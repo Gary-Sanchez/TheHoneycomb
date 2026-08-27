@@ -1,0 +1,6 @@
+{
+  "name": "The Honeycomb",
+  "description": "Multi-activity leisure and development activity tracker for company employees, with smart file parsing, attendance analysis, cross-referencing, and individual feedback records.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
