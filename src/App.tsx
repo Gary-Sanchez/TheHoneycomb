@@ -1,91 +1,42 @@
 import { useState, useEffect } from "react";
 import { Attendee, AttendanceRecord } from "./types";
-import { initialAttendees, initialAttendanceRecords } from "./mockData";
-import { isInvalidName } from "./utils";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
 import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
-import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, RefreshCw, Clock } from "lucide-react";
+import SettingsPanel from "./components/SettingsPanel";
+import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, RefreshCw, Clock, Settings, Loader2 } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   // Active colleague modal for viewing report
   const [activeReportAttendee, setActiveReportAttendee] = useState<Attendee | null>(null);
 
-  // Load from LocalStorage or seed defaults on mount
+  // Load initial state from the server-backed database on mount
   useEffect(() => {
-    let cachedAttendees = localStorage.getItem("english_tracker_attendees");
-    let cachedRecords = localStorage.getItem("english_tracker_records");
-    const cachedNotes = localStorage.getItem("english_tracker_notes");
-
-    // Detect if cache is stale (contains old activity names like "Speaking Club")
-    const isStale = (cachedAttendees && cachedAttendees.includes("Speaking Club")) || 
-                    (cachedRecords && cachedRecords.includes("Speaking Club"));
-
-    if (isStale) {
-      localStorage.removeItem("english_tracker_attendees");
-      localStorage.removeItem("english_tracker_records");
-      cachedAttendees = null;
-      cachedRecords = null;
-    }
-
-    let parsedAttendees: Attendee[] = [];
-    if (cachedAttendees) {
-      parsedAttendees = JSON.parse(cachedAttendees);
-    } else {
-      parsedAttendees = initialAttendees;
-    }
-
-    let parsedRecords: AttendanceRecord[] = [];
-    if (cachedRecords) {
-      parsedRecords = JSON.parse(cachedRecords);
-    } else {
-      parsedRecords = initialAttendanceRecords;
-    }
-
-    // SYSTEMATICALLY FILTER OUT EXCLUDED NAMES & METADATA FROM LOADED STATE
-    // This cleans up any dirty cache retroactively!
-    const filteredAttendees = parsedAttendees.filter(att => !isInvalidName(att.name));
-    const validAttendeeIds = new Set(filteredAttendees.map(att => att.id));
-    
-    const filteredRecords = parsedRecords.filter(rec => 
-      !isInvalidName(rec.attendeeName) && 
-      validAttendeeIds.has(rec.attendeeId)
-    );
-
-    setAttendees(filteredAttendees);
-    setRecords(filteredRecords);
-    localStorage.setItem("english_tracker_attendees", JSON.stringify(filteredAttendees));
-    localStorage.setItem("english_tracker_records", JSON.stringify(filteredRecords));
-
-    if (cachedNotes) {
-      setNotes(JSON.parse(cachedNotes));
-    } else {
-      setNotes({});
-    }
+    fetch("/api/data")
+      .then(res => res.json())
+      .then(data => {
+        setAttendees(data.attendees);
+        setRecords(data.records);
+        setNotes(data.notes);
+      })
+      .catch(err => console.error("Failed to load data from server:", err))
+      .finally(() => setIsLoading(false));
   }, []);
 
-  // Sync state changes to LocalStorage
-  const saveAttendeesToLocal = (updated: Attendee[]) => {
-    setAttendees(updated);
-    localStorage.setItem("english_tracker_attendees", JSON.stringify(updated));
-  };
-
-  const saveRecordsToLocal = (updated: AttendanceRecord[]) => {
-    setRecords(updated);
-    localStorage.setItem("english_tracker_records", JSON.stringify(updated));
-  };
-
-  const saveNotesToLocal = (updated: Record<string, string>) => {
-    setNotes(updated);
-    localStorage.setItem("english_tracker_notes", JSON.stringify(updated));
+  // Apply the server's canonical state after a mutation round-trips
+  const applyServerState = (data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) => {
+    setAttendees(data.attendees);
+    setRecords(data.records);
+    setNotes(data.notes);
   };
 
   // 1. Quick add a colleague
@@ -98,38 +49,58 @@ export default function App() {
       joinedDate: new Date().toISOString().split("T")[0],
     };
 
-    const updated = [...attendees, newAttendee];
-    saveAttendeesToLocal(updated);
+    setAttendees(prev => [...prev, newAttendee]);
+
+    fetch("/api/attendees", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newAttendee),
+    })
+      .then(res => res.json())
+      .then(applyServerState)
+      .catch(err => console.error("Failed to persist new attendee:", err));
+
     return newAttendee;
   };
 
   // 2. Update enrollments
   const handleUpdateEnrollment = (attendeeId: string, activities: string[]) => {
-    const updated = attendees.map(att =>
-      att.id === attendeeId ? { ...att, enrolledActivities: activities } : att
+    setAttendees(prev =>
+      prev.map(att => (att.id === attendeeId ? { ...att, enrolledActivities: activities } : att))
     );
-    saveAttendeesToLocal(updated);
 
     // If active modal is open, sync modal profile
     if (activeReportAttendee && activeReportAttendee.id === attendeeId) {
       setActiveReportAttendee(prev => (prev ? { ...prev, enrolledActivities: activities } : null));
     }
+
+    fetch(`/api/attendees/${attendeeId}/enrollment`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activities }),
+    })
+      .then(res => res.json())
+      .then(applyServerState)
+      .catch(err => console.error("Failed to persist enrollment update:", err));
   };
 
   const handleRemoveAttendee = (attendeeId: string) => {
-    const updatedAttendees = attendees.filter(att => att.id !== attendeeId);
-    saveAttendeesToLocal(updatedAttendees);
-
-    const updatedRecords = records.filter(rec => rec.attendeeId !== attendeeId);
-    saveRecordsToLocal(updatedRecords);
-
-    const updatedNotes = { ...notes };
-    delete updatedNotes[attendeeId];
-    saveNotesToLocal(updatedNotes);
+    setAttendees(prev => prev.filter(att => att.id !== attendeeId));
+    setRecords(prev => prev.filter(rec => rec.attendeeId !== attendeeId));
+    setNotes(prev => {
+      const updated = { ...prev };
+      delete updated[attendeeId];
+      return updated;
+    });
 
     if (activeReportAttendee && activeReportAttendee.id === attendeeId) {
       setActiveReportAttendee(null);
     }
+
+    fetch(`/api/attendees/${attendeeId}`, { method: "DELETE" })
+      .then(res => res.json())
+      .then(applyServerState)
+      .catch(err => console.error("Failed to persist attendee removal:", err));
   };
 
   // 3. Save manual session checklist records
@@ -138,16 +109,25 @@ export default function App() {
 
     const { date, activity } = newRecordsToSave[0];
 
-    // Remove any previous record matching this date and activity to overwrite/prevent duplicate logs
-    const filtered = records.filter(r => !(r.date === date && r.activity === activity));
-
     const instantiated: AttendanceRecord[] = newRecordsToSave.map((rec, i) => ({
       ...rec,
       id: `log-${Date.now()}-${i}`,
     }));
 
-    const updated = [...filtered, ...instantiated];
-    saveRecordsToLocal(updated);
+    // Remove any previous record matching this date and activity to overwrite/prevent duplicate logs
+    setRecords(prev => {
+      const filtered = prev.filter(r => !(r.date === date && r.activity === activity));
+      return [...filtered, ...instantiated];
+    });
+
+    fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ records: instantiated }),
+    })
+      .then(res => res.json())
+      .then(applyServerState)
+      .catch(err => console.error("Failed to persist records:", err));
   };
 
   // 4. Batch import parsed files from Gemini
@@ -157,6 +137,7 @@ export default function App() {
   ) => {
     let currentAttendees = [...attendees];
     const createdMap: Record<string, string> = {}; // Maps name to generated attendee ID
+    const createdAttendees: Attendee[] = [];
 
     // Create new attendees
     newAttendeesToCreate.forEach((att, idx) => {
@@ -166,11 +147,11 @@ export default function App() {
         id: generatedId,
       };
       currentAttendees.push(newAtt);
+      createdAttendees.push(newAtt);
       createdMap[att.name.toLowerCase()] = generatedId;
     });
 
-    // Save newly created attendees
-    saveAttendeesToLocal(currentAttendees);
+    setAttendees(currentAttendees);
 
     // Wire up logs records with their correct attendeeIds
     const finalLogs: AttendanceRecord[] = newRecordsToSave.map((rec, idx) => {
@@ -179,7 +160,7 @@ export default function App() {
       if (!attendeeId) {
         // Link to newly created attendee
         attendeeId = createdMap[rec.attendeeName.toLowerCase()];
-        
+
         // Or if existing, locate by name
         if (!attendeeId) {
           const existing = currentAttendees.find(
@@ -197,29 +178,42 @@ export default function App() {
     });
 
     // Merge in imported logs
-    const updatedRecords = [...records, ...finalLogs];
-    saveRecordsToLocal(updatedRecords);
+    setRecords(prev => [...prev, ...finalLogs]);
+
+    fetch("/api/records/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attendees: createdAttendees, records: finalLogs }),
+    })
+      .then(res => res.json())
+      .then(applyServerState)
+      .catch(err => console.error("Failed to persist imported data:", err));
   };
 
   // 5. Save notes for progress report
   const handleSaveNotes = (attendeeId: string, text: string) => {
-    const updatedNotes = {
-      ...notes,
-      [attendeeId]: text,
-    };
-    saveNotesToLocal(updatedNotes);
+    setNotes(prev => ({ ...prev, [attendeeId]: text }));
+
+    fetch(`/api/notes/${attendeeId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    })
+      .then(res => res.json())
+      .then(applyServerState)
+      .catch(err => console.error("Failed to persist note:", err));
   };
 
   // 6. Restore demo/seed data
   const handleResetDatabase = () => {
     if (window.confirm("Are you sure you want to restore the demo seed data? This will overwrite your current progress.")) {
-      setAttendees(initialAttendees);
-      setRecords(initialAttendanceRecords);
-      setNotes({});
-      localStorage.setItem("english_tracker_attendees", JSON.stringify(initialAttendees));
-      localStorage.setItem("english_tracker_records", JSON.stringify(initialAttendanceRecords));
-      localStorage.setItem("english_tracker_notes", JSON.stringify({}));
-      setActiveTab("dashboard");
+      fetch("/api/reset", { method: "POST" })
+        .then(res => res.json())
+        .then(data => {
+          applyServerState(data);
+          setActiveTab("dashboard");
+        })
+        .catch(err => console.error("Failed to reset database:", err));
     }
   };
 
@@ -227,6 +221,15 @@ export default function App() {
   const handleNavigateToAttendeeReport = (att: Attendee) => {
     setActiveReportAttendee(att);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-natural-cream flex flex-col items-center justify-center gap-3 font-sans text-natural-forest">
+        <Loader2 className="h-8 w-8 animate-spin text-natural-sage" />
+        <p className="text-sm font-semibold text-natural-sage">Loading The Honeycomb...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-natural-cream flex flex-col font-sans text-natural-forest antialiased selection:bg-natural-wheat selection:text-natural-forest">
@@ -337,6 +340,20 @@ export default function App() {
             <span>Import Forage Logs</span>
           </button>
 
+          {/* Tab 6: Settings */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("settings")}
+            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
+              activeTab === "settings"
+                ? "border-natural-forest text-natural-forest font-bold"
+                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            <span>Settings</span>
+          </button>
+
         </div>
       </nav>
 
@@ -388,6 +405,8 @@ export default function App() {
             onImportData={handleImportParsedData}
           />
         )}
+
+        {activeTab === "settings" && <SettingsPanel />}
 
       </main>
 

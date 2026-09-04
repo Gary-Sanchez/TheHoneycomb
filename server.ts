@@ -7,11 +7,40 @@ import * as xlsx from "xlsx";
 import mammoth from "mammoth";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
+import * as db from "./db";
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+
+// Path to the on-disk config file that stores a user-supplied Gemini API key
+// (set by Electron's main process to a file under the OS user-data directory;
+// falls back to the project root for `npm run dev`/`npm start`).
+function getConfigPath(): string {
+  return process.env.HONEYCOMB_CONFIG_PATH || path.join(process.cwd(), "honeycomb-config.json");
+}
+
+interface HoneycombConfig {
+  geminiApiKey?: string;
+}
+
+function readConfig(): HoneycombConfig {
+  try {
+    const raw = fs.readFileSync(getConfigPath(), "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function writeConfig(config: HoneycombConfig): void {
+  fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), "utf-8");
+}
+
+function getConfiguredGeminiKey(): string | undefined {
+  return readConfig().geminiApiKey || process.env.GEMINI_API_KEY;
+}
 
 // Use memory storage for uploaded files
 const upload = multer({
@@ -28,14 +57,16 @@ app.get(["/api/health", "/api/healthz", "/api/health-check", "/health", "/health
   res.json({ status: "ok" });
 });
 
-// Lazy initialization of Gemini client
+// Lazy initialization of Gemini client. Re-created whenever the configured key changes
+// (see POST /api/settings), since a user can set/replace the key at runtime from the app.
 let aiClient: GoogleGenAI | null = null;
+let aiClientKey: string | undefined;
 function getGeminiClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined. Please add your key in Settings > Secrets.");
-    }
+  const apiKey = getConfiguredGeminiKey();
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not defined. Please add your key in Settings.");
+  }
+  if (!aiClient || aiClientKey !== apiKey) {
     aiClient = new GoogleGenAI({
       apiKey,
       httpOptions: {
@@ -44,9 +75,60 @@ function getGeminiClient(): GoogleGenAI {
         },
       },
     });
+    aiClientKey = apiKey;
   }
   return aiClient;
 }
+
+// Settings: read/write the user-supplied Gemini API key (never echoed back to the client)
+app.get("/api/settings", (req, res) => {
+  res.json({ geminiApiKeyConfigured: Boolean(getConfiguredGeminiKey()) });
+});
+
+app.post("/api/settings", (req, res): any => {
+  const { geminiApiKey } = req.body || {};
+  if (typeof geminiApiKey !== "string" || !geminiApiKey.trim()) {
+    return res.status(400).json({ error: "geminiApiKey is required." });
+  }
+  const config = readConfig();
+  config.geminiApiKey = geminiApiKey.trim();
+  writeConfig(config);
+  res.json({ geminiApiKeyConfigured: true });
+});
+
+// Data layer: attendees, attendance records, and notes (persisted via db.ts / lowdb),
+// replacing what used to be read/written directly to the browser's localStorage.
+app.get("/api/data", async (req, res) => {
+  res.json(await db.getState());
+});
+
+app.post("/api/attendees", async (req, res) => {
+  res.json(await db.addAttendee(req.body));
+});
+
+app.put("/api/attendees/:id/enrollment", async (req, res) => {
+  res.json(await db.updateEnrollment(req.params.id, req.body.activities || []));
+});
+
+app.delete("/api/attendees/:id", async (req, res) => {
+  res.json(await db.removeAttendee(req.params.id));
+});
+
+app.post("/api/records", async (req, res) => {
+  res.json(await db.saveRecords(req.body.records || []));
+});
+
+app.post("/api/records/import", async (req, res) => {
+  res.json(await db.importParsedData(req.body.attendees || [], req.body.records || []));
+});
+
+app.put("/api/notes/:attendeeId", async (req, res) => {
+  res.json(await db.saveNote(req.params.attendeeId, req.body.text || ""));
+});
+
+app.post("/api/reset", async (req, res) => {
+  res.json(await db.resetToSeed());
+});
 
 // 4 standard English activities
 const STANDARD_ACTIVITIES = [
@@ -676,7 +758,7 @@ Return the parsed entries in a strictly structured JSON format matching the sche
 });
 
 // Serve Vite-generated assets and app
-async function startServer() {
+export async function startServer() {
   const isProduction = process.env.NODE_ENV === "production";
 
   if (isProduction) {
