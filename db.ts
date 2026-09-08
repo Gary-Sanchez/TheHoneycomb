@@ -45,19 +45,10 @@ async function getDb(): Promise<LowDbInstance> {
     // ERR_REQUIRE_ESM (a plain `node dist/server.cjs` on a newer standalone Node happens
     // to support require(esm) and masks this — Electron's runtime doesn't). A dynamic
     // `import()` works from a CJS module on both, so we load it lazily here instead.
-    dbPromise = import("lowdb/node").then(({ JSONFilePreset }) => JSONFilePreset<HoneycombData>(getDbPath(), DEFAULT_DATA)).then(async db => {
-      const isEmpty =
-        db.data.attendees.length === 0 &&
-        db.data.records.length === 0 &&
-        Object.keys(db.data.notes).length === 0;
-
-      if (isEmpty) {
-        db.data = seedData();
-        await db.write();
-      }
-
-      return db;
-    });
+    // No auto-seed on empty data: a fresh install (or a real database the user emptied
+    // out) must start/stay empty. Demo data only loads on an explicit Reset Demo Seed
+    // (resetToSeed below) — see US-04.
+    dbPromise = import("lowdb/node").then(({ JSONFilePreset }) => JSONFilePreset<HoneycombData>(getDbPath(), DEFAULT_DATA));
   }
   return dbPromise;
 }
