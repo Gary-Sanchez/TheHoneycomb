@@ -151,6 +151,14 @@ Resumen corto: qué Criterios de Aceptación quedaron cubiertos, resultado de ca
 por `QA-XX`), qué quedó explícitamente fuera de alcance, y qué fases se delegaron a subagente y
 cuáles no (una línea de motivo alcanza).
 
+Además, redactar unos **"Pasos para testear la solución"**: una lista corta, concreta y
+reproducible (comandos/clicks puntuales, no descripciones vagas) para que otra persona —revisor
+del PR, QA, el yo del futuro— pueda validar el cambio sin releer el ticket entero. Sacarla
+directamente de lo que se ejecutó de verdad en la Fase 4 (no inventar pasos hipotéticos ni
+copiar la tabla de QA tal cual si no se corrió así) — típicamente: cómo levantar la app
+([[Start-Honeycomb]]), qué acción puntual dispara el comportamiento, y qué resultado esperar. Esta
+lista se reutiliza en la Fase 6, tanto en el mensaje de commit como en el comentario de Notion.
+
 ## Fase 6 — Cierre: gates de confirmación (git y Notion)
 
 Todo lo de esta fase es visible para el equipo o difícil de revertir — a diferencia de la
@@ -162,19 +170,27 @@ el usuario ya aprobó el paso anterior:
    - Mensaje siguiendo el estilo de commits ya usado en el repo, indicando el ticket (`US-{NN}`).
    - Clasificar el cambio (patch / minor / major, o "sin bump" si es tooling interno sin impacto en
      runtime/versión pública) y anotarlo en el cuerpo del mensaje — igual que se hizo en US-09.
+   - Incluir en el cuerpo del mensaje una sección `## Cómo testear` con los "Pasos para testear la
+     solución" redactados en la Fase 5 — para que quede en el historial de git, no solo en el chat.
 2. **Gate 2 — antes de `git push`.** Aunque el commit ya se haya aprobado, pedir confirmación
    aparte antes de pushear — pushear a un branch remoto ya es visible para el equipo. Nunca asumir
    que "commit aprobado" implica "push aprobado".
-3. **Gate 3 — PR y estado en Notion**, después de un push exitoso:
+3. **Gate 3 — PR y Notion**, después de un push exitoso:
    - Preguntar si se crea el Pull Request (rama `gs/us-{NN}-...` contra `main`; recordar que `main`
      tiene branch protection y no acepta push directo, así que un PR es obligatorio para mergear).
      Si no hay `gh` CLI autenticado disponible, dar el link directo de creación de PR que devuelve
      `git push` (`https://github.com/Gary-Sanchez/TheHoneycomb/pull/new/<rama>`) en vez de
-     inventar uno.
+     inventar uno. Al redactar la descripción del PR, reusar los mismos "Pasos para testear la
+     solución" en su sección de test plan.
+   - Preguntar si se deja un **comentario en la página de Notion del ticket** (`notion-create-comment`)
+     con los mismos "Pasos para testear la solución" — así alguien de QA que solo mira Notion (no
+     el PR ni el commit) sabe cómo validar sin pedirlo por chat. Es una acción visible para el
+     equipo igual que las anteriores, así que lleva el mismo gate: no postear sin un sí explícito.
    - Preguntar si se pasa el `Status` del ticket en Notion a `QA Ready` (ver
      [`notion-board.md`](../Tefinha-crea-tickets/references/notion-board.md)) — solo si la página
      ya existe. Recién con un sí explícito, actualizar la página; si no hay confirmación clara,
      dejarlo como está y avisar que queda pendiente a mano.
 
-No agrupar estos gates en una sola pregunta genérica ("¿aviso todo?") — son tres decisiones
-distintas y el usuario puede querer, por ejemplo, el commit local ya pero el push todavía no.
+No agrupar estos gates en una sola pregunta genérica ("¿aviso todo?") — son decisiones distintas y
+el usuario puede querer, por ejemplo, el commit local ya pero el push todavía no, o el PR sí pero
+el comentario en Notion no.
