@@ -21,6 +21,9 @@ the doc for anything persistence-related.
 - `npm run build` — Vite build + esbuild bundles `server.ts` to `dist/server.cjs`.
 - `npm start` — runs the built server (`node dist/server.cjs`).
 - `npm run lint` — `tsc --noEmit`. No test suite currently exists.
+- A `husky` pre-commit hook runs `lint-staged` (config in `lint-staged.config.js`), which runs
+  `tsc --noEmit` over the whole project whenever a staged `.ts`/`.tsx` file is present — blocking
+  the commit on type errors. Skip it exceptionally with `git commit --no-verify` (see README).
 - `npm run electron:start` / `electron:build` — desktop packaging via electron-builder.
 - Requires `GEMINI_API_KEY` in `.env.local` (see `.env.example`) for the AI-powered document parser.
 
