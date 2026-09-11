@@ -59,3 +59,10 @@ the doc for anything persistence-related.
   directory to distinguish new vs. existing colleagues.
 - Removing a colleague cascades: deletes their attendance records and coaching notes too
   (`removeAttendee` in `db.ts`).
+
+## Guardrails de Claude Code
+
+`.claude/settings.json` define una allow/ask/deny list de comandos y un hook `PreToolUse`
+(`.claude/hooks/guard-writes.cjs`) que pide confirmación antes de escribir fuera del árbol del
+proyecto o sobre `honeycomb-data.json`/`honeycomb-config.json`. Ver [`.claude/README.md`](.claude/README.md)
+para el detalle de cada regla y por qué existe (US-07).
