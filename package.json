@@ -12,7 +12,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "electron:start": "npm run build && electron .",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "prepare": "husky"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -41,6 +42,8 @@
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.25.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

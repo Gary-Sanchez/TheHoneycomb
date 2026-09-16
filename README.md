@@ -52,6 +52,25 @@ cd TheHoneycomb
 - `npm run electron:start` — compila y abre la app de escritorio (Electron)
 - `npm run electron:build` — genera el instalador de escritorio (electron-builder)
 
+## Pre-commit hook (husky + lint-staged)
+
+El repo tiene un hook `pre-commit` (via `husky`) que corre `lint-staged` sobre los archivos
+staged. Actualmente eso significa: si hay algún `.ts`/`.tsx` staged, corre `tsc --noEmit` sobre
+**todo el proyecto** (el chequeo de tipos de TypeScript no se puede acotar de forma confiable a
+un subconjunto de archivos sin perder el `tsconfig.json`). Si falla, el `git commit` se bloquea
+hasta corregir el error.
+
+El hook se instala solo al correr `npm install` (script `prepare`), sin pasos manuales.
+
+Para saltearlo en un caso excepcional:
+
+```bash
+git commit --no-verify -m "..."
+```
+
+No es la práctica recomendada — úsalo solo cuando sepas exactamente por qué el chequeo está
+fallando y sea intencional saltearlo.
+
 ## Setup de MCPs
 
 Este proyecto usa Claude Code con un par de MCP servers para las skills en `.claude/skills/`.
