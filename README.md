@@ -52,6 +52,28 @@ cd TheHoneycomb
 - `npm run electron:start` — compila y abre la app de escritorio (Electron)
 - `npm run electron:build` — genera el instalador de escritorio (electron-builder)
 
+## Tests end-to-end (Playwright)
+
+El repo usa [Playwright](https://playwright.dev/) para testear la app de escritorio (Electron) de
+punta a punta. Los specs viven en `e2e/` (ver `e2e/README.md`) y la config base en
+`playwright.config.ts`.
+
+Setup (una sola vez):
+
+```bash
+npx playwright install chromium
+```
+
+Correr la suite (compila la app antes de lanzarla, igual que `electron:start`):
+
+```bash
+npm run test:e2e
+```
+
+Hoy solo existe un test de humo (`e2e/smoke.spec.ts`) que confirma que la app compila, la ventana
+principal abre, y el servidor embebido responde. Nuevos escenarios de QA (de historias como US-03,
+US-04, US-05) se agregan como specs nuevos ahí mismo, sin tocar la config base.
+
 ## Pre-commit hook (husky + lint-staged)
 
 El repo tiene un hook `pre-commit` (via `husky`) que corre `lint-staged` sobre los archivos
