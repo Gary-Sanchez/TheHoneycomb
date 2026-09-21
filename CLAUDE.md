@@ -62,7 +62,9 @@ the doc for anything persistence-related.
 
 ## Guardrails de Claude Code
 
-`.claude/settings.json` define una allow/ask/deny list de comandos y un hook `PreToolUse`
-(`.claude/hooks/guard-writes.cjs`) que pide confirmación antes de escribir fuera del árbol del
-proyecto o sobre `honeycomb-data.json`/`honeycomb-config.json`. Ver [`.claude/README.md`](.claude/README.md)
-para el detalle de cada regla y por qué existe (US-07).
+`.claude/settings.json` define una allow/deny list de comandos y dos hooks `PreToolUse`:
+`guard-writes.cjs` (Edit/Write) pide confirmación antes de escribir fuera del árbol del proyecto o
+sobre `honeycomb-data.json`/`honeycomb-config.json`; `guard-bash.cjs` (Bash) bloquea de forma dura
+`rm -rf`, `git reset --hard`, `git clean -f*` y `git push --force`/`-f` como substring en cualquier
+parte del comando (no solo por prefijo, a diferencia de la deny list). Ver
+[`.claude/README.md`](.claude/README.md) para el detalle de cada regla y por qué existe (US-07).
