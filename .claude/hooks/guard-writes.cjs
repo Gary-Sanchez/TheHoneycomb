@@ -44,15 +44,11 @@ process.stdin.on("end", () => {
   const parentDir = path.dirname(projectDir);
   const resolved = path.resolve(filePath);
 
-  if (!isInside(resolved, projectDir) && !isInside(resolved, parentDir)) {
-    ask(
-      `US-07: "${filePath}" queda fuera del árbol del repo (${projectDir}) y de la carpeta ` +
-        `padre donde viven los tickets US-* (${parentDir}). Confirmá que la ruta es intencional ` +
-        `antes de escribir ahí.`
-    );
-    return;
-  }
-
+  // Chequear primero si es un archivo de datos persistentes: HONEYCOMB_DB_PATH/
+  // HONEYCOMB_CONFIG_PATH suele apuntar fuera del árbol del repo en la build de Electron
+  // (%APPDATA%\The Honeycomb\...), y ese caso tiene que disparar el motivo específico de
+  // "datos persistentes", no el genérico de "fuera del árbol" — son la misma confirmación
+  // sin importar si el archivo vive en la raíz del repo (dev) o en %APPDATA% (empaquetado).
   const dbPath = path.resolve(
     process.env.HONEYCOMB_DB_PATH || path.join(projectDir, "honeycomb-data.json")
   );
@@ -71,6 +67,15 @@ process.stdin.on("end", () => {
       `US-07: "${filePath}" es un archivo de datos persistentes de The Honeycomb (o el destino ` +
         `configurado vía HONEYCOMB_DB_PATH/HONEYCOMB_CONFIG_PATH). Confirmá antes de ` +
         `sobrescribirlo para no perder datos reales de asistencia.`
+    );
+    return;
+  }
+
+  if (!isInside(resolved, projectDir) && !isInside(resolved, parentDir)) {
+    ask(
+      `US-07: "${filePath}" queda fuera del árbol del repo (${projectDir}) y de la carpeta ` +
+        `padre donde viven los tickets US-* (${parentDir}). Confirmá que la ruta es intencional ` +
+        `antes de escribir ahí.`
     );
     return;
   }
