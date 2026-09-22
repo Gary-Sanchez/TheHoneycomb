@@ -1,6 +1,7 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { Attendee, AttendanceRecord, ParsedRecord, ACTIVITIES } from "../types";
 import { isInvalidName } from "../utils";
+import { isBlacklistedName } from "../blacklist";
 import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -267,7 +268,8 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
     // Keep track of names we will create so we don't duplicate within the same batch
     const createdNamesInBatch = new Set<string>();
 
-    parsedRecords.forEach(rec => {
+    // US-19: never consolidate blacklisted facilitators, even if they slipped into the preview
+    parsedRecords.filter(rec => !isBlacklistedName(rec.name)).forEach(rec => {
       let attendeeId = rec.matchedAttendeeId;
 
       if (!attendeeId) {
