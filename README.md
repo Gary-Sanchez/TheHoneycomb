@@ -88,8 +88,8 @@ claude mcp add --transport http context7 https://mcp.context7.com/mcp
 
 ### Notion (tablero de tickets — "The Honeycomb Board")
 
-Se usa para crear/actualizar los tickets `US-XX` en Notion vía las skills `Tefinha-crea-tickets` y
-`Honeycomb-executor` (ver `.claude/skills/Tefinha-crea-tickets/references/notion-board.md` para el
+Se usa para crear/actualizar los tickets `US-XX` en Notion vía las skills `Tefinha-crea-tickets`,
+`Honeycomb-executor` y `super-tefinha-QA` (ver `.claude/skills/Tefinha-crea-tickets/references/notion-board.md` para el
 detalle del tablero y su esquema).
 
 1. Agregar el MCP server de Notion:
@@ -106,4 +106,4 @@ detalle del tablero y su esquema).
    ```
 
 Con ambos MCPs conectados, las skills del repo (`Tefinha-crea-tickets`, `Honeycomb-executor`,
-`Start-Honeycomb`) quedan operativas tal como están documentadas en `.claude/skills/`.
+`Start-Honeycomb`, `super-tefinha-QA`) quedan operativas tal como están documentadas en `.claude/skills/`.
