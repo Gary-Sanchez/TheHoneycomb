@@ -8,6 +8,7 @@ import mammoth from "mammoth";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import * as db from "./db";
+import { INGESTION_BLACKLIST, isBlacklistedName } from "./src/blacklist";
 
 dotenv.config();
 
@@ -163,55 +164,8 @@ function isInvalidName(nameStr: string): boolean {
     return true;
   }
 
-  // 2. Filter out hosts (systematically ignore Gustavo Ramos Soria and others)
-  const HOST_SUBSTRINGS = [
-    "gustavo ramos soria",
-    "gustavo ramos",
-    "ramos soria",
-    "nicolas rios lopez",
-    "nicolas rios",
-    "rios lopez",
-    "nadine hinojosa ramos",
-    "nadine hinojosa",
-    "hinojosa ramos",
-    "wara hermosa fernandez",
-    "wara hermosa",
-    "hermosa fernandez",
-    "angela guzman rusinque",
-    "angela guzman",
-    "guzman rusinque",
-    "alejandra barrientos garrido",
-    "alejandra barrientos",
-    "barrientos garrido",
-    "gary ronald sanchez suarez",
-    "gary ronald",
-    "sanchez suarez",
-    "gary sanchez",
-    "rodrigo rivero rocha",
-    "rodrigo rivero",
-    "rivero rocha",
-    "eric revollo ayala",
-    "eric revollo",
-    "revollo ayala",
-    "alejandra rivero crespo",
-    "alejandra rivero",
-    "rivero crespo",
-    "stephanie mariscal rodriguez",
-    "stephanie mariscal",
-    "mariscal rodriguez",
-    "fabiola arias navia",
-    "fabiola arias",
-    "arias navia",
-    "pablo rico schmidt",
-    "pablo rico",
-    "rico schmidt"
-  ];
-
-  for (const host of HOST_SUBSTRINGS) {
-    if (normalizedLower === host || normalizedLower.includes(host)) {
-      return true;
-    }
-  }
+  // 2. Filter out the US-19 ingestion blacklist (facilitators / coordination staff)
+  if (isBlacklistedName(nameStr)) return true;
 
   // 3. Filter out metadata rows
   const METADATA_SUBSTRINGS = [
@@ -645,19 +599,8 @@ Instructions:
    - "status": Must be exactly "present" or "absent". If the document implies presence (e.g., checked, tick, mark, "X", "P", 1) format as "present". If it implies absence (e.g., "A", "absent", 0, "O"), format as "absent".
 
 3. **HOSTS EXCLUSION**: The following names are activity HOSTS/COACHES and MUST NEVER be listed as attendees. Filter them out entirely:
-   - Gustavo Ramos Soria
-   - Nicolas Rios Lopez
-   - Nadine Hinojosa Ramos
-   - Wara Hermosa Fernandez
-   - Angela Guzman Rusinque
-   - Alejandra Barrientos Garrido
-   - Gary Ronald Sanchez Suarez
-   - Rodrigo Rivero Rocha
-   - Eric Revollo Ayala
-   - Alejandra Rivero Crespo
-   - Stephanie Mariscal Rodriguez
-   - Fabiola Arias Navia
-   - Pablo Rico Schmidt
+${INGESTION_BLACKLIST.map(e => `   - ${e.name}`).join("\n")}
+   Exclude them regardless of letter case, accents, or whether their full surname(s) are included.
 
 4. **METADATA EXCLUSION**: The following fields/rows are metadata or header elements and are NOT attendees. Delete them and never include them:
    - Meeting title
