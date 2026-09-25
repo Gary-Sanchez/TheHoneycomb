@@ -47,6 +47,28 @@ the doc for anything persistence-related.
   the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap Cross-Referencer, Dashboard,
   Import Forage Logs, Progress Report modal).
 
+## Security: server bind & admin auth (US-11)
+
+Don't revert either of these — they protect coaching notes and stop LAN devices from resetting the DB.
+
+- **Bind**: `server.ts` listens on `127.0.0.1` by default. `HONEYCOMB_ALLOW_LAN=true` opts into
+  `0.0.0.0` and logs a `[WARNING]` at startup. Never hardcode `0.0.0.0` in `app.listen`.
+- **Admin auth**: a single admin password. Source, in priority order: `HONEYCOMB_ADMIN_PASSWORD`
+  env var, then `adminPasswordHash` (scrypt) in `honeycomb-config.json`. If neither exists,
+  Settings → **Admin Access** offers first-run setup (`POST /api/auth/setup`), accepted only from
+  loopback and only while no credential exists. Never hardcode a password.
+- Sessions: random token held in memory (lost on server restart), cookie `honeycomb_session`
+  (`HttpOnly; SameSite=Strict`), 12h TTL. Endpoints: `GET /api/auth/status`,
+  `POST /api/auth/login|logout|setup`.
+- **Every mutating route uses the `requireAdmin` middleware** (401 JSON without a session):
+  `POST /api/settings`, `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
+  `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/import`,
+  `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
+  `GET`s and `/api/parse-attendance-file` (doesn't persist) stay public.
+- Frontend: `App.tsx` holds `auth` (from `/api/auth/status`) and passes `canEdit` to the tabs,
+  which disable mutating controls and show `ReadOnlyNotice`. Mutations go through `persist()`,
+  which on a 401 drops to read-only and reloads server state to undo the optimistic update.
+
 ## Business rules to keep in mind
 
 - 4 fixed activities: **Speakeasy** (weekly), **Reading Club**, **Music Room**, **Writing Hood**

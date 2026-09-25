@@ -3,13 +3,16 @@ import { Attendee, AttendanceRecord, ParsedRecord, ACTIVITIES } from "../types";
 import { isInvalidName } from "../utils";
 import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar } from "lucide-react";
 import confetti from "canvas-confetti";
+import ReadOnlyNotice from "./ReadOnlyNotice";
 
 interface DocumentParserProps {
   attendees: Attendee[];
   onImportData: (newAttendees: Omit<Attendee, "id">[], newRecords: Omit<AttendanceRecord, "id">[]) => void;
+  canEdit: boolean;
+  onSignIn?: () => void;
 }
 
-export default function DocumentParser({ attendees, onImportData }: DocumentParserProps) {
+export default function DocumentParser({ attendees, onImportData, canEdit, onSignIn }: DocumentParserProps) {
   const [selectedImportLogActivity, setSelectedImportLogActivity] = useState<string>("Speakeasy");
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -65,8 +68,8 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+
+    if (canEdit && e.dataTransfer.files && e.dataTransfer.files[0]) {
       validateAndSetFile(e.dataTransfer.files[0]);
     }
   };
@@ -93,6 +96,7 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
   };
 
   const handleUploadClick = () => {
+    if (!canEdit) return;
     fileInputRef.current?.click();
   };
 
@@ -261,6 +265,7 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
 
   // Import the approved records into the master list
   const handleImportApproved = () => {
+    if (!canEdit) return;
     const newAttendeesToCreate: Omit<Attendee, "id">[] = [];
     const newRecordsToSave: Omit<AttendanceRecord, "id">[] = [];
 
@@ -374,6 +379,8 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
         </p>
       </div>
 
+      {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
+
       {importedCount !== null && (
         <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-6 py-4 rounded-xl flex items-center gap-4 animate-bounce-subtle">
           <CheckCircle className="h-8 w-8 text-natural-sage shrink-0" />
@@ -403,10 +410,13 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
               onDragLeave={handleDrag}
               onDrop={handleDrop}
               onClick={handleUploadClick}
-              className={`border-2 border-dashed rounded-[24px] p-10 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] ${
-                dragActive
+              aria-disabled={!canEdit}
+              className={`border-2 border-dashed rounded-[24px] p-10 text-center transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] ${
+                !canEdit
+                  ? "border-natural-border opacity-50 cursor-not-allowed"
+                  : dragActive
                   ? "border-natural-sage bg-natural-cream/30 scale-[0.99]"
-                  : "border-natural-border hover:border-natural-sage hover:bg-natural-cream/10"
+                  : "border-natural-border hover:border-natural-sage hover:bg-natural-cream/10 cursor-pointer"
               }`}
             >
               <input
@@ -448,7 +458,8 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
                 <button
                   type="button"
                   onClick={handleParse}
-                  className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-6 py-3 rounded-xl shadow-md transition"
+                  disabled={!canEdit}
+                  className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-6 py-3 rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="h-4 w-4 fill-white" />
                   <span>Extract the Buzz</span>
@@ -542,7 +553,8 @@ export default function DocumentParser({ attendees, onImportData }: DocumentPars
               <button
                 type="button"
                 onClick={handleImportApproved}
-                className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-5 py-2 rounded-xl text-sm transition"
+                disabled={!canEdit}
+                className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-5 py-2 rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="h-4 w-4" />
                 <span>Confirm & Import Caserits</span>

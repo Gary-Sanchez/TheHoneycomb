@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Attendee, AttendanceRecord } from "./types";
+import { Attendee, AttendanceRecord, AuthStatus } from "./types";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
@@ -7,7 +7,7 @@ import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
-import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, RefreshCw, Clock, Settings, Loader2 } from "lucide-react";
+import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, RefreshCw, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -15,29 +15,57 @@ export default function App() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [auth, setAuth] = useState<AuthStatus>({ authenticated: false, adminConfigured: false, setupAllowed: false });
+  const canEdit = auth.authenticated;
 
   // Active colleague modal for viewing report
   const [activeReportAttendee, setActiveReportAttendee] = useState<Attendee | null>(null);
 
-  // Load initial state from the server-backed database on mount
-  useEffect(() => {
+  const loadData = () =>
     fetch("/api/data")
       .then(res => res.json())
-      .then(data => {
-        setAttendees(data.attendees);
-        setRecords(data.records);
-        setNotes(data.notes);
-      })
-      .catch(err => console.error("Failed to load data from server:", err))
-      .finally(() => setIsLoading(false));
+      .then(applyServerState)
+      .catch(err => console.error("Failed to load data from server:", err));
+
+  const refreshAuth = () =>
+    fetch("/api/auth/status")
+      .then(res => res.json())
+      .then((data: AuthStatus) => setAuth(data))
+      .catch(err => console.error("Failed to load auth status:", err));
+
+  // Load initial state from the server-backed database on mount
+  useEffect(() => {
+    Promise.all([loadData(), refreshAuth()]).finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Apply the server's canonical state after a mutation round-trips
-  const applyServerState = (data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) => {
+  function applyServerState(data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) {
     setAttendees(data.attendees);
     setRecords(data.records);
     setNotes(data.notes);
-  };
+  }
+
+  // Send a mutation and apply the server's canonical state. If the admin session is gone (401),
+  // drop to read-only and reload from the server to discard the optimistic local change.
+  const persist = (url: string, init: RequestInit, label: string) =>
+    fetch(url, init)
+      .then(async res => {
+        if (res.status === 401) {
+          setAuth(prev => ({ ...prev, authenticated: false }));
+          await loadData();
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        applyServerState(await res.json());
+      })
+      .catch(err => console.error(`Failed to persist ${label}:`, err));
+
+  const jsonRequest = (method: string, body?: unknown): RequestInit => ({
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 
   // 1. Quick add a colleague
   const handleAddAttendee = (name: string, email: string, enrolledActivities: string[]): Attendee => {
@@ -51,14 +79,7 @@ export default function App() {
 
     setAttendees(prev => [...prev, newAttendee]);
 
-    fetch("/api/attendees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newAttendee),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist new attendee:", err));
+    persist("/api/attendees", jsonRequest("POST", newAttendee), "new attendee");
 
     return newAttendee;
   };
@@ -74,14 +95,7 @@ export default function App() {
       setActiveReportAttendee(prev => (prev ? { ...prev, enrolledActivities: activities } : null));
     }
 
-    fetch(`/api/attendees/${attendeeId}/enrollment`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activities }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist enrollment update:", err));
+    persist(`/api/attendees/${attendeeId}/enrollment`, jsonRequest("PUT", { activities }), "enrollment update");
   };
 
   const handleRemoveAttendee = (attendeeId: string) => {
@@ -97,10 +111,7 @@ export default function App() {
       setActiveReportAttendee(null);
     }
 
-    fetch(`/api/attendees/${attendeeId}`, { method: "DELETE" })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist attendee removal:", err));
+    persist(`/api/attendees/${attendeeId}`, { method: "DELETE" }, "attendee removal");
   };
 
   // 3. Save manual session checklist records
@@ -120,14 +131,7 @@ export default function App() {
       return [...filtered, ...instantiated];
     });
 
-    fetch("/api/records", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ records: instantiated }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist records:", err));
+    persist("/api/records", jsonRequest("POST", { records: instantiated }), "records");
   };
 
   // 4. Batch import parsed files from Gemini
@@ -180,40 +184,21 @@ export default function App() {
     // Merge in imported logs
     setRecords(prev => [...prev, ...finalLogs]);
 
-    fetch("/api/records/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attendees: createdAttendees, records: finalLogs }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist imported data:", err));
+    persist("/api/records/import", jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }), "imported data");
   };
 
   // 5. Save notes for progress report
   const handleSaveNotes = (attendeeId: string, text: string) => {
     setNotes(prev => ({ ...prev, [attendeeId]: text }));
 
-    fetch(`/api/notes/${attendeeId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist note:", err));
+    persist(`/api/notes/${attendeeId}`, jsonRequest("PUT", { text }), "note");
   };
 
   // 6. Restore demo/seed data
   const handleResetDatabase = () => {
+    if (!canEdit) return;
     if (window.confirm("Are you sure you want to restore the demo seed data? This will overwrite your current progress.")) {
-      fetch("/api/reset", { method: "POST" })
-        .then(res => res.json())
-        .then(data => {
-          applyServerState(data);
-          setActiveTab("dashboard");
-        })
-        .catch(err => console.error("Failed to reset database:", err));
+      persist("/api/reset", { method: "POST" }, "database reset").then(() => setActiveTab("dashboard"));
     }
   };
 
@@ -255,11 +240,26 @@ export default function App() {
             </span>
             <button
               onClick={handleResetDatabase}
-              className="flex items-center gap-1 hover:text-natural-sand text-natural-forest font-bold transition py-1"
-              title="Reset database to default seed data"
+              disabled={!canEdit}
+              className="flex items-center gap-1 hover:text-natural-sand text-natural-forest font-bold transition py-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-natural-forest"
+              title={canEdit ? "Reset database to default seed data" : "Sign in as admin to reset the database"}
             >
               <RefreshCw className="h-3.5 w-3.5 text-natural-sage" />
               <span>Reset Demo Seed</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("settings")}
+              id="auth-badge"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold transition ${
+                canEdit
+                  ? "bg-[#CCD5AE]/30 border-[#CCD5AE]/70 text-natural-forest"
+                  : "bg-white border-natural-border text-natural-forest/70 hover:text-natural-forest"
+              }`}
+              title={canEdit ? "Admin session active" : "Read-only — sign in as admin in Settings"}
+            >
+              {canEdit ? <ShieldCheck className="h-3.5 w-3.5 text-natural-sage" /> : <Lock className="h-3.5 w-3.5 text-natural-sage" />}
+              <span>{canEdit ? "Admin" : "Sign In"}</span>
             </button>
           </div>
 
@@ -375,6 +375,8 @@ export default function App() {
             records={records}
             onAddAttendee={handleAddAttendee}
             onSaveRecords={handleSaveRecords}
+            canEdit={canEdit}
+            onSignIn={() => setActiveTab("settings")}
           />
         )}
 
@@ -386,6 +388,8 @@ export default function App() {
             onUpdateEnrollment={handleUpdateEnrollment}
             onViewReport={handleNavigateToAttendeeReport}
             onRemoveAttendee={handleRemoveAttendee}
+            canEdit={canEdit}
+            onSignIn={() => setActiveTab("settings")}
           />
         )}
 
@@ -403,10 +407,12 @@ export default function App() {
           <DocumentParser
             attendees={attendees}
             onImportData={handleImportParsedData}
+            canEdit={canEdit}
+            onSignIn={() => setActiveTab("settings")}
           />
         )}
 
-        {activeTab === "settings" && <SettingsPanel />}
+        {activeTab === "settings" && <SettingsPanel auth={auth} onAuthChange={refreshAuth} />}
 
       </main>
 
@@ -418,6 +424,7 @@ export default function App() {
           notes={notes[activeReportAttendee.id] || ""}
           onClose={() => setActiveReportAttendee(null)}
           onSaveNotes={handleSaveNotes}
+          canEdit={canEdit}
         />
       )}
 
