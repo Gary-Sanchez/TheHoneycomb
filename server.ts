@@ -94,7 +94,13 @@ function getSessionToken(req: express.Request): string | undefined {
   if (!header) return undefined;
   for (const part of header.split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name === SESSION_COOKIE) return decodeURIComponent(rest.join("="));
+    if (name === SESSION_COOKIE) {
+      try {
+        return decodeURIComponent(rest.join("="));
+      } catch {
+        return undefined; // malformed cookie → treat as no session (401), not a 500
+      }
+    }
   }
   return undefined;
 }
