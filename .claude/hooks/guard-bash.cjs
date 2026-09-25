@@ -91,11 +91,46 @@ function basename(token) {
   return token.replace(/^.*[\\/]/, "");
 }
 
-function isRmStatement(statement) {
-  if (basename(statement[0]) !== "rm") return false;
+// Resuelve el "comando" real de un statement: salta prefijos de asignación de
+// variable de entorno (`FOO=bar cmd ...`) y, si el token de comando es una
+// referencia simple a una variable (`$X`, `${X}`), la resuelve contra las
+// asignaciones vistas hasta ahora en el mismo comando (`X=rm; $X -rf ./x`).
+// Es una heurística sobre texto, no un shell real — no cubre todo (command
+// substitution, exports desde otro proceso, etc.), pero cierra el caso
+// concreto de indirección simple que un agente podría generar sin querer.
+function isAssignment(tok) {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(tok);
+}
+
+function parseAssignment(tok) {
+  const eq = tok.indexOf("=");
+  return { name: tok.slice(0, eq), value: tok.slice(eq + 1) };
+}
+
+function resolveVarRef(tok, vars) {
+  const m = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/.exec(tok);
+  if (!m) return null;
+  return vars.has(m[1]) ? vars.get(m[1]) : null;
+}
+
+function resolveCommand(statement, vars) {
+  let i = 0;
+  while (i < statement.length && isAssignment(statement[i])) {
+    const { name, value } = parseAssignment(statement[i]);
+    vars.set(name, value);
+    i++;
+  }
+  if (i >= statement.length) return null;
+  const tok = statement[i];
+  const resolved = resolveVarRef(tok, vars);
+  return { name: basename(resolved !== null ? resolved : tok), rest: statement.slice(i + 1) };
+}
+
+function isRmStatement(cmd) {
+  if (!cmd || cmd.name !== "rm") return false;
   let hasR = false;
   let hasF = false;
-  for (const tok of statement.slice(1)) {
+  for (const tok of cmd.rest) {
     if (tok === "--recursive") hasR = true;
     if (tok === "--force") hasF = true;
     if (/^-[a-zA-Z]+$/.test(tok)) {
@@ -106,31 +141,44 @@ function isRmStatement(statement) {
   return hasR && hasF;
 }
 
-function gitSubcommandIndex(statement, name) {
-  if (basename(statement[0]) !== "git") return -1;
-  return statement.indexOf(name);
+function gitSubcommandIndex(cmd, name) {
+  if (!cmd || cmd.name !== "git") return -1;
+  return cmd.rest.indexOf(name);
 }
 
-function isGitResetHardStatement(statement) {
-  const idx = gitSubcommandIndex(statement, "reset");
+function isGitResetHardStatement(cmd) {
+  const idx = gitSubcommandIndex(cmd, "reset");
   if (idx === -1) return false;
-  return statement.slice(idx + 1).includes("--hard");
+  return cmd.rest.slice(idx + 1).includes("--hard");
 }
 
-function isGitCleanForceStatement(statement) {
-  const idx = gitSubcommandIndex(statement, "clean");
+function isGitCleanForceStatement(cmd) {
+  const idx = gitSubcommandIndex(cmd, "clean");
   if (idx === -1) return false;
-  return statement
+  const args = cmd.rest.slice(idx + 1);
+  // "-n"/"--dry-run" es un no-op de git clean incluso si también viene "-f":
+  // no borra nada, así que no debe denegarse.
+  const isDryRun = args.some(
+    (tok) => tok === "--dry-run" || (/^-[a-zA-Z]+$/.test(tok) && /n/.test(tok))
+  );
+  if (isDryRun) return false;
+  return args.some((tok) => tok === "--force" || (/^-[a-zA-Z]+$/.test(tok) && /f/i.test(tok)));
+}
+
+function isGitPushForceStatement(cmd) {
+  const idx = gitSubcommandIndex(cmd, "push");
+  if (idx === -1) return false;
+  return cmd.rest
     .slice(idx + 1)
-    .some((tok) => tok === "--force" || (/^-[a-zA-Z]+$/.test(tok) && /f/i.test(tok)));
-}
-
-function isGitPushForceStatement(statement) {
-  const idx = gitSubcommandIndex(statement, "push");
-  if (idx === -1) return false;
-  return statement
-    .slice(idx + 1)
-    .some((tok) => tok === "-f" || tok === "--force" || tok.startsWith("--force-with-lease"));
+    .some(
+      (tok) =>
+        tok === "-f" ||
+        tok === "--force" ||
+        tok.startsWith("--force-with-lease") ||
+        // Refspec con prefijo "+" (ej. "+feature:main") fuerza el push sin
+        // necesidad de "-f"/"--force" — es la sintaxis estándar de git.
+        tok.startsWith("+")
+    );
 }
 
 let raw = "";
@@ -150,23 +198,25 @@ process.stdin.on("end", () => {
   if (!command || typeof command !== "string") process.exit(0);
 
   const statements = splitStatements(tokenize(command));
+  const vars = new Map();
 
   for (const statement of statements) {
-    if (isRmStatement(statement)) {
+    const cmd = resolveCommand(statement, vars);
+    if (isRmStatement(cmd)) {
       deny(
         `US-07: el comando contiene un borrado recursivo forzado ("rm -rf" o equivalente): "${command}". ` +
           `Confirmá manualmente fuera de Claude Code si de verdad hace falta.`
       );
       return;
     }
-    if (isGitResetHardStatement(statement)) {
+    if (isGitResetHardStatement(cmd)) {
       deny(
         `US-07: el comando contiene "git reset --hard", que descarta cambios sin poder deshacerlos: "${command}". ` +
           `Confirmá manualmente fuera de Claude Code si de verdad hace falta.`
       );
       return;
     }
-    if (isGitCleanForceStatement(statement)) {
+    if (isGitCleanForceStatement(cmd)) {
       deny(
         `US-07: el comando contiene "git clean" con un flag de forzado (ej. -f/-fd), que borra archivos no ` +
           `trackeados sin confirmación de git: "${command}". Confirmá manualmente fuera de Claude Code si de ` +
@@ -174,12 +224,12 @@ process.stdin.on("end", () => {
       );
       return;
     }
-    if (isGitPushForceStatement(statement)) {
+    if (isGitPushForceStatement(cmd)) {
       deny(
-        `US-07: el comando contiene "git push --force"/"-f": "${command}". Un force-push nunca debería salir de ` +
-          `un agente sin que un humano lo corra a mano — "ask" no alcanza en sesiones automáticas. Si hace falta ` +
-          `forzar un push (ej. tras un rebase en tu propia rama de feature), corré ese comando vos mismo fuera de ` +
-          `Claude Code.`
+        `US-07: el comando contiene un push forzado ("--force"/"-f"/"--force-with-lease" o un refspec "+..."): ` +
+          `"${command}". Un force-push nunca debería salir de un agente sin que un humano lo corra a mano — "ask" ` +
+          `no alcanza en sesiones automáticas. Si hace falta forzar un push (ej. tras un rebase en tu propia rama ` +
+          `de feature), corré ese comando vos mismo fuera de Claude Code.`
       );
       return;
     }
