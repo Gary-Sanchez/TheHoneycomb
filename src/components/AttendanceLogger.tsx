@@ -2,12 +2,15 @@ import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES, ActivityType } from "../types";
 import { Calendar, Check, X, UserPlus, AlertCircle, Sparkles } from "lucide-react";
 import confetti from "canvas-confetti";
+import ReadOnlyNotice from "./ReadOnlyNotice";
 
 interface AttendanceLoggerProps {
   attendees: Attendee[];
   records: AttendanceRecord[];
   onAddAttendee: (name: string, email: string, activities: string[]) => Attendee;
   onSaveRecords: (newRecords: Omit<AttendanceRecord, "id">[]) => void;
+  canEdit: boolean;
+  onSignIn?: () => void;
 }
 
 export default function AttendanceLogger({
@@ -15,6 +18,8 @@ export default function AttendanceLogger({
   records,
   onAddAttendee,
   onSaveRecords,
+  canEdit,
+  onSignIn,
 }: AttendanceLoggerProps) {
   const todayStr = "2026-06-24"; // Preset date reflecting system time
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -40,7 +45,7 @@ export default function AttendanceLogger({
 
   const handleInlineSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!inlineName.trim()) return;
+    if (!canEdit || !inlineName.trim()) return;
 
     // Add attendee with empty enrolled list since they are all colleagues of the company
     const newAtt = onAddAttendee(inlineName.trim(), "", []);
@@ -99,7 +104,7 @@ export default function AttendanceLogger({
 
   const handleQuickAddSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!quickName.trim()) return;
+    if (!canEdit || !quickName.trim()) return;
 
     // Add attendee with empty enrolled list since they are all colleagues of the company
     const newAtt = onAddAttendee(quickName.trim(), quickEmail.trim(), []);
@@ -127,6 +132,7 @@ export default function AttendanceLogger({
   };
 
   const handleSave = () => {
+    if (!canEdit) return;
     const recordsToSave: Omit<AttendanceRecord, "id">[] = enrolledAttendees.map(att => ({
       attendeeId: att.id,
       attendeeName: att.name,
@@ -165,14 +171,16 @@ export default function AttendanceLogger({
               <button
                 type="button"
                 onClick={() => handleMarkAll("present")}
-                className="px-3 py-1.5 rounded-lg hover:bg-white hover:text-natural-sage transition duration-150"
+                disabled={!canEdit}
+                className="px-3 py-1.5 rounded-lg hover:bg-white hover:text-natural-sage transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 All Present
               </button>
               <button
                 type="button"
                 onClick={() => handleMarkAll("absent")}
-                className="px-3 py-1.5 rounded-lg hover:bg-white hover:text-natural-sand transition duration-150"
+                disabled={!canEdit}
+                className="px-3 py-1.5 rounded-lg hover:bg-white hover:text-natural-sand transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 All Absent
               </button>
@@ -183,13 +191,16 @@ export default function AttendanceLogger({
           <button
             type="button"
             onClick={() => setShowQuickAdd(!showQuickAdd)}
-            className="flex items-center gap-1.5 bg-natural-wheat border border-natural-border/40 hover:bg-natural-wheat/80 text-natural-forest font-semibold px-4 py-2 rounded-xl text-sm transition duration-150"
+            disabled={!canEdit}
+            className="flex items-center gap-1.5 bg-natural-wheat border border-natural-border/40 hover:bg-natural-wheat/80 text-natural-forest font-semibold px-4 py-2 rounded-xl text-sm transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UserPlus className="h-4 w-4 text-natural-sage" />
             <span>Quick Add Colleague</span>
           </button>
         </div>
       </div>
+
+      {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
 
       {/* Success/Notification messages */}
       {successMsg && (
@@ -238,6 +249,7 @@ export default function AttendanceLogger({
 
       {/* Inline Introduce New Colleague */}
       <form onSubmit={handleInlineSubmit} className="bg-natural-wheat/20 border border-[#CCD5AE]/40 p-5 rounded-[24px] space-y-3 shadow-sm">
+        <fieldset disabled={!canEdit} className="contents">
         <h3 className="text-xs font-bold uppercase tracking-wider text-natural-forest flex items-center gap-1.5">
           <UserPlus className="h-4 w-4 text-natural-sage" />
           Introduce and Check In a New Name
@@ -255,11 +267,12 @@ export default function AttendanceLogger({
           />
           <button
             type="submit"
-            className="bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-6 py-2.5 rounded-xl text-xs transition duration-150 shadow-sm"
+            className="bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-6 py-2.5 rounded-xl text-xs transition duration-150 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Add & Check In
           </button>
         </div>
+        </fieldset>
       </form>
 
       {/* Quick Add Form Modal/Section */}
@@ -342,7 +355,8 @@ export default function AttendanceLogger({
             <button
               type="button"
               onClick={() => setShowQuickAdd(true)}
-              className="inline-flex items-center gap-1 bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition duration-150"
+              disabled={!canEdit}
+              className="inline-flex items-center gap-1 bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <UserPlus className="h-3.5 w-3.5" /> Register First Colleague
             </button>
@@ -363,7 +377,8 @@ export default function AttendanceLogger({
                     <button
                       type="button"
                       onClick={() => handleToggleStatus(att.id, "present")}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition duration-150 ${
+                      disabled={!canEdit}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
                         currentStatus === "present"
                           ? "bg-natural-sage text-white shadow-sm shadow-natural-sage/10"
                           : "bg-natural-cream text-natural-forest/60 border border-natural-border/40 hover:bg-natural-wheat"
@@ -376,7 +391,8 @@ export default function AttendanceLogger({
                     <button
                       type="button"
                       onClick={() => handleToggleStatus(att.id, "absent")}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition duration-150 ${
+                      disabled={!canEdit}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
                         currentStatus === "absent"
                           ? "bg-natural-sand text-white shadow-sm"
                           : "bg-natural-cream text-natural-forest/60 border border-natural-border/40 hover:bg-natural-wheat"
@@ -399,7 +415,8 @@ export default function AttendanceLogger({
           <button
             type="button"
             onClick={handleSave}
-            className="bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-8 py-3 rounded-xl text-sm shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition duration-150"
+            disabled={!canEdit}
+            className="bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-8 py-3 rounded-xl text-sm shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           >
             Save Attendance Records
           </button>

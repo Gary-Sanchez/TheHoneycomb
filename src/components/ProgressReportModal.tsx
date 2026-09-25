@@ -9,6 +9,7 @@ interface ProgressReportModalProps {
   notes?: string;
   onClose: () => void;
   onSaveNotes: (attendeeId: string, notes: string) => void;
+  canEdit: boolean;
 }
 
 export default function ProgressReportModal({
@@ -17,6 +18,7 @@ export default function ProgressReportModal({
   notes = "",
   onClose,
   onSaveNotes,
+  canEdit,
 }: ProgressReportModalProps) {
   const [teacherNotes, setTeacherNotes] = useState(notes);
   const [isSaved, setIsSaved] = useState(false);
@@ -78,6 +80,7 @@ export default function ProgressReportModal({
   }, [rate, totalLogs]);
 
   const handleSaveNotes = () => {
+    if (!canEdit) return;
     onSaveNotes(attendee.id, teacherNotes);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
@@ -225,16 +228,20 @@ export default function ProgressReportModal({
                   }}
                   placeholder="Record learning milestones, speaking progress, pronunciation issues, or assignment submissions here..."
                   rows={6}
-                  className="w-full bg-white border border-natural-border rounded-xl p-4 text-sm text-natural-forest placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150 resize-none font-medium"
+                  readOnly={!canEdit}
+                  className="w-full bg-white border border-natural-border rounded-xl p-4 text-sm text-natural-forest placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150 resize-none font-medium read-only:bg-natural-cream/30"
                 />
-                
+
                 <div className="flex justify-between items-center">
-                  <span className="text-[11px] text-natural-sage font-bold">Notes are saved locally on this device.</span>
-                  
+                  <span className="text-[11px] text-natural-sage font-bold">
+                    {canEdit ? "Notes are saved locally on this device." : "Read-only. Sign in as admin in Settings to edit notes."}
+                  </span>
+
                   <button
                     type="button"
                     onClick={handleSaveNotes}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-lg transition ${
+                    disabled={!canEdit}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${
                       isSaved
                         ? "bg-[#556B2F] text-white"
                         : "bg-natural-forest hover:bg-[#213028] text-white border border-natural-forest/30"
