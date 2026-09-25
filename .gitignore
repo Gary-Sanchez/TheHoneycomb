@@ -9,3 +9,6 @@ coverage/
 honeycomb-data.json
 honeycomb-config.json
 release/
+test-results/
+playwright-report/
+blob-report/
