@@ -75,7 +75,7 @@ fallando y sea intencional saltearlo.
 
 El repo tiene un workflow en `.github/workflows/ci.yml` que corre en cada `push` a `main` y en
 cada `pull request` contra `main`. El job instala dependencias (`npm ci`), corre el chequeo de
-tipos (`npm run lint`) y el build de producción (`npm run build`), en ese orden, sobre Node.js 20.
+tipos (`npm run lint`) y el build de producción (`npm run build`), en ese orden, sobre Node.js 24.
 Si alguno de esos pasos falla, el check queda en rojo (❌) en la pestaña **Checks** del PR — no
 requiere `GEMINI_API_KEY` ni ninguna otra variable de entorno.
 
