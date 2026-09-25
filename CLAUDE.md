@@ -62,3 +62,12 @@ the doc for anything persistence-related.
   directory to distinguish new vs. existing colleagues.
 - Removing a colleague cascades: deletes their attendance records and coaching notes too
   (`removeAttendee` in `db.ts`).
+
+## Guardrails de Claude Code
+
+`.claude/settings.json` define una allow/deny list de comandos y dos hooks `PreToolUse`:
+`guard-writes.cjs` (Edit/Write) pide confirmación antes de escribir fuera del árbol del proyecto o
+sobre `honeycomb-data.json`/`honeycomb-config.json`; `guard-bash.cjs` (Bash) bloquea de forma dura
+`rm -rf`, `git reset --hard`, `git clean -f*` y `git push --force`/`-f` como substring en cualquier
+parte del comando (no solo por prefijo, a diferencia de la deny list). Ver
+[`.claude/README.md`](.claude/README.md) para el detalle de cada regla y por qué existe (US-07).
