@@ -56,13 +56,8 @@ cd TheHoneycomb
 
 El repo usa [Playwright](https://playwright.dev/) para testear la app de escritorio (Electron) de
 punta a punta. Los specs viven en `e2e/` (ver `e2e/README.md`) y la config base en
-`playwright.config.ts`.
-
-Setup (una sola vez):
-
-```bash
-npx playwright install chromium
-```
+`playwright.config.ts`. Los tests lanzan Electron directamente (`_electron.launch`), no un
+navegador, así que no hace falta `npx playwright install`.
 
 Correr la suite (compila la app antes de lanzarla, igual que `electron:start`):
 

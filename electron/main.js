@@ -9,14 +9,14 @@ app.setName("The Honeycomb");
 const PORT = process.env.PORT || "3000";
 process.env.PORT = String(PORT);
 process.env.NODE_ENV = "production";
-process.env.HONEYCOMB_CONFIG_PATH = path.join(
-  app.getPath("userData"),
-  "honeycomb-config.json"
-);
-process.env.HONEYCOMB_DB_PATH = path.join(
-  app.getPath("userData"),
-  "honeycomb-data.json"
-);
+// Only default to userData when the caller hasn't already set these (e.g. the
+// e2e smoke test points them at a temp dir so it never touches real data).
+process.env.HONEYCOMB_CONFIG_PATH =
+  process.env.HONEYCOMB_CONFIG_PATH ||
+  path.join(app.getPath("userData"), "honeycomb-config.json");
+process.env.HONEYCOMB_DB_PATH =
+  process.env.HONEYCOMB_DB_PATH ||
+  path.join(app.getPath("userData"), "honeycomb-data.json");
 
 const MAX_LOAD_ATTEMPTS = 15;
 const RETRY_DELAY_MS = 400;
