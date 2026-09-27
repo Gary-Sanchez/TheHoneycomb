@@ -25,8 +25,6 @@ cd TheHoneycomb
 
 - **Node.js** (v18+; en Windows verificá que no haya una versión vieja de Node más adelante en
   el `PATH` — puede romper `npm`/`electron` con errores crípticos)
-- Una **API key de Gemini** (para el "Smart Doc Parser" — sin ella, el import de logs cae a un
-  parser offline determinístico, así que no es estrictamente bloqueante para levantar la app)
 
 ## Setup del proyecto
 
@@ -34,11 +32,7 @@ cd TheHoneycomb
    ```bash
    npm install
    ```
-2. Copiar `.env.example` a `.env.local` y completar `GEMINI_API_KEY` con tu API key de Gemini:
-   ```bash
-   cp .env.example .env.local
-   ```
-3. Correr la app en modo desarrollo (Express + Vite con hot reload, en el navegador):
+2. Correr la app en modo desarrollo (Express + Vite con hot reload, en el navegador):
    ```bash
    npm run dev
    ```
@@ -53,9 +47,15 @@ cd TheHoneycomb
 - El servidor **solo escucha en `127.0.0.1`** — otros dispositivos de la red no pueden
   alcanzarlo. Para exponerlo a la LAN hay que setear explícitamente `HONEYCOMB_ALLOW_LAN=true`
   (el arranque loguea una advertencia; va por HTTP plano, usalo solo detrás de VPN/proxy).
-- Toda operación que crea, modifica o borra datos (Caserits, asistencia, notas, import, reset,
-  API key de Gemini) exige sesión de admin; sin ella la API responde `401`. Las lecturas son
+- Toda operación que crea, modifica o borra datos (Caserits, asistencia, notas, import, reset)
+  exige sesión de admin; sin ella la API responde `401`. Las lecturas son
   públicas. Detalle técnico en [`CLAUDE.md`](CLAUDE.md#security-server-bind--admin-auth-us-11).
+
+> **Nota:** el "Smart Doc Parser" ahora es 100% offline (parser determinístico en `parser.ts`,
+> sin ningún LLM externo ni `GEMINI_API_KEY`). Si antes habías configurado una API key de Gemini,
+> no hace falta hacer nada: al arrancar, el servidor borra esa clave de `honeycomb-config.json`
+> (guardaba la key en texto plano). **No borres ese archivo a mano**: también guarda el hash de la
+> contraseña de admin (US-11) y perderías el acceso de admin.
 
 ### Otros comandos disponibles
 

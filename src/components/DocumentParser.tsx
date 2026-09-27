@@ -22,7 +22,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   const [errorMsg, setErrorMsg] = useState("");
   const [parsedRecords, setParsedRecords] = useState<ParsedRecord[]>([]);
   const [importedCount, setImportedCount] = useState<number | null>(null);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
   const [batchDate, setBatchDate] = useState<string>("2026-06-24");
   
   const handleUpdateDate = (index: number, newDate: string) => {
@@ -40,7 +39,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // Loading message sequences to keep the user engaged
   const loadingPhrases = [
     "Reading file bytes and extracting layout...",
-    "Sending content safely to Gemini 3.5 Flash...",
+    "Scanning rows for names, dates and attendance marks...",
     "Analyzing document semantics and isolating attendance logs...",
     "Matching names to the colleague directory...",
     "Normalizing session dates and activities...",
@@ -90,7 +89,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       setErrorMsg("");
       setParsedRecords([]);
       setImportedCount(null);
-      setFallbackUsed(false);
     } else {
       setErrorMsg(`Invalid file type. Please upload Excel (.xlsx, .xls), Word (.docx, .doc), or Text (.txt, .csv) files.`);
     }
@@ -108,7 +106,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     setErrorMsg("");
     setParsedRecords([]);
     setImportedCount(null);
-    setFallbackUsed(false);
     animateLoadingText(0);
 
     const formData = new FormData();
@@ -228,7 +225,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         });
       });
 
-      // Post-process the parsed records from Gemini to link to existing attendees
+      // Post-process the parsed records to link to existing attendees
       const processed: ParsedRecord[] = cleanedClientRecords.map((rec: any) => {
         // Simple case-insensitive name matcher
         const matched = attendees.find(
@@ -245,8 +242,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       if (processed.length > 0 && processed[0].date) {
         setBatchDate(processed[0].date);
       }
-      setFallbackUsed(!!data.fallbackUsed);
-      
+
       if (processed.length > 0) {
         confetti({
           particleCount: 50,
@@ -254,7 +250,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           origin: { y: 0.6 }
         });
       } else {
-        setErrorMsg("Gemini completed parsing but found no structured attendance records in the file.");
+        setErrorMsg("We couldn't find any attendance records in this file. Check the Parsing Guidelines and try again.");
       }
     } catch (err: any) {
       console.error(err);
@@ -336,7 +332,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           Smart Document Parser
         </h2>
         <p className="text-sm text-natural-sage mt-1 font-medium">
-          Upload unstructured class logs, Word docs, spreadsheets or text lists. Gemini AI compiles them into unified database records!
+          Upload class logs, Word docs, spreadsheets or text lists and we'll compile them into unified database records!
         </p>
       </div>
 
@@ -478,7 +474,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 Parsing Guidelines
               </h4>
               <p className="text-xs text-natural-sage leading-relaxed font-medium">
-                Gemini is intelligent and handles almost any formatting. To get the best results, ensure your files contain:
+                Our built-in parser reads most attendance layouts. For best results, make sure your files contain:
               </p>
               
               <ul className="space-y-3 text-xs text-natural-forest">
@@ -526,15 +522,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       {/* Parsing Preview Pane */}
       {parsedRecords.length > 0 && (
         <div className="space-y-6 animate-fade-in">
-          {fallbackUsed && (
-            <div className="bg-[#E9E5D9] border border-natural-border text-natural-forest px-4 py-3 rounded-2xl text-xs flex items-center gap-3 shadow-sm">
-              <AlertTriangle className="h-5 w-5 text-natural-sand shrink-0 animate-pulse" />
-              <span>
-                <strong>Offline Backup Active:</strong> The AI parser is currently experiencing high request volumes or temporary spikes. We’ve parsed your document using our offline deterministic engine so you can continue working without delay!
-              </span>
-            </div>
-          )}
-
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-natural-border pb-4">
             <div>
               <h3 className="font-serif font-bold text-[#1A1A1A] text-lg">Review Extracted Records</h3>

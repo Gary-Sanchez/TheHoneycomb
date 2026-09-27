@@ -25,7 +25,6 @@ the doc for anything persistence-related.
   `tsc --noEmit` over the whole project whenever a staged `.ts`/`.tsx` file is present — blocking
   the commit on type errors. Skip it exceptionally with `git commit --no-verify` (see README).
 - `npm run electron:start` / `electron:build` — desktop packaging via electron-builder.
-- Requires `GEMINI_API_KEY` in `.env.local` (see `.env.example`) for the AI-powered document parser.
 
 ## Architecture
 
@@ -36,16 +35,18 @@ the doc for anything persistence-related.
   static ESM-in-CJS `require`).
 - Mock/seed data (`src/mockData.ts`) seeds the DB on first run, filtered through `isInvalidName`
   (`src/utils.ts`) to strip configured host/facilitator names.
-- `server.ts` exposes the Express API and calls Gemini for the "Smart Doc Parser" (Import Forage
-  Logs tab); when Gemini is unavailable it falls back to a deterministic offline parser so imports
-  never block on API availability.
+- `server.ts` exposes the Express API; the "Smart Doc Parser" (Import Forage Logs tab) is a
+  deterministic offline parser in `parser.ts` — no external AI/LLM call and no API key involved.
+  It reuses `isInvalidName` from `src/utils.ts` (same host/facilitator exclusion `db.ts` uses for
+  seed filtering) plus its own parser-local heuristics for dates, activities, statuses, and
+  meeting metadata.
 - Frontend state lives in `src/App.tsx`, which owns the handlers (`handleAddAttendee`,
   `handleSaveRecords`, `handleImportParsedData`, `handleResetDatabase`, etc.) that `db.ts`'s
   functions mirror 1:1 — check the "Mirrors handleX" comments in `db.ts` when changing either side.
 - Components (`src/components/`): `AttendanceLogger`, `AttendeeDirectory`, `CrossReferenceHub`,
-  `DashboardStats`, `DocumentParser`, `ProgressReportModal`, `SettingsPanel` — map roughly 1:1 to
-  the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap Cross-Referencer, Dashboard,
-  Import Forage Logs, Progress Report modal).
+  `DashboardStats`, `DocumentParser`, `ProgressReportModal`, `SettingsPanel` (Admin Access only)
+  — map roughly 1:1 to the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap
+  Cross-Referencer, Dashboard, Import Forage Logs, Progress Report modal).
 
 ## Security: server bind & admin auth (US-11)
 
@@ -61,7 +62,7 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   (`HttpOnly; SameSite=Strict`), 12h TTL. Endpoints: `GET /api/auth/status`,
   `POST /api/auth/login|logout|setup`.
 - **Every mutating route uses the `requireAdmin` middleware** (401 JSON without a session):
-  `POST /api/settings`, `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
+  `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
   `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/import`,
   `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
   `GET`s and `/api/parse-attendance-file` (doesn't persist) stay public.
