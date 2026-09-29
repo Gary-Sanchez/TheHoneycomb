@@ -117,7 +117,22 @@ function extractUtf16LeRuns(buffer: Buffer, byteOffset: number): string[] {
   return runs;
 }
 
-function extractTextFromBinaryDoc(buffer: Buffer): string {
+// A real .doc is an OLE container whose body text lives in the "WordDocument" stream. Scanning the
+// whole file also picks up style names ("Table Grid", "Balloon Text"), the author/company from
+// SummaryInformation and other metadata streams, which then show up as fake attendees. If the
+// buffer isn't a readable OLE file (or has no such stream), the caller falls back to the full scan.
+function readWordDocumentStream(buffer: Buffer): Buffer | null {
+  try {
+    const cfb = xlsx.CFB.read(buffer, { type: "buffer" });
+    const entry = xlsx.CFB.find(cfb, "/WordDocument");
+    return entry?.content ? Buffer.from(entry.content) : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractTextFromBinaryDoc(fileBuffer: Buffer): string {
+  const buffer = readWordDocumentStream(fileBuffer) ?? fileBuffer;
   const cp1252Runs = extractCp1252Runs(buffer);
   const utf16Runs = [...extractUtf16LeRuns(buffer, 0), ...extractUtf16LeRuns(buffer, 1)];
   const lines = [...cp1252Runs, ...utf16Runs]

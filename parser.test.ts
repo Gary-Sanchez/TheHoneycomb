@@ -158,3 +158,36 @@ describe("htmlToText", () => {
     );
   });
 });
+
+// Synthetic OLE .doc: the body lives in the "WordDocument" stream, while style names and document
+// properties sit in other streams — the same layout that made the old whole-file scan report
+// "Table Grid" or the author as attendees. (Not produced by Word; see the PR notes on .doc.)
+function makeOleDoc(body: string, otherStreams: Record<string, string>): Buffer {
+  const cfb = xlsx.CFB.utils.cfb_new();
+  const header = Buffer.alloc(64, 0x01); // binary FIB-ish prefix: no printable runs
+  xlsx.CFB.utils.cfb_add(cfb, "/WordDocument", Buffer.concat([header, Buffer.from(body, "latin1")]));
+  for (const [name, text] of Object.entries(otherStreams)) {
+    xlsx.CFB.utils.cfb_add(cfb, `/${name}`, Buffer.from(text, "latin1"));
+  }
+  return xlsx.CFB.write(cfb, { type: "buffer" }) as Buffer;
+}
+
+describe(".doc extraction", () => {
+  it("reads only the WordDocument stream, ignoring style names and document properties", async () => {
+    const buf = makeOleDoc("Elena Rostova\x07Present\x07\x07\rCarlos Gomez\x07Absent\x07\x07\r", {
+      "1Table": "\0Table Grid\0Balloon Text\0Placeholder Text\0",
+      "\x05SummaryInformation": "\0Gary Doe\0Acme Corporation\0",
+    });
+    const text = await extractTextFromFile(buf, ".doc");
+    expect(text).not.toMatch(/Table Grid|Balloon Text|Placeholder|Gary Doe|Acme/);
+    const rec = byName(parseAttendance(text, "Music Room"));
+    expect(Object.keys(rec).sort()).toEqual(["Carlos Gomez", "Elena Rostova"]);
+    expect(rec["Carlos Gomez"].status).toBe("absent");
+    expect(rec["Elena Rostova"].status).toBe("present");
+  });
+
+  it("falls back to scanning the whole buffer when it is not an OLE container", async () => {
+    const text = await extractTextFromFile(Buffer.from("\x00\x01Elena Rostova\r\nCarlos Gomez\r\n\x00", "latin1"), ".doc");
+    expect(parseAttendance(text, "Music Room").map(r => r.name).sort()).toEqual(["Carlos Gomez", "Elena Rostova"]);
+  });
+});
