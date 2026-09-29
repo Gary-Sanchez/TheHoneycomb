@@ -7,7 +7,7 @@ import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
-import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, RefreshCw, Clock, Settings, Loader2 } from "lucide-react";
+import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2 } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -204,19 +204,6 @@ export default function App() {
       .catch(err => console.error("Failed to persist note:", err));
   };
 
-  // 6. Restore demo/seed data
-  const handleResetDatabase = () => {
-    if (window.confirm("Are you sure you want to restore the demo seed data? This will overwrite your current progress.")) {
-      fetch("/api/reset", { method: "POST" })
-        .then(res => res.json())
-        .then(data => {
-          applyServerState(data);
-          setActiveTab("dashboard");
-        })
-        .catch(err => console.error("Failed to reset database:", err));
-    }
-  };
-
   // Helper to open progress report of colleague
   const handleNavigateToAttendeeReport = (att: Attendee) => {
     setActiveReportAttendee(att);
@@ -253,14 +240,6 @@ export default function App() {
               <Clock className="h-3.5 w-3.5 text-natural-sage" />
               <span>June 24, 2026</span>
             </span>
-            <button
-              onClick={handleResetDatabase}
-              className="flex items-center gap-1 hover:text-natural-sand text-natural-forest font-bold transition py-1"
-              title="Reset database to default seed data"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-natural-sage" />
-              <span>Reset Demo Seed</span>
-            </button>
           </div>
 
         </div>
