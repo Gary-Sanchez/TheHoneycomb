@@ -3,6 +3,7 @@ import type { JSONFilePreset as JSONFilePresetType } from "lowdb/node";
 import { Attendee, AttendanceRecord } from "./src/types";
 import { initialAttendees, initialAttendanceRecords } from "./src/mockData";
 import { isInvalidName } from "./src/utils";
+import { isBlacklistedName } from "./src/blacklist";
 
 interface HoneycombData {
   attendees: Attendee[];
@@ -107,8 +108,9 @@ export async function importParsedData(
   newRecordsToSave: AttendanceRecord[]
 ): Promise<HoneycombData> {
   const db = await getDb();
-  db.data.attendees = [...db.data.attendees, ...newAttendees];
-  db.data.records = [...db.data.records, ...newRecordsToSave];
+  // US-19: server-side guard so blacklisted facilitators never reach consolidated data
+  db.data.attendees = [...db.data.attendees, ...newAttendees.filter(att => !isBlacklistedName(att.name))];
+  db.data.records = [...db.data.records, ...newRecordsToSave.filter(rec => !isBlacklistedName(rec.attendeeName))];
   await db.write();
   return db.data;
 }

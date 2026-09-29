@@ -2,6 +2,7 @@ import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { Search, UserPlus, FileBarChart2, X, Check, Mail, Calendar, Settings, Trash2 } from "lucide-react";
 import confetti from "canvas-confetti";
+import ReadOnlyNotice from "./ReadOnlyNotice";
 
 interface AttendeeDirectoryProps {
   attendees: Attendee[];
@@ -10,6 +11,8 @@ interface AttendeeDirectoryProps {
   onUpdateEnrollment: (attendeeId: string, activities: string[]) => void;
   onViewReport: (attendee: Attendee) => void;
   onRemoveAttendee: (id: string) => void;
+  canEdit: boolean;
+  onSignIn?: () => void;
 }
 
 export default function AttendeeDirectory({
@@ -19,6 +22,8 @@ export default function AttendeeDirectory({
   onUpdateEnrollment,
   onViewReport,
   onRemoveAttendee,
+  canEdit,
+  onSignIn,
 }: AttendeeDirectoryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedActivityFilter, setSelectedActivityFilter] = useState<string>("All");
@@ -66,7 +71,7 @@ export default function AttendeeDirectory({
 
   const handleRegister = (e: FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!canEdit || !newName.trim()) return;
 
     onAddAttendee(newName.trim(), newEmail.trim(), newEnrolled);
 
@@ -91,6 +96,7 @@ export default function AttendeeDirectory({
   };
 
   const handleToggleAttendeeEnrollment = (attendee: Attendee, activity: string) => {
+    if (!canEdit) return;
     const isEnrolled = attendee.enrolledActivities.includes(activity);
     const nextActivities = isEnrolled
       ? attendee.enrolledActivities.filter(a => a !== activity)
@@ -108,6 +114,8 @@ export default function AttendeeDirectory({
 
   return (
     <div className="space-y-8 animate-fade-in" id="attendee-directory-tab">
+      {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
+
       {/* Search and Action Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white rounded-[24px] border border-natural-border p-6 shadow-sm">
         <div className="flex flex-1 flex-col sm:flex-row gap-3 max-w-2xl">
@@ -142,7 +150,8 @@ export default function AttendeeDirectory({
         <button
           type="button"
           onClick={() => setShowRegForm(!showRegForm)}
-          className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-semibold px-5 py-3 rounded-xl text-sm transition duration-150 shadow-md"
+          disabled={!canEdit}
+          className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-semibold px-5 py-3 rounded-xl text-sm transition duration-150 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <UserPlus className="h-4 w-4" />
           <span>Register New Colleague</span>
@@ -150,7 +159,7 @@ export default function AttendeeDirectory({
       </div>
 
       {/* Register Form Modal Box */}
-      {showRegForm && (
+      {showRegForm && canEdit && (
         <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-6 animate-slide-down">
           <div className="flex justify-between items-center border-b border-natural-border pb-4">
             <h3 className="font-serif font-bold text-natural-forest text-lg flex items-center gap-2">
@@ -296,7 +305,7 @@ export default function AttendeeDirectory({
                             <span>Progress Report</span>
                           </button>
 
-                          {deletingId === att.id ? (
+                          {deletingId === att.id && canEdit ? (
                             <div className="inline-flex items-center gap-1 animate-fade-in">
                               <button
                                 type="button"
@@ -320,7 +329,8 @@ export default function AttendeeDirectory({
                             <button
                               type="button"
                               onClick={() => setDeletingId(att.id)}
-                              className="p-2 text-natural-sand/75 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+                              disabled={!canEdit}
+                              className="p-2 text-natural-sand/75 hover:text-red-600 hover:bg-red-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-natural-sand/75"
                               title="Remove Colleague"
                             >
                               <Trash2 className="h-4 w-4" />

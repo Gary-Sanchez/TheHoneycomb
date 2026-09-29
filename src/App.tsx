@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Attendee, AttendanceRecord } from "./types";
+import { Attendee, AttendanceRecord, AuthStatus } from "./types";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
@@ -7,7 +7,9 @@ import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
-import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2 } from "lucide-react";
+import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
+
+type ServerState = { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> };
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -15,12 +17,17 @@ export default function App() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [auth, setAuth] = useState<AuthStatus>({ authenticated: false, adminConfigured: false, setupAllowed: false });
+  const canEdit = auth.authenticated;
 
   // Active colleague modal for viewing report
   const [activeReportAttendee, setActiveReportAttendee] = useState<Attendee | null>(null);
 
-  // Number of mutations sent to the server whose response hasn't arrived yet
-  const pendingMutations = useRef(0);
+  // Mutation bookkeeping for persist() (US-21): how many are awaiting a response, a counter
+  // bumped on every new one, and whether the current burst must reload once it settles
+  const inFlightMutations = useRef(0);
+  const mutationSeq = useRef(0);
+  const reloadWhenIdle = useRef(false);
 
   const loadData = () =>
     fetch("/api/data")
@@ -28,47 +35,82 @@ export default function App() {
       .then(applyServerState)
       .catch(err => console.error("Failed to load data from server:", err));
 
-  // Load initial state from the server-backed database on mount
-  useEffect(() => {
-    loadData().finally(() => setIsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Apply the server's canonical state after a mutation round-trips
-  function applyServerState(data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) {
-    setAttendees(data.attendees);
-    setRecords(data.records);
-    setNotes(data.notes);
-  }
-
-  // Send a mutation and reconcile with the server's canonical state (US-21). The optimistic
-  // local update already refreshed every derived view (Dashboard, Bee-havior Hub, ...); here we
-  // only apply the snapshot returned by the *last* in-flight mutation, so a slower response to
-  // an earlier request can't overwrite newer data (e.g. quick-add a colleague + save check-in).
-  // On failure, reload from the server so the UI never shows data that wasn't persisted.
-  const persist = (url: string, init: RequestInit, label: string) => {
-    pendingMutations.current += 1;
-    return fetch(url, init)
+  // Reload the canonical state, unless a newer mutation started meanwhile — its own response
+  // will then be the fresher snapshot, and this GET may already be stale
+  const reconcileWithServer = () => {
+    const seq = mutationSeq.current;
+    return fetch("/api/data")
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then(data => {
-        if (pendingMutations.current === 1) applyServerState(data);
+        if (seq === mutationSeq.current) applyServerState(data);
+      })
+      .catch(err => console.error("Failed to load data from server:", err));
+  };
+
+  const refreshAuth = () =>
+    fetch("/api/auth/status")
+      .then(res => res.json())
+      .then((data: AuthStatus) => setAuth(data))
+      .catch(err => console.error("Failed to load auth status:", err));
+
+  // Load initial state from the server-backed database on mount
+  useEffect(() => {
+    Promise.all([loadData(), refreshAuth()]).finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Apply the server's canonical state after a mutation round-trips
+  function applyServerState(data: ServerState) {
+    setAttendees(data.attendees);
+    setRecords(data.records);
+    setNotes(data.notes);
+  }
+
+  // Send a mutation and reconcile with the server's canonical state. The optimistic local update
+  // already refreshed every derived view (Dashboard, Bee-havior Hub, ...). Nothing is applied
+  // while other mutations are still in flight: responses can arrive out of order, so an older,
+  // slower snapshot must never overwrite newer data (US-21, e.g. quick-add a colleague + save
+  // check-in). When the last one settles, a lone successful mutation applies its own snapshot;
+  // an overlapping burst, a failure, or a lost admin session (401 → read-only, US-11) reloads
+  // from the server instead, which also discards any optimistic change that wasn't persisted.
+  const persist = (url: string, init: RequestInit, label: string) => {
+    inFlightMutations.current += 1;
+    mutationSeq.current += 1;
+    if (inFlightMutations.current > 1) reloadWhenIdle.current = true;
+    let snapshot: ServerState | null = null;
+
+    return fetch(url, init)
+      .then(async res => {
+        if (res.status === 401) {
+          setAuth(prev => ({ ...prev, authenticated: false }));
+          reloadWhenIdle.current = true;
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        snapshot = await res.json();
       })
       .catch(err => {
         console.error(`Failed to persist ${label}:`, err);
-        if (pendingMutations.current === 1) return loadData();
+        reloadWhenIdle.current = true;
       })
       .finally(() => {
-        pendingMutations.current -= 1;
+        inFlightMutations.current -= 1;
+        if (inFlightMutations.current > 0) return;
+        if (reloadWhenIdle.current) {
+          reloadWhenIdle.current = false;
+          return reconcileWithServer();
+        }
+        if (snapshot) applyServerState(snapshot);
       });
   };
 
-  const jsonRequest = (method: string, body: unknown): RequestInit => ({
+  const jsonRequest = (method: string, body?: unknown): RequestInit => ({
     method,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
 
   // 1. Quick add a colleague
@@ -188,11 +230,7 @@ export default function App() {
     // Merge in imported logs
     setRecords(prev => [...prev, ...finalLogs]);
 
-    persist(
-      "/api/records/import",
-      jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }),
-      "imported data"
-    );
+    persist("/api/records/import", jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }), "imported data");
   };
 
   // 5. Save notes for progress report
@@ -238,6 +276,20 @@ export default function App() {
               <Clock className="h-3.5 w-3.5 text-natural-sage" />
               <span>June 24, 2026</span>
             </span>
+            <button
+              type="button"
+              onClick={() => setActiveTab("settings")}
+              id="auth-badge"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold transition ${
+                canEdit
+                  ? "bg-[#CCD5AE]/30 border-[#CCD5AE]/70 text-natural-forest"
+                  : "bg-white border-natural-border text-natural-forest/70 hover:text-natural-forest"
+              }`}
+              title={canEdit ? "Admin session active" : "Read-only — sign in as admin in Settings"}
+            >
+              {canEdit ? <ShieldCheck className="h-3.5 w-3.5 text-natural-sage" /> : <Lock className="h-3.5 w-3.5 text-natural-sage" />}
+              <span>{canEdit ? "Admin" : "Sign In"}</span>
+            </button>
           </div>
 
         </div>
@@ -352,6 +404,8 @@ export default function App() {
             records={records}
             onAddAttendee={handleAddAttendee}
             onSaveRecords={handleSaveRecords}
+            canEdit={canEdit}
+            onSignIn={() => setActiveTab("settings")}
           />
         )}
 
@@ -363,6 +417,8 @@ export default function App() {
             onUpdateEnrollment={handleUpdateEnrollment}
             onViewReport={handleNavigateToAttendeeReport}
             onRemoveAttendee={handleRemoveAttendee}
+            canEdit={canEdit}
+            onSignIn={() => setActiveTab("settings")}
           />
         )}
 
@@ -380,10 +436,12 @@ export default function App() {
           <DocumentParser
             attendees={attendees}
             onImportData={handleImportParsedData}
+            canEdit={canEdit}
+            onSignIn={() => setActiveTab("settings")}
           />
         )}
 
-        {activeTab === "settings" && <SettingsPanel />}
+        {activeTab === "settings" && <SettingsPanel auth={auth} onAuthChange={refreshAuth} />}
 
       </main>
 
@@ -395,6 +453,7 @@ export default function App() {
           notes={notes[activeReportAttendee.id] || ""}
           onClose={() => setActiveReportAttendee(null)}
           onSaveNotes={handleSaveNotes}
+          canEdit={canEdit}
         />
       )}
 

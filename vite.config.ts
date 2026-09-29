@@ -1,14 +1,42 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, type Plugin} from 'vite';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// index.html ships the strict, production-mode CSP (no 'unsafe-inline' scripts,
+// no dev-server origins). Vite's dev server needs more than that: the
+// @vitejs/plugin-react preamble is an inline <script>, and the HMR client opens
+// a ws:// connection back to itself — so only in `serve` (dev) mode, swap in a
+// relaxed policy. `vite build` (what ships in the packaged Electron app) never
+// touches this and keeps the strict CSP from index.html as-is.
+//
+// HMR is intentionally scoped to localhost / 127.0.0.1 in dev: connect-src
+// below only allows those hosts (not the `ws:` scheme wholesale, nor LAN IPs).
+// That matches server.ts, which binds to 127.0.0.1 by default (US-11). If you
+// opt into HONEYCOMB_ALLOW_LAN=true and open the dev server via a LAN IP, the
+// page loads but the HMR websocket is blocked by this CSP — reload manually.
+function cspDevServerPlugin(): Plugin {
+  return {
+    name: 'honeycomb-csp-dev-server',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html, ctx) {
+        if (!ctx.server) return html;
+        return html.replace(
+          /<meta http-equiv="Content-Security-Policy"[^>]*>/,
+          `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';" />`
+        );
+      },
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), cspDevServerPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

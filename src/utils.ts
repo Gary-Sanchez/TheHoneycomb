@@ -1,3 +1,5 @@
+import { isBlacklistedName } from "./blacklist";
+
 export function isInvalidName(nameStr: string): boolean {
   if (!nameStr) return true;
   const normalizedLower = nameStr.toLowerCase().replace(/\s+/g, " ").trim();
@@ -10,55 +12,8 @@ export function isInvalidName(nameStr: string): boolean {
     return true;
   }
 
-  // 2. Filter out hosts (systematically ignore Gustavo Ramos Soria and others)
-  const HOST_SUBSTRINGS = [
-    "gustavo ramos soria",
-    "gustavo ramos",
-    "ramos soria",
-    "nicolas rios lopez",
-    "nicolas rios",
-    "rios lopez",
-    "nadine hinojosa ramos",
-    "nadine hinojosa",
-    "hinojosa ramos",
-    "wara hermosa fernandez",
-    "wara hermosa",
-    "hermosa fernandez",
-    "angela guzman rusinque",
-    "angela guzman",
-    "guzman rusinque",
-    "alejandra barrientos garrido",
-    "alejandra barrientos",
-    "barrientos garrido",
-    "gary ronald sanchez suarez",
-    "gary ronald",
-    "sanchez suarez",
-    "gary sanchez",
-    "rodrigo rivero rocha",
-    "rodrigo rivero",
-    "rivero rocha",
-    "eric revollo ayala",
-    "eric revollo",
-    "revollo ayala",
-    "alejandra rivero crespo",
-    "alejandra rivero",
-    "rivero crespo",
-    "stephanie mariscal rodriguez",
-    "stephanie mariscal",
-    "mariscal rodriguez",
-    "fabiola arias navia",
-    "fabiola arias",
-    "arias navia",
-    "pablo rico schmidt",
-    "pablo rico",
-    "rico schmidt"
-  ];
-
-  for (const host of HOST_SUBSTRINGS) {
-    if (normalizedLower === host || normalizedLower.includes(host)) {
-      return true;
-    }
-  }
+  // 2. Filter out the US-19 ingestion blacklist (facilitators / coordination staff)
+  if (isBlacklistedName(nameStr)) return true;
 
   // 3. Filter out metadata rows
   const METADATA_SUBSTRINGS = [
