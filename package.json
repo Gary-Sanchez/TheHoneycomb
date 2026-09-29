@@ -14,7 +14,8 @@
     "test:e2e": "npm run build && playwright test",
     "electron:start": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -44,11 +45,13 @@
     "electron-builder": "^25.1.8",
     "esbuild": "^0.25.0",
     "husky": "^9.1.7",
+    "jszip": "^3.10.2",
     "lint-staged": "^17.5.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^5.0.2"
   },
   "build": {
     "appId": "com.honeycomb.app",

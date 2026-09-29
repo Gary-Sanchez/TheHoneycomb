@@ -20,7 +20,9 @@ the doc for anything persistence-related.
 - `npm run dev` — runs `server.ts` via `tsx` (Express serves the API; Vite handles the frontend in dev).
 - `npm run build` — Vite build + esbuild bundles `server.ts` to `dist/server.cjs`.
 - `npm start` — runs the built server (`node dist/server.cjs`).
-- `npm run lint` — `tsc --noEmit`. No test suite currently exists.
+- `npm run lint` — `tsc --noEmit`.
+- `npm test` — Vitest unit tests (`*.test.ts`, e.g. `parser.test.ts`). `npm run test:e2e` runs the
+  Playwright suite in `e2e/` (`*.spec.ts`) against the Electron build; the two are kept apart by suffix.
 - A `husky` pre-commit hook runs `lint-staged` (config in `lint-staged.config.js`), which runs
   `tsc --noEmit` over the whole project whenever a staged `.ts`/`.tsx` file is present — blocking
   the commit on type errors. Skip it exceptionally with `git commit --no-verify` (see README).
