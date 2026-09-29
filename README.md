@@ -43,6 +43,19 @@ cd TheHoneycomb
    npm run dev
    ```
    Por default sirve en `http://localhost:3000`.
+4. Crear la contraseña de administrador: abrí **Settings → Admin Access** y usá "Create Admin
+   Password" (mínimo 8 caracteres; solo se permite desde la misma máquina y mientras no exista
+   una). Sin sesión de admin la app queda en modo lectura. Alternativa: setear
+   `HONEYCOMB_ADMIN_PASSWORD` en `.env.local` (tiene prioridad sobre la guardada).
+
+### Acceso en red y autenticación
+
+- El servidor **solo escucha en `127.0.0.1`** — otros dispositivos de la red no pueden
+  alcanzarlo. Para exponerlo a la LAN hay que setear explícitamente `HONEYCOMB_ALLOW_LAN=true`
+  (el arranque loguea una advertencia; va por HTTP plano, usalo solo detrás de VPN/proxy).
+- Toda operación que crea, modifica o borra datos (Caserits, asistencia, notas, import, reset,
+  API key de Gemini) exige sesión de admin; sin ella la API responde `401`. Las lecturas son
+  públicas. Detalle técnico en [`CLAUDE.md`](CLAUDE.md#security-server-bind--admin-auth-us-11).
 
 ### Otros comandos disponibles
 
