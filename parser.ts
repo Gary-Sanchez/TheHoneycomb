@@ -353,7 +353,9 @@ function monthFromMatch(raw: string): number | undefined {
   return MONTHS[stripAccents(raw.toLowerCase())];
 }
 
-function findDateInText(text: string | undefined | null): string | null {
+// Ambiguous numeric dates (both parts <= 12) are read month-first, as in a US-locale export,
+// unless `dayFirst` is set (see hasSpanishMarkers). A part > 12 always decides on its own.
+function findDateInText(text: string | undefined | null, dayFirst = false): string | null {
   if (!text) return null;
   const t = text.trim();
   if (!t) return null;
@@ -384,8 +386,9 @@ function findDateInText(text: string | undefined | null): string | null {
     const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
     let y = parseInt(m[3], 10);
     if (m[3].length <= 2) y += 2000;
-    const mo = a > 12 ? b : a;
-    const d = a > 12 ? a : b;
+    const swap = a > 12 || (dayFirst && b <= 12);
+    const mo = swap ? b : a;
+    const d = swap ? a : b;
     if (isValidYMD(y, mo, d)) return formatDate(y, mo, d);
   }
 
@@ -518,7 +521,8 @@ function parseCells(
   cells: string[],
   columnMap: ColumnMap | null,
   requestedActivity: string,
-  documentWideActivity: string | null
+  documentWideActivity: string | null,
+  dayFirst: boolean
 ): RawRecord | null {
   let nameRaw: string | undefined;
   let dateRaw: string | undefined;
@@ -540,10 +544,10 @@ function parseCells(
   const nameCellIdx = columnMap ? columnMap.nameIdx : 0;
   const otherCells = cells.filter((_, idx) => idx !== nameCellIdx);
 
-  let rawDate: string | null = dateRaw ? findDateInText(dateRaw) : null;
+  let rawDate: string | null = dateRaw ? findDateInText(dateRaw, dayFirst) : null;
   if (rawDate === null) {
     for (const c of otherCells) {
-      const d = findDateInText(c);
+      const d = findDateInText(c, dayFirst);
       if (d) { rawDate = d; break; }
     }
   }
@@ -576,7 +580,17 @@ function parseCells(
 // Document-wide date / activity precedence
 // ---------------------------------------------------------------------------
 
-function findDocumentWideDate(lines: string[]): string | null {
+// Spanish-locale exports (Teams "Hora de inicio", Excel "Fecha | Nombre | Estado") write numeric
+// dates day-first. Any of these accent-stripped labels appearing in the document switches the
+// ambiguous-date reading to D/M; English documents keep M/D.
+const SPANISH_MARKER_RE =
+  /\b(hora de inicio|hora de finalizacion|titulo de la reunion|participantes que asistieron|duracion de la reunion|fecha|nombre|nombre completo|estado|actividad)\b/;
+
+function hasSpanishMarkers(lines: string[]): boolean {
+  return lines.some(l => SPANISH_MARKER_RE.test(normalizeForMatch(l)));
+}
+
+function findDocumentWideDate(lines: string[], dayFirst: boolean): string | null {
   let startTimeDate: string | null = null;
   let keyValueDate: string | null = null;
 
@@ -590,7 +604,7 @@ function findDocumentWideDate(lines: string[]): string | null {
         norm.includes("start time") || norm.includes("start_time") ||
         norm.includes("hora de inicio") || norm.includes("hora inicio")
       ) {
-        const d = findDateInText(line);
+        const d = findDateInText(line, dayFirst);
         if (d) startTimeDate = d;
       }
     }
@@ -598,7 +612,7 @@ function findDocumentWideDate(lines: string[]): string | null {
     if (keyValueDate === null) {
       const kv = parseKeyValueLine(line);
       if (kv && (kv.key === "date" || kv.key === "fecha")) {
-        const d = findDateInText(kv.value);
+        const d = findDateInText(kv.value, dayFirst);
         if (d) keyValueDate = d;
       }
     }
@@ -668,7 +682,8 @@ function cleanAndFilterRecords(rawRecords: ParsedAttendanceRecord[]): ParsedAtte
 
 export function parseAttendance(text: string, requestedActivity: string = ""): ParsedAttendanceRecord[] {
   const lines = text.split(/\r?\n/);
-  const documentWideDate = findDocumentWideDate(lines);
+  const dayFirst = hasSpanishMarkers(lines);
+  const documentWideDate = findDocumentWideDate(lines, dayFirst);
   const documentWideActivity = requestedActivity ? null : findDocumentWideActivity(lines);
 
   const rawRecords: RawRecord[] = [];
@@ -691,7 +706,7 @@ export function parseAttendance(text: string, requestedActivity: string = ""): P
     // otherwise be mistaken for a CSV delimiter and corrupt the split.
     const dashParts = splitByDash(line);
     if (dashParts && dashParts.length >= 3) {
-      const rec = parseCells(dashParts, null, requestedActivity, documentWideActivity);
+      const rec = parseCells(dashParts, null, requestedActivity, documentWideActivity, dayFirst);
       if (rec) rawRecords.push(rec);
       continue;
     }
@@ -712,13 +727,13 @@ export function parseAttendance(text: string, requestedActivity: string = ""): P
         if (normalizeForMatch(cells[0]) === "sheet name") columnMap = null;
         continue;
       }
-      const rec = parseCells(cells, columnMap, requestedActivity, documentWideActivity);
+      const rec = parseCells(cells, columnMap, requestedActivity, documentWideActivity, dayFirst);
       if (rec) rawRecords.push(rec);
       continue;
     }
 
     if (dashParts) {
-      const rec = parseCells(dashParts, null, requestedActivity, documentWideActivity);
+      const rec = parseCells(dashParts, null, requestedActivity, documentWideActivity, dayFirst);
       if (rec) rawRecords.push(rec);
       continue;
     }
@@ -730,7 +745,7 @@ export function parseAttendance(text: string, requestedActivity: string = ""): P
         rawRecords.push({
           name,
           activity: requestedActivity || documentWideActivity || detectActivityFromText(line) || DEFAULT_ACTIVITY,
-          rawDate: findDateInText(line),
+          rawDate: findDateInText(line, dayFirst),
           status: matchStatusToken(parenMatch[2]) ?? "present",
         });
       }

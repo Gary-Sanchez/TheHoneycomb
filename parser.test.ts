@@ -191,3 +191,25 @@ describe(".doc extraction", () => {
     expect(parseAttendance(text, "Music Room").map(r => r.name).sort()).toEqual(["Carlos Gomez", "Elena Rostova"]);
   });
 });
+
+describe("ambiguous numeric dates", () => {
+  it("reads 12/6/26 as June 12 when the document has Spanish labels (day-first)", () => {
+    const text = "Hora de inicio: 12/6/26, 12:30:00\nElena Rostova\n";
+    expect(parseAttendance(text, "Speakeasy")[0].date).toBe("2026-06-12");
+  });
+
+  it("applies day-first to a Fecha column too", () => {
+    const text = "Fecha,Nombre,Estado\n03/06/2026,Elena Rostova,Presente\n";
+    expect(parseAttendance(text, "Speakeasy")[0].date).toBe("2026-06-03");
+  });
+
+  it("keeps month-first for English documents", () => {
+    const text = "Start time: 12/6/26, 12:30:00 PM\nElena Rostova\n";
+    expect(parseAttendance(text, "Speakeasy")[0].date).toBe("2026-12-06");
+  });
+
+  it("lets a part greater than 12 decide regardless of locale", () => {
+    expect(parseAttendance("Hora de inicio: 25/6/26\nElena Rostova\n", "Speakeasy")[0].date).toBe("2026-06-25");
+    expect(parseAttendance("Start time: 6/25/26\nElena Rostova\n", "Speakeasy")[0].date).toBe("2026-06-25");
+  });
+});
