@@ -128,14 +128,56 @@ function extractTextFromBinaryDoc(buffer: Buffer): string {
   return lines.join("\n");
 }
 
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function stripTags(s: string): string {
+  return s.replace(/<[^>]*>/g, "");
+}
+
+// Flattens mammoth's HTML into the line-oriented text parseAttendance expects. mammoth's raw text
+// output puts every table cell on its own line, which detaches a row's Status from its Name; here
+// each <tr> becomes ONE line with cells separated by tabs, so tables take the same delimiter/header
+// path as spreadsheets. Paragraphs outside tables are one line each.
+export function htmlToText(html: string): string {
+  const withTables = html.replace(/<table[\s\S]*?<\/table>/gi, table => {
+    const rows = [...table.matchAll(/<tr[\s\S]*?<\/tr>/gi)].map(row =>
+      [...row[0].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+        .map(cell => stripTags(cell[1].replace(/<\/(p|li|h[1-6])>|<br\s*\/?>/gi, " ")).replace(/\s+/g, " ").trim())
+        .join("\t")
+    );
+    return `\n${rows.join("\n")}\n`;
+  });
+  const text = stripTags(withTables.replace(/<\/(p|li|h[1-6]|div)>|<br\s*\/?>/gi, "\n"));
+  return decodeHtmlEntities(text)
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+    .join("\n");
+}
+
 export async function extractTextFromFile(buffer: Buffer, extension: string): Promise<string> {
   const ext = extension.toLowerCase();
   if (ext === ".txt" || ext === ".csv") {
     return extractTextFromTxtOrCsv(buffer);
   }
   if (ext === ".docx") {
-    const parsed = await mammoth.extractRawText({ buffer });
-    return parsed.value;
+    // Images are irrelevant here; skip mammoth's default base64 inlining so a photo-heavy
+    // document doesn't balloon the intermediate HTML.
+    const parsed = await mammoth.convertToHtml(
+      { buffer },
+      { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: "" })) }
+    );
+    return htmlToText(parsed.value);
   }
   if (ext === ".doc") {
     return extractTextFromBinaryDoc(buffer);
@@ -617,8 +659,8 @@ export function parseAttendance(text: string, requestedActivity: string = ""): P
   const rawRecords: RawRecord[] = [];
   let columnMap: ColumnMap | null = null;
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
     if (!line) continue;
 
     if (isMetadataLine(line)) continue;
@@ -642,13 +684,17 @@ export function parseAttendance(text: string, requestedActivity: string = ""): P
     const delim = detectDelimiter(line);
     if (delim) {
       const cells = splitByDelimiter(line, delim);
-      if (cells.length > 0 && METADATA_TERMS.has(normalizeForMatch(cells[0]))) {
-        if (normalizeForMatch(cells[0]) === "sheet name") columnMap = null;
+      // Header detection goes first: a header can legitimately start with a metadata term
+      // ("Date,Name,Status"), and the metadata cut below would otherwise swallow it and leave
+      // columnMap unset. "Start time<TAB>6/12/26…" pairs have no name column, so they still
+      // fall through to the metadata branch.
+      const headerMap = detectHeaderRow(cells);
+      if (headerMap && cells.length > 1) {
+        columnMap = headerMap;
         continue;
       }
-      const headerMap = detectHeaderRow(cells);
-      if (headerMap) {
-        columnMap = headerMap;
+      if (cells.length > 0 && METADATA_TERMS.has(normalizeForMatch(cells[0]))) {
+        if (normalizeForMatch(cells[0]) === "sheet name") columnMap = null;
         continue;
       }
       const rec = parseCells(cells, columnMap, requestedActivity, documentWideActivity);
@@ -695,11 +741,22 @@ export function parseAttendance(text: string, requestedActivity: string = ""): P
     // Roster fallback: a bare line with just a name (one colleague per line).
     const name = cleanNameCandidate(line);
     if (name && name.split(" ").length >= 2) {
+      // Some extractors put each table cell on its own line ("Carlos Gomez", "", "Absent"). If the
+      // next non-empty line is nothing but a status token, it belongs to this name: use it (and
+      // consume it) instead of defaulting to "present".
+      let status: "present" | "absent" = "present";
+      let j = i + 1;
+      while (j < lines.length && !lines[j].trim()) j++;
+      const nextStatus = j < lines.length ? matchStatusToken(lines[j].trim()) : null;
+      if (nextStatus) {
+        status = nextStatus;
+        i = j;
+      }
       rawRecords.push({
         name,
         activity: requestedActivity || documentWideActivity || DEFAULT_ACTIVITY,
         rawDate: null,
-        status: "present",
+        status,
       });
     }
   }
