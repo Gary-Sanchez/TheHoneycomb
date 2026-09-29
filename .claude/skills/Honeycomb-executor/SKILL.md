@@ -67,15 +67,15 @@ y preguntar — no adivinar el ticket equivocado. Si da el ID, no confirmarlo, p
 Out of Scope son el contrato: implementar de más (ej. tocar algo que el propio ticket excluye
 explícitamente) es tan incorrecto como implementar de menos.
 
-## Fase 0.5 — Autoasignarte, pasar a `InProgress`, y crear la rama de trabajo
+## Fase 0.5 — Autoasignarte, pasar a `In Progress`, y crear la rama de trabajo
 
 Estos tres pasos van juntos, apenas termina la Fase 0, **antes** de tocar código. No son
 destructivos ni ambiguos (autoasignarte un ticket que vas a trabajar ahora mismo), así que no
 llevan gate de confirmación — a diferencia del cierre (Fase 6), que sí lo lleva.
 
 1. Si la página de Notion existe: `notion-fetch id: "self"` para obtener tu user ID, y
-   `notion-update-page` sobre esa página con `properties: {"Dev": ["<tu user ID>"], "Status": "InProgress"}`.
-   Si el `Status` actual no era `ToDo` (ej. ya estaba en otro estado), avisar la discrepancia en el
+   `notion-update-page` sobre esa página con `properties: {"Dev": ["<tu user ID>"], "Status": "In Progress"}`.
+   Si el `Status` actual no era `To Do` (ej. ya estaba en otro estado), avisar la discrepancia en el
    reporte final igual, pero no dejar de avanzar por eso — el pedido del usuario de ejecutar el
    ticket ya es la confirmación de que corresponde ponerlo en progreso.
 2. Confirmar que el working tree está limpio (`git status`) antes de crear rama — si hay cambios

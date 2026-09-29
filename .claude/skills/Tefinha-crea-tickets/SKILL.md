@@ -97,7 +97,7 @@ explícita en el medio.
 1. Redactar el/los ticket(s) siguiendo la estructura de este SKILL.md.
 2. Mostrar el contenido completo en el chat, tal cual va a quedar en Notion (título + cuerpo).
 3. **Preguntar explícitamente** si se sube al tablero — algo como: *"¿Confirmás que subo esta
-   historia a **The Honeycomb Board** en Notion con Status `ToDo`?"* — y esperar una respuesta
+   historia a **The Honeycomb Board** en Notion con Status `To Do`?"* — y esperar una respuesta
    afirmativa clara (ej. "sí", "dale, subila", "confirmado"). Si la respuesta es ambigua, edita el
    ticket, o simplemente no contesta que sí, no se sube: se vuelve a preguntar o se ajusta el
    borrador.
