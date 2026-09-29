@@ -12,6 +12,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // a ws:// connection back to itself — so only in `serve` (dev) mode, swap in a
 // relaxed policy. `vite build` (what ships in the packaged Electron app) never
 // touches this and keeps the strict CSP from index.html as-is.
+//
+// HMR is intentionally scoped to localhost / 127.0.0.1 in dev: connect-src
+// below only allows those hosts (not the `ws:` scheme wholesale, nor LAN IPs).
+// That matches server.ts, which binds to 127.0.0.1 by default (US-11). If you
+// opt into HONEYCOMB_ALLOW_LAN=true and open the dev server via a LAN IP, the
+// page loads but the HMR websocket is blocked by this CSP — reload manually.
 function cspDevServerPlugin(): Plugin {
   return {
     name: 'honeycomb-csp-dev-server',
