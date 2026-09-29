@@ -145,6 +145,13 @@ const upload = multer({
 
 app.use(express.json({ limit: "5mb" }));
 
+// During shutdown (US-15), tell in-flight requests to close their keep-alive connection so
+// server.close() resolves as soon as they finish instead of waiting for the idle timeout.
+app.use((req, res, next) => {
+  if (shuttingDown) res.setHeader("Connection", "close");
+  next();
+});
+
 // Health check endpoints
 app.get(["/api/health", "/api/healthz", "/api/health-check", "/health", "/healthz"], (req, res) => {
   res.json({ status: "ok" });
@@ -842,6 +849,45 @@ Return the parsed entries in a strictly structured JSON format matching the sche
   }
 });
 
+// --- Graceful shutdown (US-15) ------------------------------------------------------------
+// Stop accepting connections, let in-flight requests finish, then wait for pending lowdb
+// writes to flush. Capped by SHUTDOWN_TIMEOUT_MS so a stuck flush can never hang the process.
+// SIGKILL / `taskkill /F` can't be intercepted and stay out of scope.
+const SHUTDOWN_TIMEOUT_MS = 5000;
+let httpServer: import("http").Server | null = null;
+let shutdownPromise: Promise<void> | null = null;
+let shuttingDown = false;
+
+// Idempotent: Electron's `before-quit` and the signal handlers below may both call it.
+export function shutdown(): Promise<void> {
+  if (!shutdownPromise) {
+    shuttingDown = true;
+    const closed = new Promise<void>(resolve => {
+      if (!httpServer) return resolve();
+      httpServer.close(() => resolve());
+      httpServer.closeIdleConnections?.();
+    });
+    const graceful = closed.then(() => db.flush());
+    let timer: NodeJS.Timeout;
+    const timeout = new Promise<void>(resolve => {
+      timer = setTimeout(() => {
+        console.warn(`[Shutdown] Timed out after ${SHUTDOWN_TIMEOUT_MS}ms; exiting without waiting further.`);
+        resolve();
+      }, SHUTDOWN_TIMEOUT_MS);
+    });
+    shutdownPromise = Promise.race([graceful, timeout])
+      .catch(err => console.error("[Shutdown] Error while flushing:", err))
+      .finally(() => clearTimeout(timer));
+  }
+  return shutdownPromise;
+}
+
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    shutdown().finally(() => process.exit(0));
+  });
+}
+
 // Serve Vite-generated assets and app
 export async function startServer() {
   const isProduction = process.env.NODE_ENV === "production";
@@ -885,7 +931,7 @@ export async function startServer() {
   // Localhost-only by default; exposing the API to the LAN is an explicit opt-in (US-11).
   const allowLan = process.env.HONEYCOMB_ALLOW_LAN === "true";
   const host = allowLan ? "0.0.0.0" : "127.0.0.1";
-  app.listen(PORT, host, () => {
+  httpServer = app.listen(PORT, host, () => {
     console.log(`Server running on http://${host}:${PORT}`);
     if (allowLan) {
       console.warn(

@@ -39,6 +39,9 @@ type LowDbInstance = Awaited<ReturnType<typeof JSONFilePresetType<HoneycombData>
 
 let dbPromise: Promise<LowDbInstance> | null = null;
 
+// Writes started but not yet settled; flush() awaits these before the process exits (US-15).
+const pendingWrites = new Set<Promise<unknown>>();
+
 async function getDb(): Promise<LowDbInstance> {
   if (!dbPromise) {
     // lowdb is ESM-only. A static `import` gets converted to `require()` by esbuild's
@@ -49,9 +52,30 @@ async function getDb(): Promise<LowDbInstance> {
     // No auto-seed on empty data: a fresh install (or a real database the user emptied
     // out) must start/stay empty. Demo data only loads on an explicit Reset Demo Seed
     // (resetToSeed below) — see US-04.
-    dbPromise = import("lowdb/node").then(({ JSONFilePreset }) => JSONFilePreset<HoneycombData>(getDbPath(), DEFAULT_DATA));
+    dbPromise = import("lowdb/node")
+      .then(({ JSONFilePreset }) => JSONFilePreset<HoneycombData>(getDbPath(), DEFAULT_DATA))
+      .then(db => {
+        // Track every write so flush() can wait for in-flight ones without touching each mutation.
+        const originalWrite = db.write.bind(db);
+        db.write = () => {
+          const p = originalWrite();
+          pendingWrites.add(p);
+          const untrack = () => pendingWrites.delete(p);
+          p.then(untrack, untrack);
+          return p;
+        };
+        return db;
+      });
   }
   return dbPromise;
+}
+
+// Resolves once every write started so far has settled (no-op when nothing is pending).
+// Loops because a write can be started while we're awaiting the previous batch.
+export async function flush(): Promise<void> {
+  while (pendingWrites.size > 0) {
+    await Promise.allSettled([...pendingWrites]);
+  }
 }
 
 export async function getState(): Promise<HoneycombData> {
