@@ -10,7 +10,7 @@
 | Propiedad | Tipo   | Valores |
 |-----------|--------|---------|
 | `Name`    | title  | Título de la historia de usuario |
-| `Status`  | select | `ToDo`, `InProgress`, `QA Ready`, `Under Testing`, `Done`, `Blocked` |
+| `Status`  | select | `To Do`, `In Progress`, `QA Ready`, `Merge Ready`, `Done`, `Blocked` |
 | `Dev`     | person | Quién está desarrollando el ticket (asignación) |
 | `QA`      | person | Quién lo está testeando |
 | `Date`    | date   | Sin uso definido todavía en las skills existentes |
@@ -24,10 +24,24 @@ coincide con lo que ves acá, volvé a hacer `fetch` del data source
 (`collection://8cc326dd-ee75-415d-a78a-951a0cc146e7`) para confirmar el esquema vigente antes de
 asumir que sigue siendo el mismo.
 
+### Flujo de `Status`
+
+| Estado        | Significado | Quién lo mueve |
+|---------------|-------------|----------------|
+| `To Do`       | Ticket creado, sin arrancar | [`Tefinha-crea-tickets`](../SKILL.md) al crearlo |
+| `In Progress` | En desarrollo (o devuelto por QA con Failed / Needs Fix) | [`Honeycomb-executor`](../../Honeycomb-executor/SKILL.md) al arrancar; [`super-tefinha-QA`](../../super-tefinha-QA/SKILL.md) si falla |
+| `QA Ready`    | PR abierto, listo para (o en) QA | `Honeycomb-executor` al cierre, con gate |
+| `Merge Ready` | QA aprobado (Passed), listo para mergear el PR | `super-tefinha-QA` con veredicto Passed |
+| `Done`        | PR mergeado / ticket cerrado | Manual, o con confirmación explícita del usuario |
+| `Blocked`     | Bloqueado por una dependencia externa | Manual |
+
+Los nombres llevan espacio (`To Do`, `In Progress`, `Merge Ready`); las versiones viejas `ToDo`,
+`InProgress` y `Under Testing` ya **no existen** en el select — no usarlas.
+
 ### Asignación (`Dev`) al arrancar un ticket
 
 [`Honeycomb-executor`](../../Honeycomb-executor/SKILL.md) autoasigna el ticket al usuario actual en
-`Dev` y pasa `Status` a `InProgress` al arrancar el desarrollo. Para obtener el ID del usuario
+`Dev` y pasa `Status` a `In Progress` al arrancar el desarrollo. Para obtener el ID del usuario
 actual (necesario para el property `Dev`, que espera un array de user IDs), usar
 `notion-fetch` con `id: "self"` — devuelve `self.user.id`. No hace falta pedir confirmación para
 este paso puntual (asignarse a uno mismo y marcar en progreso no es una decisión ambigua ni
@@ -37,7 +51,7 @@ destructiva), a diferencia de mover a `Done`, que si requiere gate explícito.
 
 - `properties.Name` = el título completo de la historia, igual que el H1 del ticket
   (`US-{NN}: {Título}`) — **sin** el `#` de markdown.
-- `properties.Status` = `"ToDo"` por default (ticket recién creado), salvo que el usuario indique
+- `properties.Status` = `"To Do"` por default (ticket recién creado), salvo que el usuario indique
   explícitamente otro estado.
 - `content` = el resto del ticket en markdown (desde `**Prioridad:**` en adelante), **sin repetir
   el título** — la herramienta de creación de páginas ya lo toma de `properties.Name` y lo muestra

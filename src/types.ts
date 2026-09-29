@@ -23,6 +23,13 @@ export interface ParsedRecord {
   matchedAttendeeId?: string; // If we matched it to an existing attendee
 }
 
+// Response of GET /api/auth/status (US-11)
+export interface AuthStatus {
+  authenticated: boolean;
+  adminConfigured: boolean;
+  setupAllowed: boolean; // no admin password yet AND request came from localhost
+}
+
 export const ACTIVITIES = [
   "Speakeasy",
   "Reading Club",
