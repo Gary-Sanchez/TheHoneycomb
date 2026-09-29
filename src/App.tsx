@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Attendee, AttendanceRecord } from "./types";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
@@ -19,25 +19,57 @@ export default function App() {
   // Active colleague modal for viewing report
   const [activeReportAttendee, setActiveReportAttendee] = useState<Attendee | null>(null);
 
-  // Load initial state from the server-backed database on mount
-  useEffect(() => {
+  // Number of mutations sent to the server whose response hasn't arrived yet
+  const pendingMutations = useRef(0);
+
+  const loadData = () =>
     fetch("/api/data")
       .then(res => res.json())
-      .then(data => {
-        setAttendees(data.attendees);
-        setRecords(data.records);
-        setNotes(data.notes);
-      })
-      .catch(err => console.error("Failed to load data from server:", err))
-      .finally(() => setIsLoading(false));
+      .then(applyServerState)
+      .catch(err => console.error("Failed to load data from server:", err));
+
+  // Load initial state from the server-backed database on mount
+  useEffect(() => {
+    loadData().finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Apply the server's canonical state after a mutation round-trips
-  const applyServerState = (data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) => {
+  function applyServerState(data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) {
     setAttendees(data.attendees);
     setRecords(data.records);
     setNotes(data.notes);
+  }
+
+  // Send a mutation and reconcile with the server's canonical state (US-21). The optimistic
+  // local update already refreshed every derived view (Dashboard, Bee-havior Hub, ...); here we
+  // only apply the snapshot returned by the *last* in-flight mutation, so a slower response to
+  // an earlier request can't overwrite newer data (e.g. quick-add a colleague + save check-in).
+  // On failure, reload from the server so the UI never shows data that wasn't persisted.
+  const persist = (url: string, init: RequestInit, label: string) => {
+    pendingMutations.current += 1;
+    return fetch(url, init)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (pendingMutations.current === 1) applyServerState(data);
+      })
+      .catch(err => {
+        console.error(`Failed to persist ${label}:`, err);
+        if (pendingMutations.current === 1) return loadData();
+      })
+      .finally(() => {
+        pendingMutations.current -= 1;
+      });
   };
+
+  const jsonRequest = (method: string, body: unknown): RequestInit => ({
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
   // 1. Quick add a colleague
   const handleAddAttendee = (name: string, email: string, enrolledActivities: string[]): Attendee => {
@@ -51,14 +83,7 @@ export default function App() {
 
     setAttendees(prev => [...prev, newAttendee]);
 
-    fetch("/api/attendees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newAttendee),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist new attendee:", err));
+    persist("/api/attendees", jsonRequest("POST", newAttendee), "new attendee");
 
     return newAttendee;
   };
@@ -74,14 +99,7 @@ export default function App() {
       setActiveReportAttendee(prev => (prev ? { ...prev, enrolledActivities: activities } : null));
     }
 
-    fetch(`/api/attendees/${attendeeId}/enrollment`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activities }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist enrollment update:", err));
+    persist(`/api/attendees/${attendeeId}/enrollment`, jsonRequest("PUT", { activities }), "enrollment update");
   };
 
   const handleRemoveAttendee = (attendeeId: string) => {
@@ -97,10 +115,7 @@ export default function App() {
       setActiveReportAttendee(null);
     }
 
-    fetch(`/api/attendees/${attendeeId}`, { method: "DELETE" })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist attendee removal:", err));
+    persist(`/api/attendees/${attendeeId}`, { method: "DELETE" }, "attendee removal");
   };
 
   // 3. Save manual session checklist records
@@ -120,14 +135,7 @@ export default function App() {
       return [...filtered, ...instantiated];
     });
 
-    fetch("/api/records", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ records: instantiated }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist records:", err));
+    persist("/api/records", jsonRequest("POST", { records: instantiated }), "records");
   };
 
   // 4. Batch import parsed files from Gemini
@@ -180,28 +188,18 @@ export default function App() {
     // Merge in imported logs
     setRecords(prev => [...prev, ...finalLogs]);
 
-    fetch("/api/records/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attendees: createdAttendees, records: finalLogs }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist imported data:", err));
+    persist(
+      "/api/records/import",
+      jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }),
+      "imported data"
+    );
   };
 
   // 5. Save notes for progress report
   const handleSaveNotes = (attendeeId: string, text: string) => {
     setNotes(prev => ({ ...prev, [attendeeId]: text }));
 
-    fetch(`/api/notes/${attendeeId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    })
-      .then(res => res.json())
-      .then(applyServerState)
-      .catch(err => console.error("Failed to persist note:", err));
+    persist(`/api/notes/${attendeeId}`, jsonRequest("PUT", { text }), "note");
   };
 
   // Helper to open progress report of colleague
