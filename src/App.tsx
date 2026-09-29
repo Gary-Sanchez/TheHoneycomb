@@ -7,7 +7,7 @@ import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
-import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, RefreshCw, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -194,14 +194,6 @@ export default function App() {
     persist(`/api/notes/${attendeeId}`, jsonRequest("PUT", { text }), "note");
   };
 
-  // 6. Restore demo/seed data
-  const handleResetDatabase = () => {
-    if (!canEdit) return;
-    if (window.confirm("Are you sure you want to restore the demo seed data? This will overwrite your current progress.")) {
-      persist("/api/reset", { method: "POST" }, "database reset").then(() => setActiveTab("dashboard"));
-    }
-  };
-
   // Helper to open progress report of colleague
   const handleNavigateToAttendeeReport = (att: Attendee) => {
     setActiveReportAttendee(att);
@@ -238,15 +230,6 @@ export default function App() {
               <Clock className="h-3.5 w-3.5 text-natural-sage" />
               <span>June 24, 2026</span>
             </span>
-            <button
-              onClick={handleResetDatabase}
-              disabled={!canEdit}
-              className="flex items-center gap-1 hover:text-natural-sand text-natural-forest font-bold transition py-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-natural-forest"
-              title={canEdit ? "Reset database to default seed data" : "Sign in as admin to reset the database"}
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-natural-sage" />
-              <span>Reset Demo Seed</span>
-            </button>
             <button
               type="button"
               onClick={() => setActiveTab("settings")}

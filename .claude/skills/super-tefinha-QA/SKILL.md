@@ -1,6 +1,6 @@
 ---
 name: super-tefinha-QA
-description: Especialista sénior de QA (pruebas manuales y automatizadas). Recibe la URL de un ticket de Notion, revisa criterios de aceptación y escenarios de QA, valida la pull request de GitHub asociada, deja un veredicto (Passed / Failed / Needs Fix) como comentario en el ticket y, si falla, comenta la corrección en la PR y regresa el ticket a `InProgress` en The Honeycomb Board. Usar cuando el usuario invoque /super-tefinha-QA con una URL de Notion o pida hacer QA de un ticket.
+description: Especialista sénior de QA (pruebas manuales y automatizadas). Recibe la URL de un ticket de Notion, revisa criterios de aceptación y escenarios de QA, valida la pull request de GitHub asociada, deja un veredicto (Passed / Failed / Needs Fix) como comentario en el ticket y, si falla, comenta la corrección en la PR y regresa el ticket a `In Progress` en The Honeycomb Board (si pasa, lo mueve a `Merge Ready`). Usar cuando el usuario invoque /super-tefinha-QA con una URL de Notion o pida hacer QA de un ticket.
 argument-hint: <URL del ticket de Notion> [número o URL de la PR opcional]
 ---
 
@@ -31,10 +31,10 @@ Argumentos recibidos: `$ARGUMENTS`
    - **Criterios de aceptación** (AC).
    - **Escenarios de prueba de QA** y **QA checks**.
    - Entornos, datos de prueba, credenciales de prueba referenciadas (sin exponerlas), dependencias.
-   - Valor actual de `Status` y personas en `Dev` / `QA`. El esquema del tablero (**The Honeycomb Board**) está en [`../Tefinha-crea-tickets/references/notion-board.md`](../Tefinha-crea-tickets/references/notion-board.md): `Status` es un select con `ToDo`, `InProgress`, `QA Ready`, `Under Testing`, `Done`, `Blocked`. Si algo no coincide, vuelve a hacer `fetch` del data source para confirmar el esquema vigente.
+   - Valor actual de `Status` y personas en `Dev` / `QA`. El esquema del tablero (**The Honeycomb Board**) está en [`../Tefinha-crea-tickets/references/notion-board.md`](../Tefinha-crea-tickets/references/notion-board.md): `Status` es un select con `To Do`, `In Progress`, `QA Ready`, `Merge Ready`, `Done`, `Blocked` (ver la sección "Flujo de `Status`" de ese archivo). Si algo no coincide, vuelve a hacer `fetch` del data source para confirmar el esquema vigente.
 3. Si los AC o escenarios son ambiguos o faltan, anótalo como hallazgo; diseña tú misma los escenarios mínimos necesarios (camino feliz, casos límite, negativos, regresión) y señálalos como "escenarios añadidos por QA".
 
-4. Al empezar a probar, asígnate en `QA` (ID del usuario actual con `notion-fetch` `id: "self"`) y pasa `Status` a `Under Testing`.
+4. Al empezar a probar, asígnate en `QA` (ID del usuario actual con `notion-fetch` `id: "self"`). El `Status` se queda en `QA Ready` mientras dure la prueba — no hay columna intermedia de "en testing"; tener a alguien en `QA` es lo que indica que ya se está probando.
 
 ### 2. Localizar la pull request
 1. Si se pasó la PR como argumento, úsala.
@@ -100,9 +100,10 @@ Observaciones: <ambigüedades del ticket, escenarios añadidos por QA, bloqueos>
    - **Procedimiento de corrección propuesto**: archivo(s) y línea(s) implicadas, causa probable y cambio sugerido (con fragmento de código cuando ayude).
    - Pruebas que deberían añadirse para cubrir el caso.
    - Enlace al ticket de Notion.
-2. **Cambiar el estado del ticket** a **`InProgress`** con `notion-update-page` (propiedad `Status`).
+2. **Cambiar el estado del ticket** a **`In Progress`** con `notion-update-page` (propiedad `Status`).
 
-Si el veredicto es **Passed**, no muevas el ticket a `Done` sin confirmación explícita del usuario; indícale que queda listo para cerrarse.
+### 8. Si el veredicto es Passed
+**Cambiar el estado del ticket** a **`Merge Ready`** con `notion-update-page` (propiedad `Status`): QA aprobado, la PR queda lista para mergear. No muevas el ticket a `Done` sin confirmación explícita del usuario — `Done` corresponde a la PR ya mergeada.
 
 ## Reglas
 - Nunca apruebes, fusiones, cierres ni hagas push a la PR; tu papel es verificar y reportar.
