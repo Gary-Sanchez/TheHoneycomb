@@ -96,7 +96,32 @@ export async function saveRecords(newRecordsToSave: AttendanceRecord[]): Promise
 
   const { date, activity } = newRecordsToSave[0];
   const filtered = db.data.records.filter(r => !(r.date === date && r.activity === activity));
-  db.data.records = [...filtered, ...newRecordsToSave];
+  // US-20: one record per colleague per session, even if the payload repeats someone
+  const uniqueByAttendee = [...new Map(newRecordsToSave.map(r => [r.attendeeId, r])).values()];
+  db.data.records = [...filtered, ...uniqueByAttendee];
+  await db.write();
+  return db.data;
+}
+
+// Mirrors handleManualCheckIn (src/App.tsx) — US-20. A session is the set of records sharing
+// date+activity (same shape a .csv import produces), so checking someone in upserts their record
+// by attendeeId+date+activity: it joins the existing session or starts it, never duplicating it.
+export async function manualCheckIn(
+  newAttendee: Attendee | null,
+  record: AttendanceRecord
+): Promise<HoneycombData> {
+  const db = await getDb();
+  if (newAttendee && !db.data.attendees.some(att => att.id === newAttendee.id)) {
+    db.data.attendees.push(newAttendee);
+  }
+  const existing = db.data.records.find(
+    r => r.attendeeId === record.attendeeId && r.date === record.date && r.activity === record.activity
+  );
+  if (existing) {
+    existing.status = record.status;
+  } else {
+    db.data.records.push(record);
+  }
   await db.write();
   return db.data;
 }

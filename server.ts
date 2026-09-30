@@ -13,6 +13,7 @@ import {
   attendeeSchema,
   enrollmentBodySchema,
   importBodySchema,
+  manualCheckInBodySchema,
   noteBodySchema,
   recordsBodySchema,
   settingsBodySchema,
@@ -265,6 +266,11 @@ app.delete("/api/attendees/:id", requireAdmin, async (req, res) => {
 
 app.post("/api/records", requireAdmin, validateBody(recordsBodySchema), async (req, res) => {
   res.json(await db.saveRecords(req.body.records));
+});
+
+// US-20: add one colleague (new or existing) to the session for a date+activity
+app.post("/api/records/manual", requireAdmin, validateBody(manualCheckInBodySchema), async (req, res) => {
+  res.json(await db.manualCheckIn(req.body.attendee ?? null, req.body.record));
 });
 
 app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), async (req, res) => {

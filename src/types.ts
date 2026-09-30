@@ -23,6 +23,14 @@ export interface ParsedRecord {
   matchedAttendeeId?: string; // If we matched it to an existing attendee
 }
 
+// Outcome of a manual check-in into a date+activity session (US-20)
+export interface ManualCheckInResult {
+  attendee: Attendee;
+  isNew: boolean; // colleague was just created in the directory
+  joinedExistingSession: boolean; // the date+activity session already had records
+  alreadyInSession: boolean; // this colleague was already logged in that session
+}
+
 // Response of GET /api/auth/status (US-11)
 export interface AuthStatus {
   authenticated: boolean;

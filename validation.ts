@@ -1,5 +1,6 @@
 import type express from "express";
 import { z } from "zod";
+import { ACTIVITIES } from "./src/types";
 
 // Request-body schemas for every mutating endpoint in server.ts (US-10). Validation runs before
 // any db.ts call, so a malformed payload can never reach lowdb / honeycomb-data.json.
@@ -45,6 +46,25 @@ export const importBodySchema = z.object({
   attendees: z.array(attendeeSchema, { error: fieldError("must be an array of attendees") }),
   records: recordsArray,
 });
+
+// US-20 manual check-in: the record must name a colleague and one of the 4 fixed activities;
+// `attendee` is sent only when the colleague is new, and must be the one the record points to.
+export const manualCheckInBodySchema = z
+  .object({
+    attendee: attendeeSchema.optional(),
+    record: z.object(
+      {
+        ...attendanceRecordSchema.shape,
+        attendeeName: nonEmptyString,
+        activity: z.enum(ACTIVITIES, { error: fieldError(`must be one of: ${ACTIVITIES.join(", ")}`) }),
+      },
+      { error: fieldError("must be an attendance record object") }
+    ),
+  })
+  .refine(body => !body.attendee || body.attendee.id === body.record.attendeeId, {
+    error: "must match record.attendeeId",
+    path: ["attendee", "id"],
+  });
 
 // An empty string is valid: it clears the note.
 export const noteBodySchema = z.object({ text: string() });
