@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Attendee, AttendanceRecord, AuthStatus } from "./types";
+import { Attendee, AttendanceRecord, AuthStatus, ManualCheckInResult } from "./types";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
@@ -178,6 +178,52 @@ export default function App() {
     });
 
     persist("/api/records", jsonRequest("POST", { records: instantiated }), "records");
+  };
+
+  // 3b. Manually add one colleague to the session for a date+activity (US-20). Reuses an existing
+  // colleague by name; the record joins that date+activity's session (or starts it), upserting
+  // by attendeeId+date+activity so the same person is never logged twice in one session.
+  const handleManualCheckIn = (rawName: string, date: string, activity: string): ManualCheckInResult => {
+    const name = rawName
+      .trim()
+      .split(/\s+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+
+    const existingAttendee = attendees.find(a => a.name.toLowerCase() === name.toLowerCase());
+    const attendee: Attendee = existingAttendee ?? {
+      id: `att-${Date.now()}`,
+      name,
+      enrolledActivities: [],
+      joinedDate: new Date().toISOString().split("T")[0],
+    };
+    const joinedExistingSession = records.some(r => r.date === date && r.activity === activity);
+    const alreadyInSession = records.find(
+      r => r.attendeeId === attendee.id && r.date === date && r.activity === activity
+    );
+
+    const record: AttendanceRecord = {
+      id: alreadyInSession?.id ?? `log-${Date.now()}-manual`,
+      attendeeId: attendee.id,
+      attendeeName: attendee.name,
+      activity,
+      date,
+      status: "present",
+    };
+
+    if (!existingAttendee) setAttendees(prev => [...prev, attendee]);
+    setRecords(prev => [
+      ...prev.filter(r => !(r.attendeeId === attendee.id && r.date === date && r.activity === activity)),
+      record,
+    ]);
+
+    persist(
+      "/api/records/manual",
+      jsonRequest("POST", { attendee: existingAttendee ? undefined : attendee, record }),
+      "manual check-in"
+    );
+
+    return { attendee, isNew: !existingAttendee, joinedExistingSession, alreadyInSession: Boolean(alreadyInSession) };
   };
 
   // 4. Batch import parsed files from the Smart Document Parser
@@ -404,6 +450,7 @@ export default function App() {
             records={records}
             onAddAttendee={handleAddAttendee}
             onSaveRecords={handleSaveRecords}
+            onManualCheckIn={handleManualCheckIn}
             canEdit={canEdit}
             onSignIn={() => setActiveTab("settings")}
           />

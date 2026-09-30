@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import * as xlsx from "xlsx";
-import { extractTextFromFile, htmlToText, parseAttendance } from "./parser";
+import { extractTextFromFile, htmlToText, parseAttendance, parseCsvAttendance } from "./parser";
 
 const byName = (records: ReturnType<typeof parseAttendance>) =>
   Object.fromEntries(records.map(r => [r.name, r]));
@@ -211,5 +211,70 @@ describe("ambiguous numeric dates", () => {
   it("lets a part greater than 12 decide regardless of locale", () => {
     expect(parseAttendance("Hora de inicio: 25/6/26\nElena Rostova\n", "Speakeasy")[0].date).toBe("2026-06-25");
     expect(parseAttendance("Start time: 6/25/26\nElena Rostova\n", "Speakeasy")[0].date).toBe("2026-06-25");
+  });
+});
+
+describe("parseCsvAttendance (US-18 .csv path)", () => {
+  const csvByName = (records: ReturnType<typeof parseCsvAttendance>["records"]) =>
+    Object.fromEntries(records.map(r => [r.name, r]));
+
+  it("takes the session date from the Teams Start time row and Title Cases names", () => {
+    const csv = [
+      "Meeting title,Speakeasy weekly",
+      'Start time,"6/12/26, 12:30:00 PM"',
+      "",
+      "Name,Email,Role",
+      "PEDRO ALVAREZ,p@x.com,Attendee",
+      "mIgUeL sAnChEz (Guest),m@x.com,Attendee",
+    ].join("\n");
+    const first = parseCsvAttendance(Buffer.from(csv, "utf-8"), "Speakeasy");
+    expect(first.dateDetected).toBe(true);
+    expect(first.records.map(r => [r.name, r.date])).toEqual([
+      ["Pedro Alvarez", "2026-06-12"],
+      ["Miguel Sanchez", "2026-06-12"],
+    ]);
+    // Deterministic: the same file always yields the same result
+    expect(parseCsvAttendance(Buffer.from(csv, "utf-8"), "Speakeasy")).toEqual(first);
+  });
+
+  it("reports dateDetected=false with empty dates instead of defaulting to the reference date", () => {
+    const csv = "Start time,not a date\nName\nElena Rostova\n";
+    const { records, dateDetected } = parseCsvAttendance(Buffer.from(csv, "utf-8"), "Speakeasy");
+    expect(dateDetected).toBe(false);
+    expect(records).toEqual([{ name: "Elena Rostova", activity: "Speakeasy", date: "", status: "present" }]);
+  });
+
+  it("maps a Date,Name,Activity,Status header (date, activity and absent status kept)", () => {
+    const csv = [
+      "Date,Name,Activity,Status",
+      "2026-06-10,Elena Rostova,Reading Club,Present",
+      "2026-06-10,Carlos Gomez,Reading Club,Absent",
+    ].join("\n");
+    const rec = csvByName(parseCsvAttendance(Buffer.from(csv, "utf-8")).records);
+    expect(Object.keys(rec).sort()).toEqual(["Carlos Gomez", "Elena Rostova"]);
+    expect(rec["Elena Rostova"]).toMatchObject({ date: "2026-06-10", activity: "Reading Club", status: "present" });
+    expect(rec["Carlos Gomez"]).toMatchObject({ date: "2026-06-10", activity: "Reading Club", status: "absent" });
+  });
+
+  it("lets the activity chosen for the upload win over the Activity column", () => {
+    const csv = "Date,Name,Activity\n2026-06-10,Elena Rostova,Reading Club\n";
+    expect(parseCsvAttendance(Buffer.from(csv, "utf-8"), "Music Room").records[0].activity).toBe("Music Room");
+  });
+
+  it("splits ';' CSVs and keeps accents from latin1 files", () => {
+    const csv = "Fecha;Nombre;Estado\n10/06/2026;José Núñez;Presente\n10/06/2026;María Pérez;Ausente\n";
+    const rec = csvByName(parseCsvAttendance(Buffer.from(csv, "latin1"), "Reading Club").records);
+    expect(rec["José Núñez"]?.status).toBe("present");
+    expect(rec["María Pérez"]?.status).toBe("absent");
+  });
+
+  it("decodes UTF-16LE Teams exports", () => {
+    const csv = "Name\tRole\r\nElena Rostova\tAttendee\r\n";
+    const buf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(csv, "utf16le")]);
+    expect(parseCsvAttendance(buf, "Speakeasy").records.map(r => r.name)).toEqual(["Elena Rostova"]);
+  });
+
+  it("flags an empty file", () => {
+    expect(parseCsvAttendance(Buffer.from("  \n", "utf-8")).isEmpty).toBe(true);
   });
 });

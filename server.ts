@@ -6,7 +6,16 @@ import multer from "multer";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import * as db from "./db";
-import { extractTextFromFile, parseAttendance } from "./parser";
+import { extractTextFromFile, parseAttendance, parseCsvAttendance } from "./parser";
+import {
+  attendeeSchema,
+  enrollmentBodySchema,
+  importBodySchema,
+  manualCheckInBodySchema,
+  noteBodySchema,
+  recordsBodySchema,
+  validateBody,
+} from "./validation";
 
 dotenv.config();
 
@@ -208,33 +217,39 @@ app.post("/api/auth/setup", (req, res): any => {
 
 // Data layer: attendees, attendance records, and notes (persisted via db.ts / lowdb),
 // replacing what used to be read/written directly to the browser's localStorage.
-// Reads are public; every mutation requires an admin session (US-11).
+// Reads are public; every mutation requires an admin session (US-11) and a body that passes its
+// validation.ts schema (US-10) — an invalid payload gets a 400 before anything reaches db.ts.
 app.get("/api/data", async (req, res) => {
   res.json(await db.getState());
 });
 
-app.post("/api/attendees", requireAdmin, async (req, res) => {
+app.post("/api/attendees", requireAdmin, validateBody(attendeeSchema), async (req, res) => {
   res.json(await db.addAttendee(req.body));
 });
 
-app.put("/api/attendees/:id/enrollment", requireAdmin, async (req, res) => {
-  res.json(await db.updateEnrollment(req.params.id, req.body.activities || []));
+app.put("/api/attendees/:id/enrollment", requireAdmin, validateBody(enrollmentBodySchema), async (req, res) => {
+  res.json(await db.updateEnrollment(req.params.id, req.body.activities));
 });
 
 app.delete("/api/attendees/:id", requireAdmin, async (req, res) => {
   res.json(await db.removeAttendee(req.params.id));
 });
 
-app.post("/api/records", requireAdmin, async (req, res) => {
-  res.json(await db.saveRecords(req.body.records || []));
+app.post("/api/records", requireAdmin, validateBody(recordsBodySchema), async (req, res) => {
+  res.json(await db.saveRecords(req.body.records));
 });
 
-app.post("/api/records/import", requireAdmin, async (req, res) => {
-  res.json(await db.importParsedData(req.body.attendees || [], req.body.records || []));
+// US-20: add one colleague (new or existing) to the session for a date+activity
+app.post("/api/records/manual", requireAdmin, validateBody(manualCheckInBodySchema), async (req, res) => {
+  res.json(await db.manualCheckIn(req.body.attendee ?? null, req.body.record));
 });
 
-app.put("/api/notes/:attendeeId", requireAdmin, async (req, res) => {
-  res.json(await db.saveNote(req.params.attendeeId, req.body.text || ""));
+app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), async (req, res) => {
+  res.json(await db.importParsedData(req.body.attendees, req.body.records));
+});
+
+app.put("/api/notes/:attendeeId", requireAdmin, validateBody(noteBodySchema), async (req, res) => {
+  res.json(await db.saveNote(req.params.attendeeId, req.body.text));
 });
 
 app.post("/api/reset", requireAdmin, async (req, res) => {
@@ -265,6 +280,21 @@ app.post("/api/parse-attendance-file", upload.single("file"), async (req, res): 
     if (!supportedExtensions.includes(extension)) {
       return res.status(400).json({
         error: `Unsupported file type: ${extension}. Please upload .txt, .csv, .docx, .doc, .xlsx, or .xls files.`,
+      });
+    }
+
+    // US-18: .csv has its own table-aware parser that never invents a session date — with no
+    // valid date in the file it returns dateDetected=false and the UI asks for one.
+    if (extension === ".csv") {
+      const { records, dateDetected, isEmpty } = parseCsvAttendance(file.buffer, requestedActivity);
+      if (isEmpty) {
+        return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
+      }
+      return res.json({
+        filename,
+        recordsCount: records.length,
+        records,
+        dateDetected,
       });
     }
 

@@ -41,7 +41,8 @@ the doc for anything persistence-related.
   deterministic offline parser in `parser.ts` — no external AI/LLM call and no API key involved.
   It reuses `isInvalidName` from `src/utils.ts` (same host/facilitator exclusion `db.ts` uses for
   seed filtering) plus its own parser-local heuristics for dates, activities, statuses, and
-  meeting metadata.
+  meeting metadata. `.csv` files take their own path, `parseCsvAttendance` (US-18): it never falls
+  back to the reference date, and returns `dateDetected: false` so the UI requires a date.
 - Frontend state lives in `src/App.tsx`, which owns the handlers (`handleAddAttendee`,
   `handleSaveRecords`, `handleImportParsedData`, `handleResetDatabase`, etc.) that `db.ts`'s
   functions mirror 1:1 — check the "Mirrors handleX" comments in `db.ts` when changing either side.
@@ -71,9 +72,13 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   `POST /api/auth/login|logout|setup`.
 - **Every mutating route uses the `requireAdmin` middleware** (401 JSON without a session):
   `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
-  `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/import`,
+  `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/manual`, `POST /api/records/import`,
   `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
   `GET`s and `/api/parse-attendance-file` (doesn't persist) stay public.
+- **Input validation (US-10)**: every mutating route with a body also runs
+  `validateBody(<zod schema>)` from `validation.ts` after `requireAdmin` → 400
+  `{ error, details }` before anything reaches `db.ts`. Schemas mirror `src/types.ts`; keep them in
+  sync, and give any new mutating route with a body its own schema.
 - Frontend: `App.tsx` holds `auth` (from `/api/auth/status`) and passes `canEdit` to the tabs,
   which disable mutating controls and show `ReadOnlyNotice`. Mutations go through `persist()`,
   which on a 401 drops to read-only and reloads server state to undo the optimistic update.

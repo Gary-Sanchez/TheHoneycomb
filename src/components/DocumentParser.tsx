@@ -23,6 +23,9 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   const [parsedRecords, setParsedRecords] = useState<ParsedRecord[]>([]);
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [batchDate, setBatchDate] = useState<string>("2026-06-24");
+  // US-18: the parser found no valid session date in the file, so the user must pick one
+  const [dateRequired, setDateRequired] = useState(false);
+  const hasMissingDates = parsedRecords.some(rec => !rec.date);
   
   const handleUpdateDate = (index: number, newDate: string) => {
     setParsedRecords(prev => prev.map((rec, idx) => idx === index ? { ...rec, date: newDate } : rec));
@@ -239,7 +242,11 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       });
 
       setParsedRecords(processed);
-      if (processed.length > 0 && processed[0].date) {
+      const missingDate = data.dateDetected === false || processed.some(rec => !rec.date);
+      setDateRequired(missingDate);
+      if (missingDate) {
+        setBatchDate("");
+      } else if (processed.length > 0 && processed[0].date) {
         setBatchDate(processed[0].date);
       }
 
@@ -262,7 +269,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
   // Import the approved records into the master list
   const handleImportApproved = () => {
-    if (!canEdit) return;
+    if (!canEdit || hasMissingDates) return;
     const newAttendeesToCreate: Omit<Attendee, "id">[] = [];
     const newRecordsToSave: Omit<AttendanceRecord, "id">[] = [];
 
@@ -542,7 +549,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               <button
                 type="button"
                 onClick={handleImportApproved}
-                disabled={!canEdit}
+                disabled={!canEdit || hasMissingDates}
+                title={hasMissingDates ? "Select a session date in Batch Edit Session Date first" : undefined}
                 className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-5 py-2 rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="h-4 w-4" />
@@ -552,7 +560,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           </div>
 
           {/* Batch Edit Date Section */}
-          <div className="bg-natural-wheat/15 border border-[#CCD5AE]/30 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div
+            id="batch-edit-session-date"
+            className={`p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+              hasMissingDates ? "bg-natural-sand/10 border-2 border-natural-sand/60" : "bg-natural-wheat/15 border border-[#CCD5AE]/30"
+            }`}
+          >
             <div className="space-y-1">
               <h4 className="text-xs font-bold uppercase tracking-wider text-natural-forest flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-natural-sage" />
@@ -561,6 +574,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               <p className="text-xs text-natural-sage font-medium">
                 Change the date for all listed logs simultaneously.
               </p>
+              {hasMissingDates && (
+                <p className="text-xs text-natural-sand font-bold flex items-center gap-1.5" role="alert">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {dateRequired
+                    ? "No valid session date was found in this file. Select the session date and click \"Apply to All Logs\" before importing."
+                    : "Some logs have no date. Select the session date and click \"Apply to All Logs\" before importing."}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <input
@@ -572,7 +593,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               <button
                 type="button"
                 onClick={() => handleBatchUpdateDate(batchDate)}
-                className="bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm font-serif"
+                disabled={!batchDate}
+                className="disabled:opacity-50 disabled:cursor-not-allowed bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm font-serif"
               >
                 Apply to All Logs
               </button>
