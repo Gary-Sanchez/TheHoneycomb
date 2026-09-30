@@ -61,3 +61,9 @@ export function isInvalidName(nameStr: string): boolean {
 
   return false;
 }
+
+// US-23: key used to recognize the same colleague by name — case-insensitive and ignoring
+// leading/trailing/repeated whitespace ("  CARLA   Nueva " ≡ "Carla Nueva")
+export function nameKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}

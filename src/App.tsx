@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Attendee, AttendanceRecord, AuthStatus, ManualCheckInResult } from "./types";
+import { nameKey } from "./utils";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
@@ -183,6 +184,8 @@ export default function App() {
   // 3b. Manually add one colleague to the session for a date+activity (US-20). Reuses an existing
   // colleague by name; the record joins that date+activity's session (or starts it), upserting
   // by attendeeId+date+activity so the same person is never logged twice in one session.
+  // US-23: this window may be stale; the server re-matches by name and its response replaces
+  // the optimistic state, so a colleague added from another window is reused, not duplicated.
   const handleManualCheckIn = (rawName: string, date: string, activity: string): ManualCheckInResult => {
     const name = rawName
       .trim()
@@ -190,7 +193,7 @@ export default function App() {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(" ");
 
-    const existingAttendee = attendees.find(a => a.name.toLowerCase() === name.toLowerCase());
+    const existingAttendee = attendees.find(a => nameKey(a.name) === nameKey(name));
     const attendee: Attendee = existingAttendee ?? {
       id: `att-${Date.now()}`,
       name,

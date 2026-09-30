@@ -2,7 +2,7 @@ import path from "path";
 import type { JSONFilePreset as JSONFilePresetType } from "lowdb/node";
 import { Attendee, AttendanceRecord } from "./src/types";
 import { initialAttendees, initialAttendanceRecords } from "./src/mockData";
-import { isInvalidName } from "./src/utils";
+import { isInvalidName, nameKey } from "./src/utils";
 import { isBlacklistedName } from "./src/blacklist";
 
 interface HoneycombData {
@@ -106,21 +106,35 @@ export async function saveRecords(newRecordsToSave: AttendanceRecord[]): Promise
 // Mirrors handleManualCheckIn (src/App.tsx) — US-20. A session is the set of records sharing
 // date+activity (same shape a .csv import produces), so checking someone in upserts their record
 // by attendeeId+date+activity: it joins the existing session or starts it, never duplicating it.
+// US-23: the client may be a stale window that doesn't know the colleague yet and sends a "new"
+// attendee with its own id. The server's directory decides: a colleague whose name matches
+// (nameKey — case/whitespace-insensitive) is reused, and the record is re-pointed to them.
 export async function manualCheckIn(
   newAttendee: Attendee | null,
   record: AttendanceRecord
 ): Promise<HoneycombData> {
   const db = await getDb();
-  if (newAttendee && !db.data.attendees.some(att => att.id === newAttendee.id)) {
+  const incomingName = newAttendee?.name ?? record.attendeeName;
+  const attendee =
+    db.data.attendees.find(att => att.id === record.attendeeId) ??
+    db.data.attendees.find(att => nameKey(att.name) === nameKey(incomingName));
+
+  let attendeeId = record.attendeeId;
+  let attendeeName = record.attendeeName;
+  if (attendee) {
+    attendeeId = attendee.id;
+    attendeeName = attendee.name;
+  } else if (newAttendee) {
     db.data.attendees.push(newAttendee);
   }
+
   const existing = db.data.records.find(
-    r => r.attendeeId === record.attendeeId && r.date === record.date && r.activity === record.activity
+    r => r.attendeeId === attendeeId && r.date === record.date && r.activity === record.activity
   );
   if (existing) {
     existing.status = record.status;
   } else {
-    db.data.records.push(record);
+    db.data.records.push({ ...record, attendeeId, attendeeName });
   }
   await db.write();
   return db.data;
