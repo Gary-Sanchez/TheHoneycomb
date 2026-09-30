@@ -39,7 +39,18 @@ function extractTextFromTxtOrCsv(buffer: Buffer): string {
 }
 
 function extractTextFromSpreadsheet(buffer: Buffer): string {
-  const workbook = xlsx.read(buffer, { type: "buffer" });
+  // US-13: xlsx comes from the SheetJS CDN (0.20.3 fixes GHSA-4r6h-8v6p-xvw6 /
+  // GHSA-5pgg-2g8v-p4x9; npm's 0.18.5 has no fix). Only cell values are needed
+  // for sheet_to_csv, so skip formulas, styles, HTML, VBA and doc props to
+  // keep the parse surface of an untrusted upload minimal.
+  const workbook = xlsx.read(buffer, {
+    type: "buffer",
+    cellFormula: false,
+    cellHTML: false,
+    cellStyles: false,
+    bookVBA: false,
+    bookProps: false,
+  });
   let excelData = "";
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
