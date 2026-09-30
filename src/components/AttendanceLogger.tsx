@@ -1,5 +1,5 @@
 import { useState, useMemo, FormEvent } from "react";
-import { Attendee, AttendanceRecord, ACTIVITIES, ActivityType } from "../types";
+import { Attendee, AttendanceRecord, ACTIVITIES, ActivityType, ManualCheckInResult } from "../types";
 import { Calendar, Check, X, UserPlus, AlertCircle, Sparkles } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
@@ -9,6 +9,7 @@ interface AttendanceLoggerProps {
   records: AttendanceRecord[];
   onAddAttendee: (name: string, email: string, activities: string[]) => Attendee;
   onSaveRecords: (newRecords: Omit<AttendanceRecord, "id">[]) => void;
+  onManualCheckIn: (name: string, date: string, activity: string) => ManualCheckInResult;
   canEdit: boolean;
   onSignIn?: () => void;
 }
@@ -18,6 +19,7 @@ export default function AttendanceLogger({
   records,
   onAddAttendee,
   onSaveRecords,
+  onManualCheckIn,
   canEdit,
   onSignIn,
 }: AttendanceLoggerProps) {
@@ -45,16 +47,21 @@ export default function AttendanceLogger({
 
   const handleInlineSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!canEdit || !inlineName.trim()) return;
+    if (!canEdit || !inlineName.trim() || !selectedDate) return;
 
-    // Add attendee with empty enrolled list since they are all colleagues of the company
-    const newAtt = onAddAttendee(inlineName.trim(), "", []);
-    
-    // Default their status to present in the form state
-    setStatuses(prev => ({
-      ...prev,
-      [newAtt.id]: "present",
-    }));
+    // US-20: persist right away as a Present record in this date+activity session
+    const { attendee, isNew, joinedExistingSession, alreadyInSession } = onManualCheckIn(
+      inlineName,
+      selectedDate,
+      selectedActivity
+    );
+
+    // The persisted record is now the source of truth for this colleague's status
+    setStatuses(prev => {
+      const next = { ...prev };
+      delete next[attendee.id];
+      return next;
+    });
 
     setInlineName("");
     
@@ -65,7 +72,14 @@ export default function AttendanceLogger({
       origin: { y: 0.8 }
     });
 
-    setSuccessMsg(`Successfully registered and checked in ${newAtt.name}!`);
+    const sessionNote = alreadyInSession
+      ? "already in this session — no duplicate created"
+      : joinedExistingSession
+        ? "joined existing session"
+        : "new session created";
+    setSuccessMsg(
+      `${isNew ? "Registered and checked in" : "Checked in"} ${attendee.name} for ${selectedActivity} on ${selectedDate} (${sessionNote}).`
+    );
     setTimeout(() => setSuccessMsg(""), 4000);
   };
 
@@ -73,6 +87,12 @@ export default function AttendanceLogger({
   const existingRecords = useMemo(() => {
     return records.filter(r => r.date === selectedDate && r.activity === selectedActivity);
   }, [records, selectedDate, selectedActivity]);
+
+  // Colleagues already checked in (Present) for the selected date+activity session
+  const sessionPresent = useMemo(
+    () => existingRecords.filter(r => r.status === "present"),
+    [existingRecords]
+  );
 
   // Set default status (Present) for anyone not configured in statuses
   const getStatus = (attendeeId: string) => {
@@ -255,8 +275,30 @@ export default function AttendanceLogger({
           Introduce and Check In a New Name
         </h3>
         <p className="text-xs text-natural-sage font-medium">
-          Type a colleague's name to instantly register them in the directory and mark them as <strong>Present</strong> for this activity.
+          Type a colleague's name to register them (or find them in the directory) and save them as <strong>Present</strong> in the session for the selected date and activity.
         </p>
+        <div id="manual-session-target" className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-bold text-natural-forest bg-white border border-natural-border rounded-lg px-2.5 py-1">
+            {selectedActivity} · {selectedDate || "No date selected"}
+          </span>
+          <span className="font-semibold text-natural-sage">
+            {existingRecords.length > 0
+              ? `Joins existing session (${sessionPresent.length} present)`
+              : "A new session will be created"}
+          </span>
+        </div>
+        {sessionPresent.length > 0 && (
+          <div id="manual-session-members" className="flex flex-wrap gap-1.5">
+            {sessionPresent.map(r => (
+              <span
+                key={r.id}
+                className="text-[11px] font-semibold bg-[#CCD5AE]/30 border border-[#CCD5AE]/60 text-natural-forest px-2 py-0.5 rounded-full"
+              >
+                {r.attendeeName}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex gap-3">
           <input
             type="text"

@@ -261,6 +261,27 @@ app.post("/api/records", requireAdmin, async (req, res) => {
   res.json(await db.saveRecords(req.body.records || []));
 });
 
+// US-20: add one colleague (new or existing) to the session for a date+activity
+app.post("/api/records/manual", requireAdmin, async (req, res): Promise<any> => {
+  const { attendee, record } = req.body || {};
+  const isValidRecord =
+    record &&
+    typeof record.id === "string" &&
+    typeof record.attendeeId === "string" &&
+    typeof record.attendeeName === "string" &&
+    record.attendeeName.trim() &&
+    STANDARD_ACTIVITIES.includes(record.activity) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(record.date) &&
+    (record.status === "present" || record.status === "absent");
+  if (!isValidRecord) {
+    return res.status(400).json({ error: "A valid record (colleague, activity, YYYY-MM-DD date, status) is required." });
+  }
+  if (attendee && (attendee.id !== record.attendeeId || typeof attendee.name !== "string")) {
+    return res.status(400).json({ error: "The new colleague must match the record's attendeeId." });
+  }
+  res.json(await db.manualCheckIn(attendee || null, record));
+});
+
 app.post("/api/records/import", requireAdmin, async (req, res) => {
   res.json(await db.importParsedData(req.body.attendees || [], req.body.records || []));
 });
