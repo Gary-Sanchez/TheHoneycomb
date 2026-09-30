@@ -106,3 +106,17 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   directory to distinguish new vs. existing colleagues.
 - Removing a colleague cascades: deletes their attendance records and coaching notes too
   (`removeAttendee` in `db.ts`).
+
+## Guardrails de Claude Code
+
+`.claude/settings.json` define una allow/deny list de comandos (`Bash(...)` y sus equivalentes
+`PowerShell(...)` — las reglas `Bash` no aplican a la tool `PowerShell`) y dos hooks `PreToolUse`:
+`guard-writes.cjs` (Edit/Write/NotebookEdit) pide confirmación antes de escribir fuera del árbol del
+proyecto o sobre `honeycomb-data.json`/`honeycomb-config.json` (sin distinguir mayúsculas en
+Windows/macOS); `guard-bash.cjs` (Bash y PowerShell) bloquea de forma dura `rm -rf`,
+`Remove-Item -Recurse -Force` (y alias/prefijos), `git reset --hard`, `git clean -f*` y los push
+forzados en cualquier statement del comando — también tras saltos de línea, wrappers (`sudo`, `env`,
+`xargs`, `find -exec`) y shells anidados (`bash -c`, `pwsh -Command`, `$(...)`). Tests:
+`node --test .claude/hooks/*.test.cjs` (correrlos al tocar un hook). Ver
+[`.claude/README.md`](.claude/README.md) para el detalle de cada regla, sus límites y por qué existe
+(US-07).

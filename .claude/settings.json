@@ -1,0 +1,47 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm start)",
+      "Bash(npm start *)",
+      "PowerShell(npm run *)",
+      "PowerShell(npm start)",
+      "PowerShell(npm start *)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "PowerShell(git reset --hard*)",
+      "PowerShell(git clean -f*)",
+      "PowerShell(git push --force*)",
+      "PowerShell(git push -f*)",
+      "PowerShell(Remove-Item *-Recurse*-Force*)",
+      "PowerShell(Remove-Item *-Force*-Recurse*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-writes.cjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-bash.cjs\""
+          }
+        ]
+      }
+    ]
+  }
+}
