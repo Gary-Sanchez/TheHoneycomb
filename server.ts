@@ -153,6 +153,18 @@ const upload = multer({
   },
 });
 
+// Track in-flight responses so shutdown (US-15) can wait for them to finish. Registered before
+// the body parser so a request counts from the moment its headers arrive.
+app.use((req, res, next) => {
+  activeResponses.add(res);
+  res.on("close", () => {
+    activeResponses.delete(res);
+    if (activeResponses.size === 0) onDrained?.();
+  });
+  if (shuttingDown) res.setHeader("Connection", "close");
+  next();
+});
+
 app.use(express.json({ limit: "5mb" }));
 
 // Health check endpoints
@@ -1139,6 +1151,58 @@ Return the parsed entries in a strictly structured JSON format matching the sche
   }
 });
 
+// --- Graceful shutdown (US-15) ------------------------------------------------------------
+// Stop accepting connections, let in-flight requests finish, wait for pending lowdb writes to
+// flush, then drop whatever connections are left. Capped by SHUTDOWN_TIMEOUT_MS so a stuck
+// flush can never hang the process. SIGKILL / `taskkill /F` can't be intercepted and stay out
+// of scope.
+//
+// Completion deliberately does NOT wait for server.close()'s callback: that only fires once
+// every socket is gone, and clients keep sockets open that closeIdleConnections() never
+// reaches (e.g. Chromium's preconnected sockets that haven't sent a request yet), which made
+// every Electron close end by timeout.
+const SHUTDOWN_TIMEOUT_MS = 5000;
+let httpServer: import("http").Server | null = null;
+let shutdownPromise: Promise<void> | null = null;
+let shuttingDown = false;
+const activeResponses = new Set<express.Response>();
+let onDrained: (() => void) | null = null;
+
+// Idempotent: Electron's `before-quit` and the signal handlers below may both call it.
+export function shutdown(): Promise<void> {
+  if (!shutdownPromise) {
+    shuttingDown = true;
+    httpServer?.close(); // stop accepting new connections; see above for why we don't await it
+    httpServer?.closeIdleConnections?.();
+    // Requests already in flight must not keep their keep-alive connection open afterwards.
+    for (const res of activeResponses) {
+      if (!res.headersSent) res.setHeader("Connection", "close");
+    }
+    const drained =
+      activeResponses.size === 0 ? Promise.resolve() : new Promise<void>(resolve => (onDrained = resolve));
+    const graceful = drained
+      .then(() => db.flush())
+      .finally(() => httpServer?.closeAllConnections?.());
+    let timer: NodeJS.Timeout;
+    const timeout = new Promise<void>(resolve => {
+      timer = setTimeout(() => {
+        console.warn(`[Shutdown] Timed out after ${SHUTDOWN_TIMEOUT_MS}ms; exiting without waiting further.`);
+        resolve();
+      }, SHUTDOWN_TIMEOUT_MS);
+    });
+    shutdownPromise = Promise.race([graceful, timeout])
+      .catch(err => console.error("[Shutdown] Error while flushing:", err))
+      .finally(() => clearTimeout(timer));
+  }
+  return shutdownPromise;
+}
+
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    shutdown().finally(() => process.exit(0));
+  });
+}
+
 // Serve Vite-generated assets and app
 export async function startServer() {
   const isProduction = process.env.NODE_ENV === "production";
@@ -1182,7 +1246,7 @@ export async function startServer() {
   // Localhost-only by default; exposing the API to the LAN is an explicit opt-in (US-11).
   const allowLan = process.env.HONEYCOMB_ALLOW_LAN === "true";
   const host = allowLan ? "0.0.0.0" : "127.0.0.1";
-  app.listen(PORT, host, () => {
+  httpServer = app.listen(PORT, host, () => {
     console.log(`Server running on http://${host}:${PORT}`);
     if (allowLan) {
       console.warn(

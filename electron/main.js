@@ -18,6 +18,12 @@ process.env.HONEYCOMB_DB_PATH =
   process.env.HONEYCOMB_DB_PATH ||
   path.join(app.getPath("userData"), "honeycomb-data.json");
 
+// Hard cap on how long before-quit waits for the embedded server's shutdown (US-15). Slightly
+// above the server's own timeout so its graceful path wins, but never hangs the app.
+const QUIT_TIMEOUT_MS = 7000;
+let server = null;
+let quitting = false;
+
 const MAX_LOAD_ATTEMPTS = 15;
 const RETRY_DELAY_MS = 400;
 
@@ -70,7 +76,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // Starting the server in-process, as a side effect of require(): the
   // bundled server.cjs calls startServer() unconditionally at module load.
-  require(path.join(__dirname, "..", "dist", "server.cjs"));
+  server = require(path.join(__dirname, "..", "dist", "server.cjs"));
 
   createWindow();
 
@@ -79,6 +85,19 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+// Hold the quit until the embedded server has flushed pending lowdb writes (or the timeout hits).
+app.on("before-quit", (event) => {
+  if (quitting || !server || typeof server.shutdown !== "function") return;
+  event.preventDefault();
+  quitting = true;
+  Promise.race([
+    server.shutdown(),
+    new Promise((resolve) => setTimeout(resolve, QUIT_TIMEOUT_MS)),
+  ])
+    .catch((err) => console.error("[Shutdown] before-quit failed:", err))
+    .finally(() => app.quit());
 });
 
 app.on("window-all-closed", () => {

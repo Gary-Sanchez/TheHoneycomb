@@ -46,6 +46,13 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   `HONEYCOMB_DB_PATH`). It stores `{ attendees, records, notes }`. `lowdb` is loaded via a lazy
   dynamic `import()` — see the comment in `db.ts` for why (Electron's bundled Node breaks on a
   static ESM-in-CJS `require`).
+- **Graceful shutdown (US-15)**: `server.ts` exports `shutdown()` (also wired to `SIGTERM`/`SIGINT`):
+  stops accepting connections, waits for in-flight requests, then awaits `db.flush()` (pending
+  `lowdb` writes tracked in `db.ts`) and force-closes any remaining connections, capped at 5s.
+  Don't make completion wait on `server.close()`'s callback — Chromium's preconnected sockets
+  keep it pending and every Electron close would end by timeout (covered by `e2e/shutdown.spec.ts`).
+  `electron/main.js` calls it from `before-quit` (7s cap). `SIGKILL` / Task Manager "End task" / `taskkill /F` can't be intercepted — those are
+  **not** covered, so an abrupt kill can still lose the write in flight.
 - Mock/seed data (`src/mockData.ts`) seeds the DB on first run, filtered through `isInvalidName`
   (`src/utils.ts`) to strip configured host/facilitator names.
 - `server.ts` exposes the Express API and calls Gemini for the "Smart Doc Parser" (Import Forage

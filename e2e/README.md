@@ -5,6 +5,11 @@ build (see `playwright.config.ts` and `npm run test:e2e`).
 
 - `smoke.spec.ts` — base smoke test (US-06): the app compiles, the main window opens, and the
   embedded Express server responds.
+- `shutdown.spec.ts` — graceful shutdown (US-15): closing the Electron window is fast and never ends
+  by the 5s timeout, saved records survive a reopen, and the standalone server (on both the system
+  Node and Electron's Node) exits promptly with request-less or keep-alive connections open while
+  still persisting a write in flight. `fixtures/server-harness.cjs` runs `dist/server.cjs` and
+  takes `SIGINT`/`SIGTERM` over stdin, since real signals can't be sent to a child on Windows.
 - Add new spec files here for future QA scenarios (e.g. the ones documented in `US-03`, `US-04`,
   `US-05`) — the base Electron-launch config in `playwright.config.ts` already covers them. If a
   scenario writes or deletes attendance data, launch Electron with `HONEYCOMB_DB_PATH`/
