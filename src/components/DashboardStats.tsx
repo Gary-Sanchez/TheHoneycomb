@@ -28,13 +28,14 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
   // 1. Core KPIs
   const totalAttendees = attendees.length;
 
+  // Only activities the colleague actually attended count (Manual Check-In also logs absences)
   const multiActivityCount = useMemo(() => {
     const map: Record<string, string[]> = {};
     attendees.forEach(a => {
       map[a.id] = [];
     });
     records.forEach(r => {
-      if (map[r.attendeeId] && !map[r.attendeeId].includes(r.activity)) {
+      if (r.status === "present" && map[r.attendeeId] && !map[r.attendeeId].includes(r.activity)) {
         map[r.attendeeId].push(r.activity);
       }
     });
@@ -142,10 +143,11 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
         meaning = "Queen's favorite. Elite attendance and top-tier dedication.";
       }
 
-      // Check multi-activity participation
-      const activeActivities = ACTIVITIES.filter(act =>
-        records.some(r => r.attendeeId === att.id && r.activity === act)
-      );
+      // Check multi-activity participation: an activity counts once the colleague attended it
+      // at least once — absence-only logs (e.g. from Manual Check-In) don't make them a regular
+      const activeActivities = activityStats
+        .filter(stat => stat.presents > 0)
+        .map(stat => stat.activity);
       const isMulti = activeActivities.length > 1;
 
       return {

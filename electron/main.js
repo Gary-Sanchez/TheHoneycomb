@@ -26,6 +26,16 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: "The Honeycomb",
+    // Explicit security posture instead of relying on Electron defaults: no direct
+    // Node access from the renderer (nodeIntegration: false), the renderer's JS
+    // context stays isolated from the preload/main world (contextIsolation: true),
+    // and the renderer process runs sandboxed (sandbox: true). The app has no
+    // preload/IPC channel today, so nothing depends on relaxing these.
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
   });
 
   const url = `http://localhost:${PORT}`;

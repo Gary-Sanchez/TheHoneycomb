@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Attendee, AttendanceRecord, AuthStatus } from "./types";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
@@ -8,6 +8,8 @@ import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
 import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
+
+type ServerState = { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> };
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -21,11 +23,32 @@ export default function App() {
   // Active colleague modal for viewing report
   const [activeReportAttendee, setActiveReportAttendee] = useState<Attendee | null>(null);
 
+  // Mutation bookkeeping for persist() (US-21): how many are awaiting a response, a counter
+  // bumped on every new one, and whether the current burst must reload once it settles
+  const inFlightMutations = useRef(0);
+  const mutationSeq = useRef(0);
+  const reloadWhenIdle = useRef(false);
+
   const loadData = () =>
     fetch("/api/data")
       .then(res => res.json())
       .then(applyServerState)
       .catch(err => console.error("Failed to load data from server:", err));
+
+  // Reload the canonical state, unless a newer mutation started meanwhile — its own response
+  // will then be the fresher snapshot, and this GET may already be stale
+  const reconcileWithServer = () => {
+    const seq = mutationSeq.current;
+    return fetch("/api/data")
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (seq === mutationSeq.current) applyServerState(data);
+      })
+      .catch(err => console.error("Failed to load data from server:", err));
+  };
 
   const refreshAuth = () =>
     fetch("/api/auth/status")
@@ -40,26 +63,49 @@ export default function App() {
   }, []);
 
   // Apply the server's canonical state after a mutation round-trips
-  function applyServerState(data: { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> }) {
+  function applyServerState(data: ServerState) {
     setAttendees(data.attendees);
     setRecords(data.records);
     setNotes(data.notes);
   }
 
-  // Send a mutation and apply the server's canonical state. If the admin session is gone (401),
-  // drop to read-only and reload from the server to discard the optimistic local change.
-  const persist = (url: string, init: RequestInit, label: string) =>
-    fetch(url, init)
+  // Send a mutation and reconcile with the server's canonical state. The optimistic local update
+  // already refreshed every derived view (Dashboard, Bee-havior Hub, ...). Nothing is applied
+  // while other mutations are still in flight: responses can arrive out of order, so an older,
+  // slower snapshot must never overwrite newer data (US-21, e.g. quick-add a colleague + save
+  // check-in). When the last one settles, a lone successful mutation applies its own snapshot;
+  // an overlapping burst, a failure, or a lost admin session (401 → read-only, US-11) reloads
+  // from the server instead, which also discards any optimistic change that wasn't persisted.
+  const persist = (url: string, init: RequestInit, label: string) => {
+    inFlightMutations.current += 1;
+    mutationSeq.current += 1;
+    if (inFlightMutations.current > 1) reloadWhenIdle.current = true;
+    let snapshot: ServerState | null = null;
+
+    return fetch(url, init)
       .then(async res => {
         if (res.status === 401) {
           setAuth(prev => ({ ...prev, authenticated: false }));
-          await loadData();
+          reloadWhenIdle.current = true;
           return;
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        applyServerState(await res.json());
+        snapshot = await res.json();
       })
-      .catch(err => console.error(`Failed to persist ${label}:`, err));
+      .catch(err => {
+        console.error(`Failed to persist ${label}:`, err);
+        reloadWhenIdle.current = true;
+      })
+      .finally(() => {
+        inFlightMutations.current -= 1;
+        if (inFlightMutations.current > 0) return;
+        if (reloadWhenIdle.current) {
+          reloadWhenIdle.current = false;
+          return reconcileWithServer();
+        }
+        if (snapshot) applyServerState(snapshot);
+      });
+  };
 
   const jsonRequest = (method: string, body?: unknown): RequestInit => ({
     method,

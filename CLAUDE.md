@@ -49,6 +49,12 @@ the doc for anything persistence-related.
   `DashboardStats`, `DocumentParser`, `ProgressReportModal`, `SettingsPanel` (Admin Access only)
   — map roughly 1:1 to the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap
   Cross-Referencer, Dashboard, Import Forage Logs, Progress Report modal).
+- **Content-Security-Policy (US-14)**: the strict production CSP lives in `index.html`; in dev,
+  `cspDevServerPlugin` (`vite.config.ts`) swaps in a relaxed one (inline script for React Fast
+  Refresh, HMR websocket). Any new external origin (CDN, fonts, images) must be added to **both**.
+  Dev HMR is only allowed via `localhost` / `127.0.0.1` — with `HONEYCOMB_ALLOW_LAN=true` and a LAN
+  IP the page loads but HMR is CSP-blocked (reload manually). Electron's `webPreferences`
+  (`contextIsolation`, `nodeIntegration: false`, `sandbox`) are set explicitly in `electron/main.js`.
 
 ## Security: server bind & admin auth (US-11)
 
