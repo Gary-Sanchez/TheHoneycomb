@@ -14,10 +14,10 @@
     "test:e2e": "npm run build && playwright test",
     "electron:start": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "canvas-confetti": "^1.9.4",
@@ -46,10 +46,12 @@
     "electron-builder": "^26.15.3",
     "esbuild": "^0.25.0",
     "husky": "^9.1.7",
+    "jszip": "^3.10.2",
     "lint-staged": "^17.5.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "vitest": "^5.0.2"
   },
   "build": {
     "appId": "com.honeycomb.app",
@@ -67,10 +69,8 @@
     }
   },
   "allowScripts": {
-    "@google/genai@2.10.0": true,
     "electron-winstaller@5.4.0": true,
     "esbuild@0.25.12": true,
-    "esbuild@0.28.1": true,
-    "protobufjs@7.6.6": true
+    "esbuild@0.28.1": true
   }
 }

@@ -69,12 +69,6 @@ export const manualCheckInBodySchema = z
 // An empty string is valid: it clears the note.
 export const noteBodySchema = z.object({ text: string() });
 
-// The route overrides the top-level message to keep the pre-US-10 "geminiApiKey is required.";
-// the stored key is trimmed, as before.
-export const settingsBodySchema = z.object({
-  geminiApiKey: z.string({ error: "is required" }).trim().min(1, { error: "is required" }),
-});
-
 function describeIssue(issue: z.core.$ZodIssue): string {
   if (issue.path.length === 0) return issue.message;
   const field = issue.path.reduce<string>(

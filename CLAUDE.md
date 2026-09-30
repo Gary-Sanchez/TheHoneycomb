@@ -20,12 +20,13 @@ the doc for anything persistence-related.
 - `npm run dev` — runs `server.ts` via `tsx` (Express serves the API; Vite handles the frontend in dev).
 - `npm run build` — Vite build + esbuild bundles `server.ts` to `dist/server.cjs`.
 - `npm start` — runs the built server (`node dist/server.cjs`).
-- `npm run lint` — `tsc --noEmit`. No test suite currently exists.
+- `npm run lint` — `tsc --noEmit`.
+- `npm test` — Vitest unit tests (`*.test.ts`, e.g. `parser.test.ts`). `npm run test:e2e` runs the
+  Playwright suite in `e2e/` (`*.spec.ts`) against the Electron build; the two are kept apart by suffix.
 - A `husky` pre-commit hook runs `lint-staged` (config in `lint-staged.config.js`), which runs
   `tsc --noEmit` over the whole project whenever a staged `.ts`/`.tsx` file is present — blocking
   the commit on type errors. Skip it exceptionally with `git commit --no-verify` (see README).
 - `npm run electron:start` / `electron:build` — desktop packaging via electron-builder.
-- Requires `GEMINI_API_KEY` in `.env.local` (see `.env.example`) for the AI-powered document parser.
 
 ## Dependencies (US-13 — `npm audit` at 0)
 
@@ -55,16 +56,19 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   **not** covered, so an abrupt kill can still lose the write in flight.
 - Mock/seed data (`src/mockData.ts`) seeds the DB on first run, filtered through `isInvalidName`
   (`src/utils.ts`) to strip configured host/facilitator names.
-- `server.ts` exposes the Express API and calls Gemini for the "Smart Doc Parser" (Import Forage
-  Logs tab); when Gemini is unavailable it falls back to a deterministic offline parser so imports
-  never block on API availability.
+- `server.ts` exposes the Express API; the "Smart Doc Parser" (Import Forage Logs tab) is a
+  deterministic offline parser in `parser.ts` — no external AI/LLM call and no API key involved.
+  It reuses `isInvalidName` from `src/utils.ts` (same host/facilitator exclusion `db.ts` uses for
+  seed filtering) plus its own parser-local heuristics for dates, activities, statuses, and
+  meeting metadata. `.csv` files take their own path, `parseCsvAttendance` (US-18): it never falls
+  back to the reference date, and returns `dateDetected: false` so the UI requires a date.
 - Frontend state lives in `src/App.tsx`, which owns the handlers (`handleAddAttendee`,
   `handleSaveRecords`, `handleImportParsedData`, `handleResetDatabase`, etc.) that `db.ts`'s
   functions mirror 1:1 — check the "Mirrors handleX" comments in `db.ts` when changing either side.
 - Components (`src/components/`): `AttendanceLogger`, `AttendeeDirectory`, `CrossReferenceHub`,
-  `DashboardStats`, `DocumentParser`, `ProgressReportModal`, `SettingsPanel` — map roughly 1:1 to
-  the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap Cross-Referencer, Dashboard,
-  Import Forage Logs, Progress Report modal).
+  `DashboardStats`, `DocumentParser`, `ProgressReportModal`, `SettingsPanel` (Admin Access only)
+  — map roughly 1:1 to the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap
+  Cross-Referencer, Dashboard, Import Forage Logs, Progress Report modal).
 - **Content-Security-Policy (US-14)**: the strict production CSP lives in `index.html`; in dev,
   `cspDevServerPlugin` (`vite.config.ts`) swaps in a relaxed one (inline script for React Fast
   Refresh, HMR websocket). Any new external origin (CDN, fonts, images) must be added to **both**.
@@ -86,8 +90,8 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   (`HttpOnly; SameSite=Strict`), 12h TTL. Endpoints: `GET /api/auth/status`,
   `POST /api/auth/login|logout|setup`.
 - **Every mutating route uses the `requireAdmin` middleware** (401 JSON without a session):
-  `POST /api/settings`, `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
-  `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/import`,
+  `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
+  `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/manual`, `POST /api/records/import`,
   `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
   `GET`s and `/api/parse-attendance-file` (doesn't persist) stay public.
 - **Input validation (US-10)**: every mutating route with a body also runs

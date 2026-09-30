@@ -229,7 +229,7 @@ export default function App() {
     return { attendee, isNew: !existingAttendee, joinedExistingSession, alreadyInSession: Boolean(alreadyInSession) };
   };
 
-  // 4. Batch import parsed files from Gemini
+  // 4. Batch import parsed files from the Smart Document Parser
   const handleImportParsedData = (
     newAttendeesToCreate: Omit<Attendee, "id">[],
     newRecordsToSave: Omit<AttendanceRecord, "id">[]

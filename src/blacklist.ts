@@ -1,7 +1,7 @@
 // US-19: Fixed anti-noise blacklist applied during attendance ingestion.
 // Facilitators and coordination staff that must never appear as attendees in
 // the import preview or in consolidated data. The list is intentionally fixed
-// (no admin UI) — edit it here; server.ts, src/utils.ts, the Gemini prompt and
+// (no admin UI) — edit it here; server.ts, src/utils.ts, parser.ts and
 // db.ts all read from this single source.
 
 export interface BlacklistEntry {

@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
       Production-mode CSP. fonts.googleapis.com/fonts.gstatic.com are allowed
-      because src/index.css @imports Google Fonts directly. The Gemini API call
-      for the Smart Doc Parser happens server-side (server.ts), never from this
-      page, so it doesn't need a connect-src entry here. In dev,
+      because src/index.css @imports Google Fonts directly. The Smart Doc Parser
+      runs locally on the server (parser.ts) with no external API, so the page
+      only ever talks to its own origin (connect-src 'self'). In dev,
       vite.config.ts's cspDevServerPlugin swaps this for a relaxed policy that
       Vite's HMR client/React Fast Refresh need (inline script, ws:// to the dev
       server) — see that plugin for why. worker-src allows blob: because
