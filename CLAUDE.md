@@ -27,6 +27,18 @@ the doc for anything persistence-related.
 - `npm run electron:start` / `electron:build` — desktop packaging via electron-builder.
 - Requires `GEMINI_API_KEY` in `.env.local` (see `.env.example`) for the AI-powered document parser.
 
+## Dependencies (US-13 — `npm audit` at 0)
+
+Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these or audit regresses:
+
+- `xlsx` comes from the **SheetJS CDN** (`https://cdn.sheetjs.com/xlsx-0.20.3/...tgz`), not npm —
+  npm's last `xlsx` (0.18.5) is vulnerable with no fix. Never `npm i xlsx`; upgrade via the CDN URL.
+- Electron 44 / electron-builder 26. electron-builder 26 drops anything listed in `devDependencies`
+  from `app.asar`, so runtime deps (e.g. `vite`, imported by `server.ts`) must be **only** in
+  `dependencies` — a duplicate in `devDependencies` breaks the packaged app at startup.
+- npm ≥ 11 blocks dependency install scripts unless listed in `package.json` → `allowScripts`.
+  After a bump, run `npm install-scripts ls` and approve the new versions (esbuild needs it).
+
 ## Architecture
 
 - **Persistence is server-side**, not browser localStorage: `db.ts` uses `lowdb` (`JSONFilePreset`)
