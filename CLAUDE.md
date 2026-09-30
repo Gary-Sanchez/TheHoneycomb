@@ -71,6 +71,10 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/import`,
   `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
   `GET`s and `/api/parse-attendance-file` (doesn't persist) stay public.
+- **Input validation (US-10)**: every mutating route with a body also runs
+  `validateBody(<zod schema>)` from `validation.ts` after `requireAdmin` → 400
+  `{ error, details }` before anything reaches `db.ts`. Schemas mirror `src/types.ts`; keep them in
+  sync, and give any new mutating route with a body its own schema.
 - Frontend: `App.tsx` holds `auth` (from `/api/auth/status`) and passes `canEdit` to the tabs,
   which disable mutating controls and show `ReadOnlyNotice`. Mutations go through `persist()`,
   which on a 401 drops to read-only and reloads server state to undo the optimistic update.

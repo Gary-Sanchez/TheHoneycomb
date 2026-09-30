@@ -9,6 +9,15 @@ import mammoth from "mammoth";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import * as db from "./db";
+import {
+  attendeeSchema,
+  enrollmentBodySchema,
+  importBodySchema,
+  noteBodySchema,
+  recordsBodySchema,
+  settingsBodySchema,
+  validateBody,
+} from "./validation";
 import { INGESTION_BLACKLIST, isBlacklistedName } from "./src/blacklist";
 
 dotenv.config();
@@ -178,13 +187,9 @@ app.get("/api/settings", (req, res) => {
   res.json({ geminiApiKeyConfigured: Boolean(getConfiguredGeminiKey()) });
 });
 
-app.post("/api/settings", requireAdmin, (req, res): any => {
-  const { geminiApiKey } = req.body || {};
-  if (typeof geminiApiKey !== "string" || !geminiApiKey.trim()) {
-    return res.status(400).json({ error: "geminiApiKey is required." });
-  }
+app.post("/api/settings", requireAdmin, validateBody(settingsBodySchema, "geminiApiKey is required."), (req, res) => {
   const config = readConfig();
-  config.geminiApiKey = geminiApiKey.trim();
+  config.geminiApiKey = req.body.geminiApiKey; // already trimmed by the schema
   writeConfig(config);
   res.json({ geminiApiKeyConfigured: true });
 });
@@ -240,33 +245,34 @@ app.post("/api/auth/setup", (req, res): any => {
 
 // Data layer: attendees, attendance records, and notes (persisted via db.ts / lowdb),
 // replacing what used to be read/written directly to the browser's localStorage.
-// Reads are public; every mutation requires an admin session (US-11).
+// Reads are public; every mutation requires an admin session (US-11) and a body that passes its
+// validation.ts schema (US-10) — an invalid payload gets a 400 before anything reaches db.ts.
 app.get("/api/data", async (req, res) => {
   res.json(await db.getState());
 });
 
-app.post("/api/attendees", requireAdmin, async (req, res) => {
+app.post("/api/attendees", requireAdmin, validateBody(attendeeSchema), async (req, res) => {
   res.json(await db.addAttendee(req.body));
 });
 
-app.put("/api/attendees/:id/enrollment", requireAdmin, async (req, res) => {
-  res.json(await db.updateEnrollment(req.params.id, req.body.activities || []));
+app.put("/api/attendees/:id/enrollment", requireAdmin, validateBody(enrollmentBodySchema), async (req, res) => {
+  res.json(await db.updateEnrollment(req.params.id, req.body.activities));
 });
 
 app.delete("/api/attendees/:id", requireAdmin, async (req, res) => {
   res.json(await db.removeAttendee(req.params.id));
 });
 
-app.post("/api/records", requireAdmin, async (req, res) => {
-  res.json(await db.saveRecords(req.body.records || []));
+app.post("/api/records", requireAdmin, validateBody(recordsBodySchema), async (req, res) => {
+  res.json(await db.saveRecords(req.body.records));
 });
 
-app.post("/api/records/import", requireAdmin, async (req, res) => {
-  res.json(await db.importParsedData(req.body.attendees || [], req.body.records || []));
+app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), async (req, res) => {
+  res.json(await db.importParsedData(req.body.attendees, req.body.records));
 });
 
-app.put("/api/notes/:attendeeId", requireAdmin, async (req, res) => {
-  res.json(await db.saveNote(req.params.attendeeId, req.body.text || ""));
+app.put("/api/notes/:attendeeId", requireAdmin, validateBody(noteBodySchema), async (req, res) => {
+  res.json(await db.saveNote(req.params.attendeeId, req.body.text));
 });
 
 app.post("/api/reset", requireAdmin, async (req, res) => {
