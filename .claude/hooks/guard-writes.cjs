@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PreToolUse hook (Edit|Write) — ver US-07 y .claude/README.md.
+// PreToolUse hook (Edit|Write|NotebookEdit) — ver US-07 y .claude/README.md.
 // Pide confirmación explícita ("ask") antes de escribir fuera del árbol
 // esperado del proyecto, o sobre los archivos de datos persistentes reales
 // de The Honeycomb. No bloquea nada de forma dura: solo fuerza el prompt.
@@ -37,7 +37,9 @@ process.stdin.on("end", () => {
     process.exit(0); // no se pudo parsear: seguir el flujo normal de permisos
   }
 
-  const filePath = input && input.tool_input && input.tool_input.file_path;
+  // Edit/Write usan `file_path`; NotebookEdit usa `notebook_path`.
+  const toolInput = (input && input.tool_input) || {};
+  const filePath = toolInput.file_path || toolInput.notebook_path;
   if (!filePath) process.exit(0);
 
   const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -55,11 +57,17 @@ process.stdin.on("end", () => {
   const configPath = path.resolve(
     process.env.HONEYCOMB_CONFIG_PATH || path.join(projectDir, "honeycomb-config.json")
   );
-  const base = path.basename(resolved);
+  // NTFS (Windows) y APFS por defecto (macOS) no distinguen mayúsculas:
+  // `Honeycomb-Data.json` es el mismo archivo que `honeycomb-data.json`, así que
+  // la comparación tampoco puede distinguirlas o un cambio de caso la esquiva.
+  const caseInsensitive = process.platform === "win32" || process.platform === "darwin";
+  const norm = (p) => (caseInsensitive ? p.toLowerCase() : p);
+  const resolvedN = norm(resolved);
+  const base = norm(path.basename(resolved));
 
   if (
-    resolved === dbPath ||
-    resolved === configPath ||
+    resolvedN === norm(dbPath) ||
+    resolvedN === norm(configPath) ||
     base === "honeycomb-data.json" ||
     base === "honeycomb-config.json"
   ) {
