@@ -114,7 +114,7 @@ que define el PRD 2.0 (§2.2, Consolidación por Fecha). La usan BUG-01 (§2.1) 
   que ya estaban registrados en ese evento no se duplican.
 - La detección también aplica **dentro de una carga múltiple** (§2.4): si hay dos archivos iguales
   en el mismo lote, el segundo se marca como duplicado.
-- **Reset Database** borra también el historial de huellas.
+- `POST /api/reset` borra también el historial de huellas.
 
 ### 2.4. Doc Parser: carga múltiple de hasta 20 `.csv`
 
