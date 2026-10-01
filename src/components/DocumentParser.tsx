@@ -1,6 +1,6 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { Attendee, AttendanceRecord, ParsedRecord, ACTIVITIES } from "../types";
-import { isInvalidName } from "../utils";
+import { isInvalidName, REFERENCE_DATE } from "../utils";
 import { isBlacklistedName } from "../blacklist";
 import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -22,7 +22,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   const [errorMsg, setErrorMsg] = useState("");
   const [parsedRecords, setParsedRecords] = useState<ParsedRecord[]>([]);
   const [importedCount, setImportedCount] = useState<number | null>(null);
-  const [batchDate, setBatchDate] = useState<string>("2026-06-24");
+  const [batchDate, setBatchDate] = useState<string>(REFERENCE_DATE);
   // US-18: the parser found no valid session date in the file, so the user must pick one
   const [dateRequired, setDateRequired] = useState(false);
   const hasMissingDates = parsedRecords.some(rec => !rec.date);
@@ -277,7 +277,18 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     const createdNamesInBatch = new Set<string>();
 
     // US-19: never consolidate blacklisted facilitators, even if they slipped into the preview
-    parsedRecords.filter(rec => !isBlacklistedName(rec.name)).forEach(rec => {
+    const importable = parsedRecords.filter(rec => !isBlacklistedName(rec.name));
+
+    // US-24: a new colleague joins on their earliest date in the batch, whatever the row order
+    // (YYYY-MM-DD compares as a string), so none of their attendances falls before joinedDate.
+    const earliestDate = new Map<string, string>();
+    importable.forEach(rec => {
+      const key = rec.name.trim().toLowerCase();
+      const current = earliestDate.get(key);
+      if (current === undefined || rec.date < current) earliestDate.set(key, rec.date);
+    });
+
+    importable.forEach(rec => {
       let attendeeId = rec.matchedAttendeeId;
 
       if (!attendeeId) {
@@ -295,7 +306,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             newAttendeesToCreate.push({
               name: rec.name,
               enrolledActivities: [rec.activity],
-              joinedDate: rec.date,
+              joinedDate: earliestDate.get(nameKey.toLowerCase()) ?? rec.date,
             });
             createdNamesInBatch.add(nameKey.toLowerCase());
           }

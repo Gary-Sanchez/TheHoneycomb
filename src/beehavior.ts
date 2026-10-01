@@ -78,7 +78,9 @@ export function getHiveTier(rate: number): HiveTier {
 
 // An event is each unique activity + date with at least one record in the DB, whatever its source
 // and status. Absence is deduced from the events a colleague missed — no `absent` rows are created.
-// Only events on/after the colleague's joinedDate count for them (YYYY-MM-DD compares as a string).
+// Only events on/after the colleague's joinedDate count for them (YYYY-MM-DD compares as a string),
+// except that an event they attended always counts — the window starts at the earlier of joinedDate
+// and their first present in that activity, so presents can never fall outside the denominator.
 export function computeBeehavior(attendees: Attendee[], records: AttendanceRecord[]): BeehaviorRow[] {
   const eventDates: Record<string, Set<string>> = {};
   const presentDates: Record<string, Set<string>> = {}; // `${attendeeId}|${activity}` → dates attended
@@ -97,7 +99,8 @@ export function computeBeehavior(attendees: Attendee[], records: AttendanceRecor
         const attended = presentDates[`${att.id}|${activity}`];
         if (!attended) return { activity, enrolled: false, presents: 0, total: 0, rate: null };
 
-        const counted = [...(eventDates[activity] ?? [])].filter(date => date >= att.joinedDate);
+        const from = [...attended].reduce((min, date) => (date < min ? date : min), att.joinedDate);
+        const counted = [...(eventDates[activity] ?? [])].filter(date => date >= from);
         const presents = counted.filter(date => attended.has(date)).length;
         const total = counted.length;
         return { activity, enrolled: true, presents, total, rate: total ? percent(presents, total) : null };

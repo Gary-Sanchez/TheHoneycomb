@@ -1,6 +1,6 @@
 import * as xlsx from "xlsx";
 import mammoth from "mammoth";
-import { isInvalidName } from "./src/utils";
+import { isInvalidName, REFERENCE_DATE } from "./src/utils";
 
 // Deterministic offline attendance-log parser. Replaces the old Gemini-backed extraction path:
 // no external AI/LLM call, no API key, just heuristics over the extracted document text.
@@ -18,7 +18,6 @@ export interface ParsedAttendanceRecord {
   status: "present" | "absent";
 }
 
-const REFERENCE_DATE = "2026-06-24"; // System reference date (see CLAUDE.md) — never the real current date.
 const DEFAULT_ACTIVITY = "Speakeasy";
 
 // ---------------------------------------------------------------------------

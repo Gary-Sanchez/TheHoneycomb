@@ -116,12 +116,31 @@ describe("computeBeehavior (US-24)", () => {
     expect(row.tier.label).toBe("Forager");
   });
 
-  it("never divides by zero when no event counts after joinedDate", () => {
-    const records = [rec("ana", "Speakeasy", D(1))];
-    const row = computeBeehavior([attendee("ana", "2026-10-01")], records)[0];
-    expect(row.activityStats.find(s => s.activity === "Speakeasy")).toMatchObject({ enrolled: true, total: 0, rate: null });
-    expect(row.overallRate).toBeNull();
-    expect(row.tier.label).toBe("Dormant");
+  it("a sole present on joinedDate → 100% (1/1)", () => {
+    const records = [rec("ana", "Speakeasy", "2026-06-24")];
+    const row = computeBeehavior([attendee("ana", "2026-06-24")], records)[0];
+    expect(row.activityStats.find(s => s.activity === "Speakeasy")).toMatchObject({ presents: 1, total: 1, rate: 100 });
+    expect(row.overallRate).toBe(100);
+    expect(row.tier.label).toBe("Busy Bee");
+  });
+
+  it("joinedDate is inclusive: the event on that day counts, the day before doesn't", () => {
+    const records = [
+      rec("otro", "Music Room", "2026-06-09"),
+      rec("otro", "Music Room", "2026-06-10"),
+      rec("ana", "Music Room", "2026-06-10"),
+      rec("otro", "Music Room", "2026-06-17"),
+    ];
+    const s = stat(computeBeehavior([attendee("ana", "2026-06-10"), attendee("otro")], records), "ana", "Music Room");
+    expect(s).toMatchObject({ presents: 1, total: 2, rate: 50 });
+  });
+
+  it("a present before joinedDate still counts, so a real date can't push presents out of the denominator", () => {
+    const records = [rec("ana", "Speakeasy", "2026-06-24"), rec("otro", "Speakeasy", "2026-06-17")];
+    const row = computeBeehavior([attendee("ana", "2026-10-01"), attendee("otro")], records)[0];
+    const s = row.activityStats.find(x => x.activity === "Speakeasy")!;
+    expect(s).toMatchObject({ enrolled: true, presents: 1, total: 1, rate: 100 });
+    expect(row.overallRate).toBe(100);
   });
 
   it("counts duplicate records of the same event once and keeps rates ≤ 100%", () => {
