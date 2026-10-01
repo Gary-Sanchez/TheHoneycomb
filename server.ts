@@ -256,8 +256,14 @@ app.post("/api/records/manual", requireAdmin, validateBody(manualCheckInBodySche
   res.json(await db.manualCheckIn(req.body.attendee ?? null, req.body.record));
 });
 
+// US-27: one request = one atomic write (a whole .csv batch is saved, or none of it is)
 app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), async (req, res) => {
-  res.json(await db.importParsedData(req.body.attendees, req.body.records));
+  try {
+    res.json(await db.importParsedData(req.body.attendees, req.body.records));
+  } catch (err) {
+    console.error("Error importing parsed data:", err);
+    res.status(500).json({ error: "Import failed: nothing from this batch was saved." });
+  }
 });
 
 app.put("/api/notes/:attendeeId", requireAdmin, validateBody(noteBodySchema), async (req, res) => {
@@ -298,16 +304,11 @@ app.post("/api/parse-attendance-file", upload.single("file"), async (req, res): 
     // US-18: .csv has its own table-aware parser that never invents a session date — with no
     // valid date in the file it returns dateDetected=false and the UI asks for one.
     if (extension === ".csv") {
-      const { records, dateDetected, isEmpty } = parseCsvAttendance(file.buffer, requestedActivity);
+      const { isEmpty, fingerprint, declaredActivities, ...parsed } = parseCsvAttendance(file.buffer, requestedActivity);
       if (isEmpty) {
         return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
       }
-      return res.json({
-        filename,
-        recordsCount: records.length,
-        records,
-        dateDetected,
-      });
+      return res.json({ filename, recordsCount: parsed.records.length, ...parsed });
     }
 
     const fileTextContent = await extractTextFromFile(file.buffer, extension);
@@ -330,6 +331,84 @@ app.post("/api/parse-attendance-file", upload.single("file"), async (req, res): 
     });
   }
 });
+
+// US-27: parse 1–20 .csv files of ONE activity in a single request. Like the single-file route it
+// doesn't persist anything. The batch is rejected whole (400, nothing parsed into the preview) when
+// it has too many files, a non-.csv file, an unreadable file, or a file that declares a different
+// activity. Identical files are not an error: later copies come back as duplicates, with no records.
+const MAX_CSV_BATCH_FILES = 20;
+const TOO_MANY_FILES_ERROR = `Too many files: the maximum is ${MAX_CSV_BATCH_FILES} .csv files per import. The whole batch was rejected.`;
+
+app.post(
+  "/api/parse-attendance-batch",
+  (req, res, next) => {
+    upload.array("files", MAX_CSV_BATCH_FILES)(req, res, (err: unknown): any => {
+      if (err instanceof multer.MulterError) {
+        const error = err.code === "LIMIT_UNEXPECTED_FILE" ? TOO_MANY_FILES_ERROR : `Upload rejected: ${err.message}`;
+        return res.status(400).json({ error });
+      }
+      next(err);
+    });
+  },
+  (req, res): any => {
+    try {
+      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      if (files.length === 0) {
+        return res.status(400).json({ error: "No file uploaded." });
+      }
+      if (files.length > MAX_CSV_BATCH_FILES) {
+        return res.status(400).json({ error: TOO_MANY_FILES_ERROR });
+      }
+      const notCsv = files.filter(f => path.extname(f.originalname).toLowerCase() !== ".csv");
+      if (notCsv.length > 0) {
+        return res.status(400).json({
+          error: `Only .csv files can be imported together. Not a .csv: ${notCsv.map(f => f.originalname).join(", ")}.`,
+        });
+      }
+
+      const requestedActivity: string = req.body.activity || "";
+      const parsed = files.map(f => ({ filename: f.originalname, ...parseCsvAttendance(f.buffer, requestedActivity) }));
+
+      const empty = parsed.filter(p => p.isEmpty);
+      if (empty.length > 0) {
+        return res.status(400).json({
+          error: `The whole batch was rejected because these files are empty or could not be read: ${empty.map(p => p.filename).join(", ")}.`,
+        });
+      }
+
+      // Every file must belong to the batch's activity: the one the user picked or, without one,
+      // the single activity the files declare.
+      const declared = [...new Set(parsed.flatMap(p => p.declaredActivities))];
+      const batchActivity = requestedActivity || (declared.length === 1 ? declared[0] : "");
+      const mismatched = batchActivity
+        ? parsed.filter(p => p.declaredActivities.some(a => a !== batchActivity))
+        : parsed.filter(p => p.declaredActivities.length > 0);
+      if (mismatched.length > 0) {
+        const list = mismatched.map(p => `${p.filename} (${p.declaredActivities.join(", ")})`).join(", ");
+        return res.status(400).json({
+          error: batchActivity
+            ? `Batch rejected: every file must belong to ${batchActivity}. These files belong to a different activity: ${list}. Nothing was imported.`
+            : `Batch rejected: all files must belong to the same activity. Files found: ${list}. Nothing was imported.`,
+          mismatchedFiles: mismatched.map(p => ({ filename: p.filename, activities: p.declaredActivities })),
+        });
+      }
+
+      const firstByFingerprint = new Map<string, string>();
+      return res.json({
+        activity: batchActivity,
+        files: parsed.map(({ isEmpty, fingerprint, declaredActivities, ...p }) => {
+          const duplicateOf = firstByFingerprint.get(fingerprint) ?? null;
+          if (!duplicateOf) firstByFingerprint.set(fingerprint, p.filename);
+          const records = duplicateOf ? [] : p.records;
+          return { ...p, records, recordsCount: records.length, duplicateOf };
+        }),
+      });
+    } catch (err: any) {
+      console.error("Error parsing attendance batch:", err);
+      return res.status(500).json({ error: "An error occurred while parsing the files. " + (err.message || "") });
+    }
+  }
+);
 
 // --- Graceful shutdown (US-15) ------------------------------------------------------------
 // Stop accepting connections, let in-flight requests finish, wait for pending lowdb writes to
