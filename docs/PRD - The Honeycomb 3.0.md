@@ -13,12 +13,16 @@ realmente participó, que no se pueda cargar dos veces la misma sesión y que lo
 calculen contra los eventos que de verdad se realizaron. Además, permite **cargar varios archivos
 `.csv` a la vez** y muestra mejor la información en pantalla.
 
-### 1.2. 🔴 Corrección de Bug (ALTA PRIORIDAD)
+### 1.2. Corrección de Bugs
 
-- **BUG-01: porcentajes del Bee-havior Hub mal calculados.** En la vista **Caserits Bee-havior
-  Hub**, el % de asistencia de cada colega a cada actividad debe calcularse sobre el **número de
-  eventos registrados de esa actividad**. Hoy se calcula sobre los registros propios del colega, lo
-  que infla los porcentajes. Detalle en §2.1.
+- 🔴 **BUG-01 (ALTA PRIORIDAD): porcentajes del Bee-havior Hub mal calculados.** En la vista
+  **Caserits Bee-havior Hub**, el % de asistencia de cada colega a cada actividad debe calcularse
+  sobre el **número de eventos registrados de esa actividad**. Hoy se calcula sobre los registros
+  propios del colega, lo que infla los porcentajes. Detalle en §2.1.
+- 🟢 **BUG-02 (baja prioridad): la blacklist excluye a colegas por error.** La blacklist reconoce
+  a las personas por nombre + primer apellido, así que también descarta a colegas con nombres
+  parecidos (ej. **Nicolas Rios Cardozo** se excluye como si fuera **Nicolas Rios Lopez**). Debe
+  reconocerlas por su **nombre completo**. Detalle en §2.7.
 
 ### 1.3. Nuevas Funcionalidades
 
@@ -38,6 +42,9 @@ calculen contra los eventos que de verdad se realizaron. Además, permite **carg
 El PRD 2.0 (§2.2) menciona la *base de datos local (localStorage)*. La persistencia real es
 **del lado del servidor** (`lowdb` sobre `honeycomb-data.json`). Todo lo que este documento dice
 sobre "guardar" o "registrar" se refiere a esa base.
+
+La lista de exclusión del PRD 2.0 (§2.1) nombra a las personas con nombre y un solo apellido, y no
+incluye a **Stephanie Mariscal Rodriguez**. La lista vigente es la de §2.7 de este documento.
 
 ### 1.5. Definición común: Evento
 
@@ -163,7 +170,38 @@ tiene (*Active Attendees* y *Attendance rate*):
 - Los colegas de la blacklist y los excluidos por < 10 min nunca llegan a la base, así que no
   cuentan en el promedio.
 
-### 2.7. Restricciones técnicas (se mantienen de versiones anteriores)
+### 2.7. 🟢 BUG-02: Blacklist por nombres completos
+
+**Comportamiento actual (incorrecto).** La blacklist excluye a todo nombre que contenga el nombre y
+el primer apellido de alguien de la lista. Así, al importar, **Nicolas Rios Cardozo** (colega) se
+descarta como si fuera **Nicolas Rios Lopez** (equipo), y cualquier "Pablo Rico ..." se descarta
+como si fuera Pablo Rico Schmidt.
+
+**Comportamiento esperado.**
+
+- La blacklist contiene exactamente estos 13 nombres completos:
+  1. Nadine Hinojosa Ramos
+  2. Fabiola Arias Navia
+  3. Alejandra Barrientos Garrido
+  4. Rodrigo Rivero Rocha
+  5. Gary Ronald Sanchez Suarez
+  6. Nicolas Rios Lopez
+  7. Wara Hermosa Fernandez
+  8. Angela Guzman Rusinque
+  9. Gustavo Ramos Soria
+  10. Alejandra Rivera Crespo
+  11. Pablo Rico Schmidt
+  12. Eric Revollo Ayala
+  13. Stephanie Mariscal Rodriguez
+- Un nombre se excluye solo si contiene **todas las palabras** de uno de esos nombres completos. La
+  comparación ignora el orden (`Guzman Rusinque, Angela`), las mayúsculas y los acentos.
+- Un nombre incompleto (ej. `Nicolas Rios`, `Fabiola Arias`) **no** se excluye: si alguien del
+  equipo aparece con un solo apellido, se borra a mano su fila en la vista previa.
+- El filtro se sigue aplicando solo en la ingesta de archivos (vista previa de **Import Forage
+  Logs** y consolidación). No se aplica en **Manual Check-In** ni en el alta de colegas desde
+  **Caserits & Progress**.
+
+### 2.8. Restricciones técnicas (se mantienen de versiones anteriores)
 
 - Toda ruta nueva que modifique datos (ej. guardar huellas de importación, importación por lote)
   requiere sesión de administrador (`requireAdmin`) y validación del cuerpo (`validateBody` con
@@ -196,6 +234,10 @@ tiene (*Active Attendees* y *Attendance rate*):
 | **TC-18** | Activities Matrix Profile | Speakeasy tiene 4 eventos con 6, 8, 7 y 9 asistentes presentes. | La tarjeta muestra `4` eventos y promedio `7.5` asistentes. |
 | **TC-19** | Activities Matrix Profile | Writing Hood sin eventos. | La tarjeta muestra `0` eventos y promedio `—`. |
 | **TC-20** | Activities Matrix Profile | Se importa un evento nuevo de Speakeasy con 10 asistentes. | La tarjeta pasa a `5` eventos y promedio `8.0` sin recargar la página. |
+| **TC-21** | Blacklist (BUG-02) | `.csv` con `Nicolas Rios Lopez` y `Nicolas Rios Cardozo`. | Se excluye a Nicolas Rios Lopez; Nicolas Rios Cardozo se importa. |
+| **TC-22** | Blacklist (BUG-02) | `.csv` con `Nicolas Rios` y `Fabiola Arias` (sin segundo apellido). | No se excluye a ninguno. |
+| **TC-23** | Blacklist (BUG-02) | `.csv` con los 13 nombres completos, en distinto orden, mayúsculas y acentos. | Se excluye a los 13 antes de la vista previa. |
+| **TC-24** | Blacklist (BUG-02) | `.csv` con `Pablo Rico Vargas`. | No se excluye. |
 
 ---
 
@@ -221,3 +263,17 @@ tiene (*Active Attendees* y *Attendance rate*):
     Eso suma puntos de inconsistencia.
   - La base crecería con un registro por inscrito y por evento sin aportar información nueva.
   - La detección de duplicados (§2.3) y el promedio de asistentes (§2.6) se complicarían.
+- **D-5 (blacklist):** la blacklist reconoce solo nombres completos (nombre y dos apellidos) y se
+  aplica únicamente a la ingesta de archivos (§2.7).
+
+## 6. Tickets en The Honeycomb Board
+
+| Ticket | Punto del PRD | Prioridad |
+|---|---|---|
+| [US-24](https://app.notion.com/p/3ec7669ddc9e8180ac26e75fba594daf) | BUG-01: porcentajes del Bee-havior Hub (§2.1) | 🔴 Alta |
+| [US-25](https://app.notion.com/p/3ec7669ddc9e811db061ed0390ffd717) | Exclusión por menos de 10 minutos (§2.2) | 🟡 Media |
+| [US-26](https://app.notion.com/p/3ec7669ddc9e814b8deefea7f366f656) | Detección de `.csv` duplicado (§2.3) | 🟡 Media |
+| [US-27](https://app.notion.com/p/3ec7669ddc9e81b4b885c1c1c5a7af69) | Carga múltiple de hasta 20 `.csv` (§2.4) | 🟡 Media |
+| [US-28](https://app.notion.com/p/3ec7669ddc9e81598defce92d42be4c7) | Orden alfabético en Caserits & Progress (§2.5) | 🟢 Baja |
+| [US-29](https://app.notion.com/p/3ec7669ddc9e8198a736ecb9148f6de4) | Eventos y promedio en Activities Matrix Profile (§2.6) | 🟡 Media |
+| [US-30](https://app.notion.com/p/3ec7669ddc9e81299b44c20a797e8767) | BUG-02: blacklist por nombres completos (§2.7) | 🟢 Baja |
