@@ -61,7 +61,13 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   It reuses `isInvalidName` from `src/utils.ts` (same host/facilitator exclusion `db.ts` uses for
   seed filtering) plus its own parser-local heuristics for dates, activities, statuses, and
   meeting metadata. `.csv` files take their own path, `parseCsvAttendance` (US-18): it never falls
-  back to the reference date, and returns `dateDetected: false` so the UI requires a date.
+  back to the reference date, and returns `dateDetected: false` so the UI requires a date. It also
+  drops attendees under 10 minutes when the file has a duration column (US-25, summed per table
+  section, max across sections so Teams' two tables aren't double counted).
+- **CSV batches (US-27)**: `POST /api/parse-attendance-batch` parses 1–20 `.csv` of one activity
+  and rejects the whole batch (too many files, non-.csv, or a file declaring another activity);
+  identical files come back as `duplicateOf`. The confirmed batch is one `POST /api/records/import`,
+  and `importParsedData` rolls back in-memory state if the write fails — all or nothing.
 - Frontend state lives in `src/App.tsx`, which owns the handlers (`handleAddAttendee`,
   `handleSaveRecords`, `handleImportParsedData`, `handleResetDatabase`, etc.) that `db.ts`'s
   functions mirror 1:1 — check the "Mirrors handleX" comments in `db.ts` when changing either side.
@@ -93,7 +99,7 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
   `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/manual`, `POST /api/records/import`,
   `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
-  `GET`s and `/api/parse-attendance-file` (doesn't persist) stay public.
+  `GET`s, `/api/parse-attendance-file` and `/api/parse-attendance-batch` (don't persist) stay public.
 - **Input validation (US-10)**: every mutating route with a body also runs
   `validateBody(<zod schema>)` from `validation.ts` after `requireAdmin` → 400
   `{ error, details }` before anything reaches `db.ts`. Schemas mirror `src/types.ts`; keep them in
