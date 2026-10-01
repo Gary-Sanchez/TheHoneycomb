@@ -166,15 +166,26 @@ export async function manualCheckIn(
 
 // Mirrors handleImportParsedData (src/App.tsx) — attendees/records are already fully
 // formed and linked client-side (ids assigned, attendeeId matched by name); this appends them.
+// US-27: a whole .csv batch arrives in one call and is all-or-nothing — if the write fails, the
+// in-memory state is rolled back too, so a later successful write can't persist half a batch.
 export async function importParsedData(
   newAttendees: Attendee[],
   newRecordsToSave: AttendanceRecord[]
 ): Promise<HoneycombData> {
   const db = await getDb();
+  const previous = db.data;
   // US-19: server-side guard so blacklisted facilitators never reach consolidated data
-  db.data.attendees = [...db.data.attendees, ...newAttendees.filter(att => !isBlacklistedName(att.name))];
-  db.data.records = [...db.data.records, ...newRecordsToSave.filter(rec => !isBlacklistedName(rec.attendeeName))];
-  await db.write();
+  db.data = {
+    ...previous,
+    attendees: [...previous.attendees, ...newAttendees.filter(att => !isBlacklistedName(att.name))],
+    records: [...previous.records, ...newRecordsToSave.filter(rec => !isBlacklistedName(rec.attendeeName))],
+  };
+  try {
+    await db.write();
+  } catch (err) {
+    db.data = previous;
+    throw err;
+  }
   return db.data;
 }
 

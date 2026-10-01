@@ -1,6 +1,9 @@
+import crypto from "crypto";
 import * as xlsx from "xlsx";
 import mammoth from "mammoth";
 import { isInvalidName, REFERENCE_DATE } from "./src/utils";
+import { isBlacklistedName } from "./src/blacklist";
+import type { DurationExclusion } from "./src/types";
 
 // Deterministic offline attendance-log parser. Replaces the old Gemini-backed extraction path:
 // no external AI/LLM call, no API key, just heuristics over the extracted document text.
@@ -9,13 +12,17 @@ import { isInvalidName, REFERENCE_DATE } from "./src/utils";
 //   - extractTextFromFile: turns an uploaded file's Buffer into plain text, per extension.
 //   - parseAttendance: turns that text into { name, activity, date, status } records.
 //   - parseCsvAttendance (US-18): .csv only, straight from the Buffer; also reports whether a
-//     session date was found (dateDetected) instead of falling back to the reference date.
+//     session date was found (dateDetected) instead of falling back to the reference date,
+//     drops attendees under 10 minutes (US-25) and reports what the file declares (US-27).
 
 export interface ParsedAttendanceRecord {
   name: string;
   activity: string;
   date: string;
   status: "present" | "absent";
+  // US-25: the duration couldn't be read, so the attendee was kept and flagged for review
+  needsReview?: boolean;
+  reviewReason?: string;
 }
 
 const DEFAULT_ACTIVITY = "Speakeasy";
@@ -992,13 +999,110 @@ function parseCsvStatus(cell: string | undefined): "present" | "absent" | null {
   return null;
 }
 
-export function parseCsvAttendance(
-  buffer: Buffer,
-  requestedActivity: string = ""
-): { records: ParsedAttendanceRecord[]; dateDetected: boolean; isEmpty: boolean } {
+// ---------------------------------------------------------------------------
+// US-25: per-attendee duration (.csv only)
+// ---------------------------------------------------------------------------
+
+export const MIN_ATTENDANCE_SECONDS = 10 * 60;
+
+// Header cells (exact match after normalizeLabel: case/accent-insensitive) of the duration column
+const CSV_DURATION_HEADERS = [
+  "in-meeting duration", "in meeting duration", "duration", "duracion en la reunion", "tiempo en la reunion",
+];
+
+const DURATION_UNIT_SECONDS: Record<string, number> = {
+  h: 3600, hr: 3600, hrs: 3600, hour: 3600, hours: 3600, hora: 3600, horas: 3600,
+  m: 60, min: 60, mins: 60, minute: 60, minutes: 60, minuto: 60, minutos: 60,
+  s: 1, sec: 1, secs: 1, second: 1, seconds: 1, seg: 1, segs: 1, segundo: 1, segundos: 1,
+};
+
+// Seconds for "1h 5m 30s", "45m 12s", "9m", "1 h 5 min", "00:45:12" (h:m:s) or "45:12" (m:s).
+// Anything else (including a bare number, whose unit is unknown) returns null.
+export function parseDurationSeconds(raw: string | undefined | null): number | null {
+  if (!raw) return null;
+  const v = stripAccents(raw.toLowerCase()).trim();
+  if (!v) return null;
+
+  let m = v.match(/^(\d{1,3}):(\d{1,2}):(\d{1,2})$/);
+  if (m) {
+    const [h, min, s] = [+m[1], +m[2], +m[3]];
+    return min < 60 && s < 60 ? h * 3600 + min * 60 + s : null;
+  }
+  m = v.match(/^(\d{1,4}):(\d{1,2})$/);
+  if (m) {
+    const [min, s] = [+m[1], +m[2]];
+    return s < 60 ? min * 60 + s : null;
+  }
+
+  const tokenRe = /(\d+(?:[.,]\d+)?)\s*([a-z]+)\.?/g;
+  let total = 0;
+  let tokens = 0;
+  for (const t of v.matchAll(tokenRe)) {
+    const unit = DURATION_UNIT_SECONDS[t[2]];
+    if (unit === undefined) return null;
+    total += parseFloat(t[1].replace(",", ".")) * unit;
+    tokens++;
+  }
+  // Every character must belong to a "<number><unit>" token (separators aside)
+  if (tokens === 0 || v.replace(tokenRe, "").replace(/[\s,]+/g, "") !== "") return null;
+  return Math.round(total);
+}
+
+export function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+}
+
+// ---------------------------------------------------------------------------
+// US-27: activity a file declares for itself (Activity column / label, or the meeting title)
+// ---------------------------------------------------------------------------
+
+const CSV_ACTIVITY_LABELS = ["activity", "actividad"];
+const CSV_TITLE_LABELS = ["meeting title", "title", "meeting name", "titulo de la reunion", "titulo", "nombre de la reunion"];
+const ACTIVITY_NAMES = ["Speakeasy", "Reading Club", "Music Room", "Writing Hood"];
+
+// A meeting title only declares an activity when it names one of the 4 activities verbatim
+// (case/accent-insensitive): the loose keyword heuristics ("email", "book"...) would otherwise
+// reject a valid batch over an incidental word in the title.
+function activityNamedInTitle(title: string): string | null {
+  const norm = normalizeForMatch(title);
+  return ACTIVITY_NAMES.find(a => norm.includes(a.toLowerCase())) ?? null;
+}
+
+export interface CsvParseResult {
+  records: ParsedAttendanceRecord[];
+  dateDetected: boolean;
+  isEmpty: boolean;
+  // US-25: false when the file has no duration column (nobody excluded by time)
+  durationFilterApplied: boolean;
+  excludedByDuration: DurationExclusion[];
+  // US-19 blacklist hits (distinct people), reported per file in the batch preview (US-27)
+  excludedByBlacklist: number;
+  // US-27: every activity the file itself names, so a batch can be checked for a single activity
+  declaredActivities: string[];
+  // US-27: content hash (line endings/outer whitespace normalized) to spot identical files in a batch
+  fingerprint: string;
+}
+
+export function parseCsvAttendance(buffer: Buffer, requestedActivity: string = ""): CsvParseResult {
   const text = decodeCsvBuffer(buffer);
   const rows = parseCsvRows(text, detectCsvDelimiter(text));
   const activity = requestedActivity || DEFAULT_ACTIVITY;
+  const declared = new Set<string>();
+
+  for (const row of rows) {
+    if (row.length < 2) continue;
+    const label = normalizeLabel(row[0]);
+    const value = row.slice(1).find(Boolean) || "";
+    const found = CSV_ACTIVITY_LABELS.includes(label)
+      ? detectActivityFromText(value)
+      : CSV_TITLE_LABELS.includes(label)
+      ? activityNamedInTitle(value)
+      : null;
+    if (found) declared.add(found);
+  }
 
   // 1. Session date from metadata: a row whose first cell is a date label ("Start time", "Date", ...).
   //    The first valid match wins, so the same file always yields the same date.
@@ -1019,7 +1123,13 @@ export function parseCsvAttendance(
   let statusCol = -1;
   let dateCol = -1;
   let activityCol = -1;
+  let durationCol = -1;
   let headerFound = false;
+  let durationFilterApplied = false;
+  // US-25: name key -> table section index -> summed seconds of that person's rows in the section
+  const durations = new Map<string, Map<number, number>>();
+  const unreadableDuration = new Map<string, string>(); // name key -> first raw value we couldn't read
+  let section = -1;
 
   for (const row of rows) {
     const nonEmpty = row.filter(Boolean);
@@ -1034,10 +1144,13 @@ export function parseCsvAttendance(
     const headerNameIdx = nameCol === -1 ? labels.findIndex(l => CSV_NAME_HEADERS.includes(l)) : -1;
     if (headerNameIdx !== -1) {
       headerFound = true;
+      section++;
       nameCol = headerNameIdx;
       statusCol = labels.findIndex(l => l === "status" || l === "attendance" || l === "estado" || l === "asistencia");
       dateCol = labels.findIndex(l => CSV_DATE_COLUMN_HINTS.some(h => l.includes(h)));
       activityCol = labels.findIndex(l => l === "activity" || l === "actividad");
+      durationCol = labels.findIndex(l => CSV_DURATION_HEADERS.includes(l));
+      if (durationCol !== -1) durationFilterApplied = true;
       continue;
     }
     if (nameCol === -1) continue;
@@ -1045,6 +1158,22 @@ export function parseCsvAttendance(
     const name = cleanCsvName(row[nameCol] || "");
     if (!name) continue;
     if (!contentDate && dateCol !== -1) contentDate = parseDeterministicDate(row[dateCol] || "");
+    if (activityCol !== -1) {
+      const declaredActivity = detectActivityFromText(row[activityCol]);
+      if (declaredActivity) declared.add(declaredActivity);
+    }
+    if (durationCol !== -1) {
+      const key = toTitleCase(name).toLowerCase();
+      const raw = row[durationCol] || "";
+      const seconds = parseDurationSeconds(raw);
+      if (seconds === null) {
+        if (!unreadableDuration.has(key)) unreadableDuration.set(key, raw);
+      } else {
+        const bySection = durations.get(key) ?? new Map<number, number>();
+        bySection.set(section, (bySection.get(section) ?? 0) + seconds);
+        durations.set(key, bySection);
+      }
+    }
     // An Activity column is honored unless the user picked an activity for the upload
     const rowActivity = requestedActivity ? null : activityCol !== -1 ? detectActivityFromText(row[activityCol]) : null;
     records.push({
@@ -1074,10 +1203,53 @@ export function parseCsvAttendance(
   // Metadata date wins; otherwise the first date found in the attendee table's date column.
   // No valid date => leave it empty so the UI asks for one via "Batch Edit Session Date".
   const finalDate = sessionDate || contentDate || "";
+
+  // US-19 blacklist goes first, so a facilitator is never also counted as excluded by time (US-25)
+  const blacklisted = new Set(records.filter(r => isBlacklistedName(r.name)).map(r => r.name.toLowerCase()));
+
+  // US-25: someone who left and rejoined has several rows in a section, and those are summed.
+  // Teams exports repeat people across sections (the "Participants" total and the per-join
+  // "In-Meeting Activities" rows), so sections are not added together: the largest section
+  // total is the person's time. An unreadable duration keeps the person, flagged for review.
+  const excludedByDuration: DurationExclusion[] = [];
+  const excludedKeys = new Set<string>();
+  const reviewReasons = new Map<string, string>();
+  if (durationFilterApplied) {
+    const seen = new Set<string>();
+    for (const rec of records) {
+      const key = rec.name.toLowerCase();
+      if (seen.has(key) || blacklisted.has(key) || isInvalidName(rec.name)) continue;
+      seen.add(key);
+      const bySection = durations.get(key);
+      if (unreadableDuration.has(key) || !bySection) {
+        const raw = unreadableDuration.get(key);
+        reviewReasons.set(key, raw ? `Duration could not be read: "${raw}"` : "No duration found for this attendee");
+        continue;
+      }
+      const seconds = Math.max(...bySection.values());
+      if (seconds < MIN_ATTENDANCE_SECONDS) {
+        excludedKeys.add(key);
+        excludedByDuration.push({ name: rec.name, seconds, duration: formatDuration(seconds) });
+      }
+    }
+  }
+
+  // Same final pass as every other format: blacklist/host/metadata filtering, Title Case, dedupe
+  const cleaned = cleanAndFilterRecords(
+    records.filter(r => !excludedKeys.has(r.name.toLowerCase())).map(r => ({ ...r, date: finalDate }))
+  ).map(r => {
+    const reviewReason = reviewReasons.get(r.name.toLowerCase());
+    return reviewReason ? { ...r, needsReview: true, reviewReason } : r;
+  });
+
   return {
-    // Same final pass as every other format: blacklist/host/metadata filtering, Title Case, dedupe
-    records: cleanAndFilterRecords(records.map(r => ({ ...r, date: finalDate }))),
+    records: cleaned,
     dateDetected: Boolean(finalDate),
     isEmpty: !text.trim(),
+    durationFilterApplied,
+    excludedByDuration,
+    excludedByBlacklist: blacklisted.size,
+    declaredActivities: [...declared],
+    fingerprint: crypto.createHash("sha256").update(text.replace(/\r\n?/g, "\n").trim()).digest("hex"),
   };
 }

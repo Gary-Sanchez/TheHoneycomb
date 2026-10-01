@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import * as xlsx from "xlsx";
-import { extractTextFromFile, htmlToText, parseAttendance, parseCsvAttendance } from "./parser";
+import { extractTextFromFile, htmlToText, parseAttendance, parseCsvAttendance, parseDurationSeconds } from "./parser";
 
 const byName = (records: ReturnType<typeof parseAttendance>) =>
   Object.fromEntries(records.map(r => [r.name, r]));
@@ -276,5 +276,117 @@ describe("parseCsvAttendance (US-18 .csv path)", () => {
 
   it("flags an empty file", () => {
     expect(parseCsvAttendance(Buffer.from("  \n", "utf-8")).isEmpty).toBe(true);
+  });
+});
+
+describe("parseDurationSeconds (US-25)", () => {
+  it.each([
+    ["1h 5m 30s", 3930],
+    ["45m 12s", 2712],
+    ["9m", 540],
+    ["00:45:12", 2712],
+    ["45:12", 2712],
+    ["1 h 5 min", 3900],
+    ["10m 0s", 600],
+    ["9m 59s", 599],
+    ["1 hora 2 minutos", 3720],
+  ])("reads %s", (raw, seconds) => {
+    expect(parseDurationSeconds(raw)).toBe(seconds);
+  });
+
+  it.each(["abc", "", "45", "10 parsecs", "5m extra", "1:75"])("rejects %j", raw => {
+    expect(parseDurationSeconds(raw)).toBeNull();
+  });
+});
+
+describe("parseCsvAttendance — 10-minute duration filter (US-25)", () => {
+  const parse = (lines: string[]) => parseCsvAttendance(Buffer.from(lines.join("\n"), "utf-8"), "Speakeasy");
+  const names = (r: ReturnType<typeof parse>) => r.records.map(x => x.name).sort();
+
+  it("QA-01: excludes only the attendee under 10 minutes (exact threshold)", () => {
+    const r = parse(["Name,In-Meeting Duration", "Ana Lopez,9m 59s", "Beto Paz,10m 0s", "Ciro Diaz,45m"]);
+    expect(r.durationFilterApplied).toBe(true);
+    expect(names(r)).toEqual(["Beto Paz", "Ciro Diaz"]);
+    expect(r.excludedByDuration).toEqual([{ name: "Ana Lopez", seconds: 599, duration: "9m 59s" }]);
+  });
+
+  it("QA-02: every supported format is read and kept", () => {
+    const r = parse(["Name,Duration", "Ana Lopez,00:45:12", "Beto Paz,45:12", "Ciro Diaz,1h 5m 30s", "Dora Ruiz,1 h 5 min"]);
+    expect(names(r)).toEqual(["Ana Lopez", "Beto Paz", "Ciro Diaz", "Dora Ruiz"]);
+    expect(r.excludedByDuration).toEqual([]);
+    expect(r.records.some(x => x.needsReview)).toBe(false);
+  });
+
+  it("QA-03: sums the rows of someone who left and rejoined (one row in the result)", () => {
+    const r = parse(["Name,Duration", "Ana Lopez,6m", "ana lopez,5m", "Beto Paz,3m", "Beto Paz,4m"]);
+    expect(r.records.map(x => x.name)).toEqual(["Ana Lopez"]);
+    expect(r.excludedByDuration).toEqual([{ name: "Beto Paz", seconds: 420, duration: "7m 0s" }]);
+  });
+
+  it("does not double count Teams' Participants total and its per-join activity rows", () => {
+    const r = parse([
+      "Name,First Join,Last Leave,In-Meeting Duration",
+      "Ana Lopez,6/12/26 10:00,6/12/26 10:08,8m",
+      "",
+      "Name,Join Time,Leave Time,Duration",
+      "Ana Lopez,6/12/26 10:00,6/12/26 10:05,5m",
+      "Ana Lopez,6/12/26 10:06,6/12/26 10:09,3m",
+    ]);
+    expect(r.records).toEqual([]);
+    expect(r.excludedByDuration).toEqual([{ name: "Ana Lopez", seconds: 480, duration: "8m 0s" }]);
+  });
+
+  it("QA-04: recognizes Spanish headers", () => {
+    for (const header of ["Duración en la reunión", "TIEMPO EN LA REUNION"]) {
+      const r = parse([`Nombre,${header}`, "Ana Lopez,3m", "Beto Paz,30m"]);
+      expect(r.durationFilterApplied).toBe(true);
+      expect(names(r)).toEqual(["Beto Paz"]);
+    }
+  });
+
+  it("QA-05: without a duration column nobody is excluded and the filter is reported as not applied", () => {
+    const r = parse(["Name,Email", "Ana Lopez,a@x.com", "Beto Paz,b@x.com"]);
+    expect(r.durationFilterApplied).toBe(false);
+    expect(names(r)).toEqual(["Ana Lopez", "Beto Paz"]);
+    expect(r.excludedByDuration).toEqual([]);
+  });
+
+  it("QA-06: an unreadable duration keeps the attendee, flagged for review", () => {
+    const r = parse(["Name,Duration", "Ana Lopez,abc", "Beto Paz,20m"]);
+    const ana = r.records.find(x => x.name === "Ana Lopez");
+    expect(ana).toMatchObject({ needsReview: true });
+    expect(ana?.reviewReason).toContain("abc");
+    expect(r.records.find(x => x.name === "Beto Paz")?.needsReview).toBeUndefined();
+  });
+
+  it("QA-07: blacklisted people are dropped first and not counted as excluded by time", () => {
+    const r = parse(["Name,Duration", "Fabiola Arias,2m", "Ana Lopez,3m", "Beto Paz,30m"]);
+    expect(names(r)).toEqual(["Beto Paz"]);
+    expect(r.excludedByBlacklist).toBe(1);
+    expect(r.excludedByDuration.map(x => x.name)).toEqual(["Ana Lopez"]);
+  });
+});
+
+describe("parseCsvAttendance — batch metadata (US-27)", () => {
+  it("reports the activity the file declares in its title, label or Activity column", () => {
+    const title = parseCsvAttendance(Buffer.from("Meeting title,Writing Hood session\nName\nAna Lopez\n"), "Speakeasy");
+    expect(title.declaredActivities).toEqual(["Writing Hood"]);
+    const label = parseCsvAttendance(Buffer.from("Actividad,Music Room\nName\nAna Lopez\n"), "Speakeasy");
+    expect(label.declaredActivities).toEqual(["Music Room"]);
+    const column = parseCsvAttendance(Buffer.from("Name,Activity\nAna Lopez,Reading Club\n"), "Speakeasy");
+    expect(column.declaredActivities).toEqual(["Reading Club"]);
+  });
+
+  it("ignores loose keywords in a meeting title (only the 4 activity names count)", () => {
+    const r = parseCsvAttendance(Buffer.from("Meeting title,Weekly email catch-up\nName\nAna Lopez\n"), "Speakeasy");
+    expect(r.declaredActivities).toEqual([]);
+  });
+
+  it("gives identical content the same fingerprint regardless of line endings", () => {
+    const a = parseCsvAttendance(Buffer.from("Name\nAna Lopez\n"));
+    const b = parseCsvAttendance(Buffer.from("Name\r\nAna Lopez\r\n\r\n"));
+    const c = parseCsvAttendance(Buffer.from("Name\nBeto Paz\n"));
+    expect(a.fingerprint).toBe(b.fingerprint);
+    expect(a.fingerprint).not.toBe(c.fingerprint);
   });
 });

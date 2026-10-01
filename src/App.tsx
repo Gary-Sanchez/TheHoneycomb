@@ -77,7 +77,8 @@ export default function App() {
   // check-in). When the last one settles, a lone successful mutation applies its own snapshot;
   // an overlapping burst, a failure, or a lost admin session (401 → read-only, US-11) reloads
   // from the server instead, which also discards any optimistic change that wasn't persisted.
-  const persist = (url: string, init: RequestInit, label: string) => {
+  // Resolves to whether the server accepted the mutation (US-27 reports a failed batch import).
+  const persist = (url: string, init: RequestInit, label: string): Promise<boolean> => {
     inFlightMutations.current += 1;
     mutationSeq.current += 1;
     if (inFlightMutations.current > 1) reloadWhenIdle.current = true;
@@ -88,14 +89,16 @@ export default function App() {
         if (res.status === 401) {
           setAuth(prev => ({ ...prev, authenticated: false }));
           reloadWhenIdle.current = true;
-          return;
+          return false;
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         snapshot = await res.json();
+        return true;
       })
       .catch(err => {
         console.error(`Failed to persist ${label}:`, err);
         reloadWhenIdle.current = true;
+        return false;
       })
       .finally(() => {
         inFlightMutations.current -= 1;
@@ -279,7 +282,7 @@ export default function App() {
     // Merge in imported logs
     setRecords(prev => [...prev, ...finalLogs]);
 
-    persist("/api/records/import", jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }), "imported data");
+    return persist("/api/records/import", jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }), "imported data");
   };
 
   // 5. Save notes for progress report
