@@ -1,6 +1,6 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ACTIVITIES } from "../types";
-import { isInvalidName, nameKey } from "../utils";
+import { isInvalidName, nameKey, REFERENCE_DATE } from "../utils";
 import { isBlacklistedName } from "../blacklist";
 import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -67,7 +67,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   const [expandedExclusions, setExpandedExclusions] = useState<Set<number>>(new Set());
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
-  const [batchDate, setBatchDate] = useState<string>("2026-06-24");
+  const [batchDate, setBatchDate] = useState<string>(REFERENCE_DATE);
   // US-18: the parser found no valid session date in the file, so the user must pick one
   const [dateRequired, setDateRequired] = useState(false);
   const hasMissingDates = parsedRecords.some(rec => !rec.date);
@@ -352,6 +352,15 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       else if (rec.status === "present") consolidated.set(key, { ...existing, status: "present" });
     });
 
+    // US-24: a new colleague joins on their earliest date in the batch, whatever the row order
+    // (YYYY-MM-DD compares as a string), so none of their attendances falls before joinedDate.
+    const earliestDate = new Map<string, string>();
+    consolidated.forEach(rec => {
+      const key = nameKey(rec.name);
+      const current = earliestDate.get(key);
+      if (current === undefined || rec.date < current) earliestDate.set(key, rec.date);
+    });
+
     consolidated.forEach(rec => {
       let attendeeId = rec.matchedAttendeeId;
 
@@ -370,7 +379,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             newAttendeesToCreate.push({
               name: rec.name,
               enrolledActivities: [rec.activity],
-              joinedDate: rec.date,
+              joinedDate: earliestDate.get(nameKey(trimmedName)) ?? rec.date,
             });
             createdNamesInBatch.add(trimmedName.toLowerCase());
           }

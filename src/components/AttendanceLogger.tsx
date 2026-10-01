@@ -1,5 +1,6 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES, ActivityType, ManualCheckInResult } from "../types";
+import { REFERENCE_DATE } from "../utils";
 import { Calendar, Check, X, UserPlus, AlertCircle, Sparkles } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
@@ -23,7 +24,7 @@ export default function AttendanceLogger({
   canEdit,
   onSignIn,
 }: AttendanceLoggerProps) {
-  const todayStr = "2026-06-24"; // Preset date reflecting system time
+  const todayStr = REFERENCE_DATE; // Preset date reflecting system time
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [selectedActivity, setSelectedActivity] = useState<ActivityType>(ACTIVITIES[0]);
 

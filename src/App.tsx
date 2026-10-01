@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Attendee, AttendanceRecord, AuthStatus, ManualCheckInResult } from "./types";
-import { nameKey } from "./utils";
+import { nameKey, REFERENCE_DATE } from "./utils";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
@@ -124,7 +124,7 @@ export default function App() {
       name,
       email: email || undefined,
       enrolledActivities,
-      joinedDate: new Date().toISOString().split("T")[0],
+      joinedDate: REFERENCE_DATE, // never the real date: it would postdate every session (US-24)
     };
 
     setAttendees(prev => [...prev, newAttendee]);
@@ -201,7 +201,7 @@ export default function App() {
       id: `att-${Date.now()}`,
       name,
       enrolledActivities: [],
-      joinedDate: new Date().toISOString().split("T")[0],
+      joinedDate: date, // the session they're checked into, so that event counts for them (US-24)
     };
     const joinedExistingSession = records.some(r => r.date === date && r.activity === activity);
     const alreadyInSession = records.find(

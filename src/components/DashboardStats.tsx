@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
+import { computeBeehavior } from "../beehavior";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -92,76 +93,8 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
     });
   }, [attendees, records]);
 
-  // Calculate detailed information for the new "Caserits Bee-havior" table
-  const beehaviorData = useMemo(() => {
-    const sorted = [...attendees].sort((a, b) => a.name.localeCompare(b.name));
-
-    return sorted.map(att => {
-      // Calculate attendance rates for each activity
-      const activityStats = ACTIVITIES.map(act => {
-        const logs = records.filter(r => r.attendeeId === att.id && r.activity === act);
-        const total = logs.length;
-        const presents = logs.filter(r => r.status === "present").length;
-        const rate = total ? Math.round((presents / total) * 100) : null;
-        return { activity: act, total, presents, rate };
-      });
-
-      // Overall attendance rate calculation
-      const attLogs = records.filter(r => r.attendeeId === att.id);
-      const overallTotal = attLogs.length;
-      const overallPresents = attLogs.filter(r => r.status === "present").length;
-      const overallRate = overallTotal ? Math.round((overallPresents / overallTotal) * 100) : 0;
-
-      // Tier assignments based on specific rules
-      let label = "Dormant";
-      let color = "#2F4F4F"; // Charcoal
-      let bgLight = "#E6ECEC"; // Light charcoal tint
-      let textColor = "#2F4F4F";
-      let icon = "💤";
-      let meaning = "Hibernating. Rare sightings. Still getting to know the honeycomb.";
-
-      if (overallRate >= 26 && overallRate <= 50) {
-        label = "Hatcher";
-        color = "#B89F30"; // Darker gold/amber to ensure contrast on off-white or yellow backgrounds
-        bgLight = "#FEFBEA"; // Light Pale Amber tint
-        textColor = "#6B5800";
-        icon = "🥚";
-        meaning = "Getting cozy. Halfway to becoming a regular flyer.";
-      } else if (overallRate >= 51 && overallRate <= 75) {
-        label = "Forager";
-        color = "#E68A00"; // Rich Warm Orange for contrast
-        bgLight = "#FFF7E6"; // Light warm orange tint
-        textColor = "#804C00";
-        icon = "🌸";
-        meaning = "Honey maker. Solid presence, regularly contributing to the buzz.";
-      } else if (overallRate >= 76) {
-        label = "Busy Bee";
-        color = "#D4AF37"; // Metallic/Golden Yellow for contrast
-        bgLight = "#FFFDF0"; // Light Bright Golden Yellow tint
-        textColor = "#7A5E00";
-        icon = "🐝";
-        meaning = "Queen's favorite. Elite attendance and top-tier dedication.";
-      }
-
-      // Check multi-activity participation: an activity counts once the colleague attended it
-      // at least once — absence-only logs (e.g. from Manual Check-In) don't make them a regular
-      const activeActivities = activityStats
-        .filter(stat => stat.presents > 0)
-        .map(stat => stat.activity);
-      const isMulti = activeActivities.length > 1;
-
-      return {
-        attendee: att,
-        activityStats,
-        overallRate,
-        overallTotal,
-        overallPresents,
-        tier: { label, color, bgLight, textColor, icon, meaning },
-        isMulti,
-        participatedCount: activeActivities.length,
-      };
-    });
-  }, [attendees, records]);
+  // Caserits Bee-havior table (US-24): rates are computed over recorded events, not the colleague's own logs
+  const beehaviorData = useMemo(() => computeBeehavior(attendees, records), [attendees, records]);
 
   // Filtered list of Bee-haviors based on search
   const filteredBeehaviorData = useMemo(() => {
@@ -357,15 +290,16 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
                         const actColor = COLORS[idx % COLORS.length];
                         return (
                           <td key={stat.activity} className="p-4 text-center font-mono">
-                            {stat.total === 0 ? (
+                            {stat.rate === null ? (
                               <span className="text-natural-sage/50 text-[11px]">—</span>
                             ) : (
                               <span
                                 className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold"
                                 style={{ backgroundColor: `${actColor}15`, color: actColor }}
-                                title={`${stat.presents} present out of ${stat.total} logs`}
+                                title={`Attended ${stat.presents} of ${stat.total} events`}
                               >
                                 {stat.rate}%
+                                <span className="ml-1 text-[10px] font-medium opacity-75">({stat.presents}/{stat.total})</span>
                               </span>
                             )}
                           </td>
@@ -374,11 +308,12 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
 
                       {/* Overall Rate */}
                       <td className="p-4 text-center font-mono font-bold text-[#1A1A1A]">
-                        {overallTotal === 0 ? (
+                        {overallRate === null ? (
                           <span className="text-natural-sage/50">—</span>
                         ) : (
-                          <span title={`${overallPresents}/${overallTotal} total checks`}>
+                          <span title={`Attended ${overallPresents} of ${overallTotal} events`}>
                             {overallRate}%
+                            <span className="ml-1 text-[10px] font-medium text-natural-sage">({overallPresents}/{overallTotal})</span>
                           </span>
                         )}
                       </td>

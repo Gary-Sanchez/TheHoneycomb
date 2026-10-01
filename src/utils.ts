@@ -1,5 +1,9 @@
 import { isBlacklistedName } from "./blacklist";
 
+// System reference date (see CLAUDE.md) — dashboards, default session dates and new colleagues'
+// joinedDate key off this, never the real current date.
+export const REFERENCE_DATE = "2026-06-24";
+
 export function isInvalidName(nameStr: string): boolean {
   if (!nameStr) return true;
   const normalizedLower = nameStr.toLowerCase().replace(/\s+/g, " ").trim();

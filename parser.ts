@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import * as xlsx from "xlsx";
 import mammoth from "mammoth";
-import { isInvalidName } from "./src/utils";
+import { isInvalidName, REFERENCE_DATE } from "./src/utils";
 import { isBlacklistedName } from "./src/blacklist";
 import type { DurationExclusion } from "./src/types";
 
@@ -25,7 +25,6 @@ export interface ParsedAttendanceRecord {
   reviewReason?: string;
 }
 
-const REFERENCE_DATE = "2026-06-24"; // System reference date (see CLAUDE.md) — never the real current date.
 const DEFAULT_ACTIVITY = "Speakeasy";
 
 // ---------------------------------------------------------------------------
