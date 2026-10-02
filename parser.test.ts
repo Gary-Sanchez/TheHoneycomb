@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import * as xlsx from "xlsx";
 import { extractTextFromFile, htmlToText, parseAttendance, parseCsvAttendance, parseDurationSeconds } from "./parser";
+import { INGESTION_BLACKLIST } from "./src/blacklist";
 
 const byName = (records: ReturnType<typeof parseAttendance>) =>
   Object.fromEntries(records.map(r => [r.name, r]));
@@ -45,7 +46,7 @@ describe("parseAttendance — text shapes", () => {
       "Name\tFirst Join\tLast Leave\tIn-meeting Duration\tEmail\tRole",
       "Elena Rostova\t6/12/26, 12:31:00 PM\t6/12/26, 1:29:00 PM\t58m\telena@example.com\tAttendee",
       "Dr. Carlos Gomez\t6/12/26, 12:35:00 PM\t6/12/26, 1:20:00 PM\t45m\tcarlos@example.com\tAttendee",
-      "Rodrigo Rivero\t6/12/26, 12:30:00 PM\t6/12/26, 1:30:00 PM\t1h\trodrigo@example.com\tOrganizer",
+      "Rodrigo Rivero Rocha\t6/12/26, 12:30:00 PM\t6/12/26, 1:30:00 PM\t1h\trodrigo@example.com\tOrganizer",
     ].join("\n");
 
     const records = parseAttendance(text, "Music Room");
@@ -72,7 +73,7 @@ describe("parseAttendance — text shapes", () => {
   });
 
   it("drops configured hosts and never lets metadata lines through as names", () => {
-    const text = "Meeting title\nSpeakeasy Attendance\nAttended participants\nElena Rostova\nNicolas Rios\nWara Hermosa\n";
+    const text = "Meeting title\nSpeakeasy Attendance\nAttended participants\nElena Rostova\nNicolas Rios Lopez\nWara Hermosa Fernandez\n";
     expect(parseAttendance(text, "Speakeasy").map(r => r.name)).toEqual(["Elena Rostova"]);
   });
 
@@ -360,7 +361,7 @@ describe("parseCsvAttendance — 10-minute duration filter (US-25)", () => {
   });
 
   it("QA-07: blacklisted people are dropped first and not counted as excluded by time", () => {
-    const r = parse(["Name,Duration", "Fabiola Arias,2m", "Ana Lopez,3m", "Beto Paz,30m"]);
+    const r = parse(["Name,Duration", "Fabiola Arias Navia,2m", "Ana Lopez,3m", "Beto Paz,30m"]);
     expect(names(r)).toEqual(["Beto Paz"]);
     expect(r.excludedByBlacklist).toBe(1);
     expect(r.excludedByDuration.map(x => x.name)).toEqual(["Ana Lopez"]);
@@ -388,5 +389,46 @@ describe("parseCsvAttendance — batch metadata (US-27)", () => {
     const c = parseCsvAttendance(Buffer.from("Name\nBeto Paz\n"));
     expect(a.fingerprint).toBe(b.fingerprint);
     expect(a.fingerprint).not.toBe(c.fingerprint);
+  });
+});
+
+describe("parseCsvAttendance — full-name blacklist (US-30)", () => {
+  const parse = (lines: string[]) => parseCsvAttendance(Buffer.from(lines.join("\n"), "utf-8"), "Speakeasy");
+  const names = (r: ReturnType<typeof parse>) => r.records.map(x => x.name).sort();
+
+  it("QA-01: excludes Nicolas Rios Lopez but imports Nicolas Rios Cardozo", () => {
+    const r = parse(["Name", "Nicolas Rios Lopez", "Nicolas Rios Cardozo"]);
+    expect(names(r)).toEqual(["Nicolas Rios Cardozo"]);
+    expect(r.excludedByBlacklist).toBe(1);
+  });
+
+  it("QA-02: an incomplete name (no second surname) is not excluded", () => {
+    const r = parse(["Name", "Nicolas Rios"]);
+    expect(names(r)).toEqual(["Nicolas Rios"]);
+    expect(r.excludedByBlacklist).toBe(0);
+  });
+
+  it("QA-03: all 13 full names are excluded before the preview", () => {
+    const r = parse(["Name", ...INGESTION_BLACKLIST, "Ana Lopez"]);
+    expect(names(r)).toEqual(["Ana Lopez"]);
+    expect(r.excludedByBlacklist).toBe(13);
+  });
+
+  it("QA-04: order, case and accents are ignored", () => {
+    const r = parse(["Name", '"Guzman Rusinque, Angela"', "ANGELA GUZMÁN RUSINQUE", "Ana Lopez"]);
+    expect(names(r)).toEqual(["Ana Lopez"]);
+    expect(r.excludedByBlacklist).toBe(2);
+  });
+
+  it("QA-05: partial matches are not false positives", () => {
+    const r = parse(["Name", "Fabiola Arias", "Pablo Rico Vargas"]);
+    expect(names(r)).toEqual(["Fabiola Arias", "Pablo Rico Vargas"]);
+    expect(r.excludedByBlacklist).toBe(0);
+  });
+
+  it("QA-06: Gustavo Ramos Soria and Stephanie Mariscal Rodriguez are still excluded", () => {
+    const r = parse(["Name", "Gustavo Ramos Soria", "Stephanie Mariscal Rodriguez", "Ana Lopez"]);
+    expect(names(r)).toEqual(["Ana Lopez"]);
+    expect(r.excludedByBlacklist).toBe(2);
   });
 });

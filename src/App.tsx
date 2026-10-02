@@ -529,6 +529,7 @@ export default function App() {
             onImportData={handleImportParsedData}
             canEdit={canEdit}
             onSignIn={() => setActiveTab("settings")}
+            onSessionExpired={() => setAuth(prev => ({ ...prev, authenticated: false }))}
           />
         )}
 
