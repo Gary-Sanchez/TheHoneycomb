@@ -3,6 +3,7 @@ import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { Search, UserPlus, FileBarChart2, X, Check, Mail, Calendar, Settings, Trash2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
+import { sortByName } from "../utils";
 
 interface AttendeeDirectoryProps {
   attendees: Attendee[];
@@ -56,9 +57,10 @@ export default function AttendeeDirectory({
     return stats;
   }, [attendees, records]);
 
-  // Filtered attendees list
+  // Filtered attendees list, A→Z by name (US-28) — sorted at render time so the order holds
+  // after any search, filter, registration, import or check-in
   const filteredAttendees = useMemo(() => {
-    return attendees.filter(att => {
+    return sortByName(attendees).filter(att => {
       const matchesSearch = att.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             (att.email && att.email.toLowerCase().includes(searchQuery.toLowerCase()));
       
