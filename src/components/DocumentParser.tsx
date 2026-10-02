@@ -12,7 +12,13 @@ interface DocumentParserProps {
   onImportData: (newAttendees: Omit<Attendee, "id">[], newRecords: Omit<AttendanceRecord, "id">[]) => Promise<boolean> | void;
   canEdit: boolean;
   onSignIn?: () => void;
+  // US-22: the parser answered 401 (admin session lost, e.g. server restart) → drop to read-only
+  onSessionExpired?: () => void;
 }
+
+const SESSION_EXPIRED_MESSAGE = "Your admin session has expired. Sign in again in Settings to import attendance files.";
+
+class SessionExpiredError extends Error {}
 
 const VALID_EXTENSIONS = [".txt", ".csv", ".docx", ".doc", ".xlsx", ".xls"];
 // US-27: up to 20 .csv files of one activity per import; every other format stays one file at a time
@@ -54,7 +60,7 @@ function cleanClientRecords(rawRecords: any[]): any[] {
   return cleaned;
 }
 
-export default function DocumentParser({ attendees, onImportData, canEdit, onSignIn }: DocumentParserProps) {
+export default function DocumentParser({ attendees, onImportData, canEdit, onSignIn, onSessionExpired }: DocumentParserProps) {
   const [selectedImportLogActivity, setSelectedImportLogActivity] = useState<string>("Speakeasy");
   const [dragActive, setDragActive] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -214,6 +220,10 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
     const contentType = response.headers.get("content-type") || "";
 
+    if (response.status === 401) {
+      throw new SessionExpiredError(SESSION_EXPIRED_MESSAGE);
+    }
+
     if (!response.ok) {
       let errorMsg = "Failed to parse document";
       if (contentType.includes("application/json")) {
@@ -326,6 +336,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       }
     } catch (err: any) {
       console.error(err);
+      if (err instanceof SessionExpiredError) onSessionExpired?.();
       setErrorMsg(err.message || "An error occurred while uploading and parsing the document.");
     } finally {
       setLoading(false);
