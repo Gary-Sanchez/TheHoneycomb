@@ -201,7 +201,7 @@ export default function App() {
       id: `att-${Date.now()}`,
       name,
       enrolledActivities: [],
-      joinedDate: date, // the session they're checked into, so that event counts for them (US-24)
+      joinedDate: date, // the session they're checked into (informative only since US-31)
     };
     const joinedExistingSession = records.some(r => r.date === date && r.activity === activity);
     const alreadyInSession = records.find(
