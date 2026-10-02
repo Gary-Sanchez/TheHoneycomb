@@ -353,7 +353,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     });
 
     // US-24: a new colleague joins on their earliest date in the batch, whatever the row order
-    // (YYYY-MM-DD compares as a string), so none of their attendances falls before joinedDate.
+    // (YYYY-MM-DD compares as a string). Informative only: since US-31 it doesn't affect the Bee-havior Hub.
     const earliestDate = new Map<string, string>();
     consolidated.forEach(rec => {
       const key = nameKey(rec.name);

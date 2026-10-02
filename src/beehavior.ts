@@ -15,10 +15,10 @@ export interface ActivityStat {
   activity: string;
   // At least one `present` record in this activity (absence-only logs don't enroll)
   enrolled: boolean;
-  // Events (activity + date) the colleague attended / events that count for them
+  // Events (activity + date) the colleague attended / all recorded events of the activity (US-31)
   presents: number;
   total: number;
-  // null → the table shows "—" (not enrolled, or no event counts for them)
+  // null → the table shows "—" (not enrolled)
   rate: number | null;
 }
 
@@ -104,9 +104,8 @@ export function getActivityEventStats(records: AttendanceRecord[], activity: str
 export const formatAvgAttendees = (avg: number | null) => (avg === null ? "—" : avg.toFixed(1));
 
 // Absence is deduced from the events a colleague missed — no `absent` rows are created.
-// Only events on/after the colleague's joinedDate count for them (YYYY-MM-DD compares as a string),
-// except that an event they attended always counts — the window starts at the earlier of joinedDate
-// and their first present in that activity, so presents can never fall outside the denominator.
+// US-31: the denominator is every event of the activity, the same for all enrolled colleagues —
+// joinedDate and the date of their first present don't trim it, so a late starter isn't inflated.
 export function computeBeehavior(attendees: Attendee[], records: AttendanceRecord[]): BeehaviorRow[] {
   const eventDates = getEventDates(records);
   const presentDates: Record<string, Set<string>> = {}; // `${attendeeId}|${activity}` → dates attended
@@ -124,11 +123,9 @@ export function computeBeehavior(attendees: Attendee[], records: AttendanceRecor
         const attended = presentDates[`${att.id}|${activity}`];
         if (!attended) return { activity, enrolled: false, presents: 0, total: 0, rate: null };
 
-        const from = [...attended].reduce((min, date) => (date < min ? date : min), att.joinedDate);
-        const counted = [...(eventDates[activity] ?? [])].filter(date => date >= from);
-        const presents = counted.filter(date => attended.has(date)).length;
-        const total = counted.length;
-        return { activity, enrolled: true, presents, total, rate: total ? percent(presents, total) : null };
+        const presents = attended.size;
+        const total = eventDates[activity].size; // ≥ presents: every attended date is one of its events
+        return { activity, enrolled: true, presents, total, rate: percent(presents, total) };
       });
 
       const overallPresents = activityStats.reduce((sum, s) => sum + s.presents, 0);
