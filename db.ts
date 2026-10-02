@@ -1,6 +1,6 @@
 import path from "path";
 import type { JSONFilePreset as JSONFilePresetType } from "lowdb/node";
-import { Attendee, AttendanceRecord, ImportFingerprint, PreviousImport } from "./src/types";
+import { Attendee, AttendanceRecord, ImportFingerprint, LoadedEvent, PreviousImport } from "./src/types";
 import { initialAttendees, initialAttendanceRecords } from "./src/mockData";
 import { isInvalidName, nameKey } from "./src/utils";
 import { isBlacklistedName } from "./src/blacklist";
@@ -52,6 +52,50 @@ export function findPreviousImport(imports: ImportFingerprint[], candidate: Impo
 export class DuplicateImportError extends Error {
   constructor(public readonly previous: PreviousImport, public readonly filename: string) {
     super(`${filename} was already imported as ${previous.filename}`);
+  }
+}
+
+// A colleague's key within a date+activity event: the directory name behind attendeeId when known
+// (the record's own name may be stale), else the record's name. Shared by the US-26 merge and US-33.
+function eventKeyFor(attendees: Attendee[]) {
+  const nameById = new Map(attendees.map(att => [att.id, nameKey(att.name)]));
+  return (rec: Pick<AttendanceRecord, "attendeeId" | "attendeeName" | "date" | "activity">) =>
+    `${nameById.get(rec.attendeeId) ?? nameKey(rec.attendeeName)}|${rec.date}|${rec.activity}`;
+}
+
+// US-33: what a .csv is compared against the existing records with
+export interface EventCandidate {
+  activity: string;
+  date: string;
+  attendees: { name: string; status: AttendanceRecord["status"] }[];
+}
+
+// US-33: the date+activity event a .csv adds nothing to, or null. That is the case when every
+// (already filtered) attendee already has a record in that event — however it got there (Manual
+// Check-In, Batch Check-In, an import from before US-26) — and the file turns nobody from absent
+// to present. Without a date yet (the user still has to pick it) nothing can match.
+export function findLoadedEvent(
+  records: AttendanceRecord[],
+  attendees: Attendee[],
+  candidate: EventCandidate
+): LoadedEvent | null {
+  const { activity, date } = candidate;
+  if (!activity || !date || candidate.attendees.length === 0) return null;
+  const keyOf = eventKeyFor(attendees);
+  const statusByKey = new Map(
+    records.filter(rec => rec.date === date && rec.activity === activity).map(rec => [keyOf(rec), rec.status])
+  );
+  const addsNothing = candidate.attendees.every(att => {
+    const existing = statusByKey.get(`${nameKey(att.name)}|${date}|${activity}`);
+    return existing !== undefined && !(existing === "absent" && att.status === "present");
+  });
+  return addsNothing ? { activity, date } : null;
+}
+
+// US-33: thrown by importParsedData when a .csv in the payload adds nothing to its event
+export class EventAlreadyLoadedError extends Error {
+  constructor(public readonly event: LoadedEvent, public readonly filename: string) {
+    super(`${filename} adds nothing to the ${event.activity} event on ${event.date}`);
   }
 }
 
@@ -212,6 +256,8 @@ export async function manualCheckIn(
 // US-26: each imported .csv leaves a fingerprint, saved in the same write. A payload carrying a
 // .csv that was already imported is rejected whole (DuplicateImportError) before anything changes.
 // A file joining an existing date+activity event only adds the colleagues not already in it.
+// US-33: a .csv whose event already holds all its colleagues is rejected too (EventAlreadyLoadedError),
+// and an import that changes nothing leaves no fingerprint.
 export async function importParsedData(
   newAttendees: Attendee[],
   newRecordsToSave: AttendanceRecord[],
@@ -227,21 +273,39 @@ export async function importParsedData(
 
   // US-19: server-side guard so blacklisted facilitators never reach consolidated data
   const attendees = [...previous.attendees, ...newAttendees.filter(att => !isBlacklistedName(att.name))];
-  const nameById = new Map(attendees.map(att => [att.id, nameKey(att.name)]));
-  const sessionKey = (rec: AttendanceRecord) =>
-    `${nameById.get(rec.attendeeId) ?? nameKey(rec.attendeeName)}|${rec.date}|${rec.activity}`;
+  const sessionKey = eventKeyFor(attendees);
+
+  // US-33: the date may have been picked in the preview, so re-check each .csv against the records.
+  // A fingerprint carries names only; their status is the one the (consolidated) payload sends.
+  const statusByKey = new Map(newRecordsToSave.map(rec => [sessionKey(rec), rec.status]));
+  for (const fp of fingerprints) {
+    const loaded = findLoadedEvent(previous.records, attendees, {
+      activity: fp.activity,
+      date: fp.date,
+      attendees: fp.attendeeNames.map(name => ({
+        name,
+        status: statusByKey.get(`${nameKey(name)}|${fp.date}|${fp.activity}`) ?? "present",
+      })),
+    });
+    if (loaded) throw new EventAlreadyLoadedError(loaded, fp.filename);
+  }
 
   const records = previous.records.map(rec => ({ ...rec }));
   const bySession = new Map(records.map(rec => [sessionKey(rec), rec]));
+  let changed = false;
   for (const rec of newRecordsToSave) {
     if (isBlacklistedName(rec.attendeeName)) continue;
     const existing = bySession.get(sessionKey(rec));
     if (existing) {
-      if (rec.status === "present") existing.status = "present"; // "present" wins, like a batch
+      if (rec.status === "present" && existing.status !== "present") {
+        existing.status = "present"; // "present" wins, like a batch
+        changed = true;
+      }
       continue;
     }
     records.push(rec);
     bySession.set(sessionKey(rec), rec);
+    changed = true;
   }
 
   const importedAt = new Date().toISOString();
@@ -249,7 +313,8 @@ export async function importParsedData(
     ...previous,
     attendees,
     records,
-    imports: [...previous.imports, ...fingerprints.map(fp => ({ ...fp, importedAt }))],
+    // US-33: no fingerprint for an import that added nothing — it would vouch for a file never loaded
+    imports: changed ? [...previous.imports, ...fingerprints.map(fp => ({ ...fp, importedAt }))] : previous.imports,
   };
   try {
     await db.write();

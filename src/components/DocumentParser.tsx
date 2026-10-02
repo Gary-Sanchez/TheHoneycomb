@@ -1,6 +1,6 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
-import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, formatImportedAt } from "../utils";
+import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt } from "../utils";
 import { isBlacklistedName } from "../blacklist";
 import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -76,7 +76,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // US-25/US-27: one entry per uploaded .csv (empty for other formats)
   const [fileGroups, setFileGroups] = useState<ParsedFileGroup[]>([]);
   const [expandedExclusions, setExpandedExclusions] = useState<Set<number>>(new Set());
-  const [importedCount, setImportedCount] = useState<number | null>(null);
+  // Logs added and logs turned from absent to present by the last confirmed import
+  const [importResult, setImportResult] = useState<{ added: number; updated: number } | null>(null);
   const [importing, setImporting] = useState(false);
   const [batchDate, setBatchDate] = useState<string>(REFERENCE_DATE);
   // US-18: the parser found no valid session date in the file, so the user must pick one
@@ -129,8 +130,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     setParsedRecords([]);
     setFileGroups([]);
     setExpandedExclusions(new Set());
-    setImportedCount(null);
+    setImportResult(null);
   };
+
+  // Left out of the import: identical to another file of the batch, imported before (US-26), or
+  // its event already holds all its colleagues (US-33)
+  const isBlockedGroup = (g: ParsedFileGroup) => Boolean(g.duplicateOf || g.alreadyImported || g.alreadyLoaded);
 
   const handleDrag = (e: DragEvent) => {
     e.preventDefault();
@@ -309,23 +314,29 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             excludedByBlacklist: f.excludedByBlacklist || 0,
             duplicateOf: f.duplicateOf ?? null,
             alreadyImported: f.alreadyImported ?? null,
+            alreadyLoaded: f.alreadyLoaded ?? null,
             fingerprint: f.fingerprint ?? "",
           });
-          if (!f.duplicateOf && !f.alreadyImported) {
+          if (!isBlockedGroup(groups[id])) {
             processed.push(...cleanClientRecords(f.records).map(rec => toPreviewRecord(rec, id)));
           }
         });
-        missingDate =
-          groups.some(g => !g.dateDetected && !g.duplicateOf && !g.alreadyImported) || processed.some(rec => !rec.date);
+        missingDate = groups.some(g => !g.dateDetected && !isBlockedGroup(g)) || processed.some(rec => !rec.date);
 
-        // US-26: every file was imported before — block it, nothing to review
-        const blocked = groups.filter(g => g.alreadyImported);
+        // US-26/US-33: every file was imported before or adds nothing to its event — block it, nothing to review
+        const blocked = groups.filter(g => g.alreadyImported || g.alreadyLoaded);
         if (blocked.length > 0 && blocked.length === groups.filter(g => !g.duplicateOf).length) {
+          const reason = (g: ParsedFileGroup) =>
+            g.alreadyImported
+              ? `${g.filename} was already imported as "${g.alreadyImported.filename}" on ${formatImportedAt(g.alreadyImported.importedAt)}`
+              : `${g.filename} is already loaded in the ${g.alreadyLoaded!.activity} event on ${g.alreadyLoaded!.date}`;
           setErrorMsg(
             blocked.length === 1
-              ? duplicateImportMessage(blocked[0].alreadyImported!)
-              : `Duplicate files: ${blocked
-                  .map(g => `${g.filename} was already imported as "${g.alreadyImported!.filename}" on ${formatImportedAt(g.alreadyImported!.importedAt)}`)
+              ? blocked[0].alreadyImported
+                ? duplicateImportMessage(blocked[0].alreadyImported)
+                : alreadyLoadedMessage(blocked[0].alreadyLoaded!)
+              : `${blocked.every(g => g.alreadyImported) ? "Duplicate files" : "Files already imported or loaded"}: ${blocked
+                  .map(reason)
                   .join("; ")}. The import was blocked and no records were created.`
           );
           return;
@@ -430,7 +441,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
     // US-26: each .csv in the preview leaves its fingerprint, with the date it's imported under
     const fingerprints: Omit<ImportFingerprint, "importedAt">[] = fileGroups
-      .filter(g => !g.duplicateOf && !g.alreadyImported && g.fingerprint)
+      .filter(g => !isBlockedGroup(g) && g.fingerprint)
       .flatMap(g => {
         const fileRecords = parsedRecords.filter(rec => rec.fileId === g.id);
         if (fileRecords.length === 0) return [];
@@ -458,16 +469,18 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       return;
     }
 
-    // Blast celebration confetti!
-    confetti({
-      particleCount: 150,
-      spread: 80,
-      origin: { y: 0.8 }
-    });
+    // Blast celebration confetti! (US-33: not for an import that changed nothing)
+    if (outcome.added > 0 || outcome.updated > 0) {
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.8 }
+      });
+    }
 
     setErrorMsg("");
     resetPreview();
-    setImportedCount(outcome.added);
+    setImportResult({ added: outcome.added, updated: outcome.updated });
     setFiles([]);
   };
 
@@ -581,13 +594,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     const groupDate = rows[0]?.rec.date ?? "";
     const sameDateFiles = groupDate
       ? fileGroups.filter(
-          g => g.id !== group.id && !g.duplicateOf && !g.alreadyImported && parsedRecords.some(r => r.fileId === g.id && r.date === groupDate)
+          g => g.id !== group.id && !isBlockedGroup(g) && parsedRecords.some(r => r.fileId === g.id && r.date === groupDate)
         )
       : [];
     const excludedCount = group.excludedByDuration.length;
     const showExcluded = expandedExclusions.has(group.id);
-    // Left out of the import: identical to another file of the batch, or imported before (US-26)
-    const isBlocked = Boolean(group.duplicateOf || group.alreadyImported);
+    const isBlocked = isBlockedGroup(group);
 
     return (
       <div key={group.id} className="space-y-3" data-testid="file-group">
@@ -648,6 +660,11 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <Copy className="h-3 w-3" />
                 Already imported as {group.alreadyImported.filename} on {formatImportedAt(group.alreadyImported.importedAt)} (blocked)
               </span>
+            ) : group.alreadyLoaded ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-natural-sand/15 border border-natural-sand/40 text-natural-sand" role="alert">
+                <Copy className="h-3 w-3" />
+                Already loaded in {group.alreadyLoaded.activity} on {group.alreadyLoaded.date} (blocked)
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#CCD5AE]/30 border border-[#CCD5AE]/80 text-natural-forest">
                 <CheckCircle className="h-3 w-3" />
@@ -688,7 +705,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     );
   };
 
-  const fileCount = fileGroups.filter(g => !g.duplicateOf && !g.alreadyImported).length;
+  const fileCount = fileGroups.filter(g => !isBlockedGroup(g)).length;
 
   return (
     <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-8 animate-fade-in" id="smart-parser-tab">
@@ -745,13 +762,27 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
 
-      {importedCount !== null && (
+      {importResult !== null && (importResult.added > 0 || importResult.updated > 0) && (
         <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-6 py-4 rounded-xl flex items-center gap-4 animate-bounce-subtle">
           <CheckCircle className="h-8 w-8 text-natural-sage shrink-0" />
           <div>
             <h4 className="font-serif font-bold text-natural-forest text-base">Import Successful!</h4>
             <p className="text-sm text-natural-forest/80 mt-0.5 font-medium">
-              Successfully registered {importedCount} new attendance logs and registered any new colleagues.
+              Successfully registered {importResult.added} new attendance logs and registered any new colleagues.
+              {importResult.updated > 0 && ` Marked ${importResult.updated} existing logs as present.`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* US-33: an import that changed nothing is not a success — those colleagues were already logged */}
+      {importResult !== null && importResult.added === 0 && importResult.updated === 0 && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-800 px-6 py-4 rounded-xl flex items-center gap-4" role="alert">
+          <AlertTriangle className="h-8 w-8 text-amber-600 shrink-0" />
+          <div>
+            <h4 className="font-serif font-bold text-base">No new attendance logs</h4>
+            <p className="text-sm mt-0.5 font-medium">
+              No new attendance logs were registered: every colleague in this import was already recorded in that event.
             </p>
           </div>
         </div>

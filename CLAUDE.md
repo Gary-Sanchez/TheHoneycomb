@@ -81,6 +81,12 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   it as `alreadyImported` (no records); the import route re-checks (409) because the date may be
   picked by the user. Records joining an existing date+activity event skip colleagues already in
   it. `POST /api/reset` clears `imports`.
+- **`.csv` whose event is already in `records` (US-33)**: `findLoadedEvent` (`db.ts`) also compares
+  the file against `records`, so events loaded without a fingerprint (Manual Check-In, imports before
+  US-26) are caught: blocked when every filtered attendee already has a record for that date+activity
+  and the file turns nobody from absent to present. Parse routes return it as `alreadyLoaded`; the
+  import route re-checks (409 via `EventAlreadyLoadedError`). An import that changes nothing stores
+  no fingerprint, and `DocumentParser` shows a "No new attendance logs" warning instead of success.
 - Frontend state lives in `src/App.tsx`, which owns the handlers (`handleAddAttendee`,
   `handleSaveRecords`, `handleImportParsedData`, `handleResetDatabase`, etc.) that `db.ts`'s
   functions mirror 1:1 — check the "Mirrors handleX" comments in `db.ts` when changing either side.

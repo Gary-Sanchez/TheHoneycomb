@@ -43,6 +43,7 @@ export interface ParsedFileGroup {
   excludedByBlacklist: number;
   duplicateOf: string | null; // filename of the identical earlier file in the batch
   alreadyImported: PreviousImport | null; // US-26: matches a .csv imported before (blocked)
+  alreadyLoaded: LoadedEvent | null; // US-33: its event already holds all its colleagues (blocked)
   fingerprint: string; // US-26: SHA-256 of the file content, saved with the import
 }
 
@@ -58,13 +59,21 @@ export interface ImportFingerprint {
 }
 
 // Result of a Doc Parser import: how many attendance logs were actually added (US-26: colleagues
-// already in that date+activity event aren't logged again), or why the server refused it.
-export type ImportOutcome = { ok: true; added: number } | { ok: false; error?: string };
+// already in that date+activity event aren't logged again), how many existing logs went from absent
+// to present (US-33), or why the server refused it.
+export type ImportOutcome = { ok: true; added: number; updated: number } | { ok: false; error?: string };
 
 // US-26: the earlier import a duplicate .csv is reported against
 export interface PreviousImport {
   filename: string;
   importedAt: string;
+}
+
+// US-33: the date+activity event a .csv adds nothing to — every colleague in it is already
+// recorded there, however they got there (Manual Check-In, Batch Check-In, an import before US-26)
+export interface LoadedEvent {
+  activity: string;
+  date: string; // YYYY-MM-DD
 }
 
 // Outcome of a manual check-in into a date+activity session (US-20)
