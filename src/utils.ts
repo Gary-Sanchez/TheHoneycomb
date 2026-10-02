@@ -85,3 +85,17 @@ export function compareNames(a: string, b: string): number {
 export function sortByName<T extends { name: string }>(items: readonly T[]): T[] {
   return [...items].sort((a, b) => compareNames(a.name, b.name));
 }
+
+// US-26: when a .csv was imported, as "YYYY-MM-DD HH:mm" (local time). Shared by the server's
+// 409 message and the Doc Parser so both say the same thing.
+export function formatImportedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// US-26: the message shown when a .csv is blocked as a duplicate of an earlier import
+export function duplicateImportMessage(previous: { filename: string; importedAt: string }): string {
+  return `Duplicate file: this .csv was already imported as "${previous.filename}" on ${formatImportedAt(previous.importedAt)}. The import was blocked and no records were created.`;
+}

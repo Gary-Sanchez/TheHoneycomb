@@ -16,6 +16,7 @@ import {
   recordsBodySchema,
   validateBody,
 } from "./validation";
+import { duplicateImportMessage } from "./src/utils";
 
 dotenv.config();
 
@@ -257,10 +258,17 @@ app.post("/api/records/manual", requireAdmin, validateBody(manualCheckInBodySche
 });
 
 // US-27: one request = one atomic write (a whole .csv batch is saved, or none of it is)
-app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), async (req, res) => {
+// US-26: this is also the route that stores the .csv fingerprints; a duplicate .csv gets a 409.
+app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), async (req, res): Promise<any> => {
   try {
-    res.json(await db.importParsedData(req.body.attendees, req.body.records));
+    res.json(await db.importParsedData(req.body.attendees, req.body.records, req.body.fingerprints ?? []));
   } catch (err) {
+    if (err instanceof db.DuplicateImportError) {
+      return res.status(409).json({
+        error: `${err.filename}: ${duplicateImportMessage(err.previous)}`,
+        duplicateOf: err.previous,
+      });
+    }
     console.error("Error importing parsed data:", err);
     res.status(500).json({ error: "Import failed: nothing from this batch was saved." });
   }
@@ -281,6 +289,27 @@ const STANDARD_ACTIVITIES = [
   "Music Room",
   "Writing Hood",
 ];
+
+// US-26: the earlier import a just-parsed .csv duplicates, if any. The event date is the one the
+// parser found; with none, only the content hash can match (the import route re-checks once the
+// user has picked the date).
+function findCsvImportIn(
+  imports: Awaited<ReturnType<typeof db.getState>>["imports"],
+  hash: string,
+  activity: string,
+  records: { name: string; activity: string; date: string }[]
+) {
+  return db.findPreviousImport(imports, {
+    hash,
+    activity: activity || records[0]?.activity || "",
+    date: records[0]?.date || "",
+    attendeeNames: records.map(r => r.name),
+  });
+}
+
+async function findCsvImport(hash: string, activity: string, records: { name: string; activity: string; date: string }[]) {
+  return findCsvImportIn((await db.getState()).imports, hash, activity, records);
+}
 
 // API endpoint for parsing uploaded file. US-22: requireAdmin runs before multer, so a request
 // without an admin session gets its 401 before the upload is read into memory or parsed.
@@ -309,7 +338,18 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
       if (isEmpty) {
         return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
       }
-      return res.json({ filename, recordsCount: parsed.records.length, ...parsed });
+      // US-26: a .csv imported before is blocked here already (no records come back)
+      const alreadyImported = await findCsvImport(fingerprint, requestedActivity, parsed.records);
+      const records = alreadyImported ? [] : parsed.records;
+      return res.json({
+        filename,
+        ...parsed,
+        records,
+        recordsCount: records.length,
+        fingerprint,
+        attendeeNames: parsed.records.map(r => r.name),
+        alreadyImported,
+      });
     }
 
     const fileTextContent = await extractTextFromFile(file.buffer, extension);
@@ -353,7 +393,7 @@ app.post(
       next(err);
     });
   },
-  (req, res): any => {
+  async (req, res): Promise<any> => {
     try {
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       if (files.length === 0) {
@@ -397,13 +437,24 @@ app.post(
       }
 
       const firstByFingerprint = new Map<string, string>();
+      const { imports } = await db.getState();
       return res.json({
         activity: batchActivity,
         files: parsed.map(({ isEmpty, fingerprint, declaredActivities, ...p }) => {
           const duplicateOf = firstByFingerprint.get(fingerprint) ?? null;
           if (!duplicateOf) firstByFingerprint.set(fingerprint, p.filename);
-          const records = duplicateOf ? [] : p.records;
-          return { ...p, records, recordsCount: records.length, duplicateOf };
+          // US-26: a file already imported in an earlier upload is blocked (no records come back)
+          const alreadyImported = duplicateOf ? null : findCsvImportIn(imports, fingerprint, batchActivity || requestedActivity, p.records);
+          const records = duplicateOf || alreadyImported ? [] : p.records;
+          return {
+            ...p,
+            records,
+            recordsCount: records.length,
+            duplicateOf,
+            alreadyImported,
+            fingerprint,
+            attendeeNames: p.records.map(r => r.name),
+          };
         }),
       });
     } catch (err: any) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Attendee, AttendanceRecord, AuthStatus, ManualCheckInResult } from "./types";
+import { Attendee, AttendanceRecord, AuthStatus, ImportFingerprint, ImportOutcome, ManualCheckInResult } from "./types";
 import { nameKey, REFERENCE_DATE } from "./utils";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
@@ -78,7 +78,14 @@ export default function App() {
   // an overlapping burst, a failure, or a lost admin session (401 → read-only, US-11) reloads
   // from the server instead, which also discards any optimistic change that wasn't persisted.
   // Resolves to whether the server accepted the mutation (US-27 reports a failed batch import).
-  const persist = (url: string, init: RequestInit, label: string): Promise<boolean> => {
+  // US-26: `onSaved` gets the server's state after the mutation; `onRejected` the server's error
+  // message when it refuses it (e.g. a duplicate .csv).
+  const persist = (
+    url: string,
+    init: RequestInit,
+    label: string,
+    hooks: { onSaved?: (data: ServerState) => void; onRejected?: (message: string) => void } = {}
+  ): Promise<boolean> => {
     inFlightMutations.current += 1;
     mutationSeq.current += 1;
     if (inFlightMutations.current > 1) reloadWhenIdle.current = true;
@@ -91,8 +98,13 @@ export default function App() {
           reloadWhenIdle.current = true;
           return false;
         }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const message = await res.json().then(body => body?.error, () => undefined);
+          if (message) hooks.onRejected?.(message);
+          throw new Error(message || `HTTP ${res.status}`);
+        }
         snapshot = await res.json();
+        hooks.onSaved?.(snapshot!);
         return true;
       })
       .catch(err => {
@@ -233,10 +245,13 @@ export default function App() {
   };
 
   // 4. Batch import parsed files from the Smart Document Parser
-  const handleImportParsedData = (
+  // US-26: `fingerprints` (one per .csv) are saved with the import; the server refuses a .csv that
+  // was already imported (409) and the optimistic update is then undone by persist().
+  const handleImportParsedData = async (
     newAttendeesToCreate: Omit<Attendee, "id">[],
-    newRecordsToSave: Omit<AttendanceRecord, "id">[]
-  ) => {
+    newRecordsToSave: Omit<AttendanceRecord, "id">[],
+    fingerprints: Omit<ImportFingerprint, "importedAt">[] = []
+  ): Promise<ImportOutcome> => {
     let currentAttendees = [...attendees];
     const createdMap: Record<string, string> = {}; // Maps name to generated attendee ID
     const createdAttendees: Attendee[] = [];
@@ -279,10 +294,33 @@ export default function App() {
       };
     });
 
-    // Merge in imported logs
-    setRecords(prev => [...prev, ...finalLogs]);
+    // Merge in imported logs. Mirrors importParsedData (db.ts): a colleague already logged in that
+    // date+activity event isn't logged again ("present" wins over "absent").
+    const nameById = new Map(currentAttendees.map(att => [att.id, nameKey(att.name)]));
+    const sessionKey = (rec: AttendanceRecord) =>
+      `${nameById.get(rec.attendeeId) ?? nameKey(rec.attendeeName)}|${rec.date}|${rec.activity}`;
+    const existingKeys = new Set(records.map(sessionKey));
+    const added = finalLogs.filter(rec => !existingKeys.has(sessionKey(rec)));
+    const presentKeys = new Set(finalLogs.filter(rec => rec.status === "present").map(sessionKey));
+    setRecords(prev => [
+      ...prev.map(rec => (presentKeys.has(sessionKey(rec)) ? { ...rec, status: "present" as const } : rec)),
+      ...added,
+    ]);
 
-    return persist("/api/records/import", jsonRequest("POST", { attendees: createdAttendees, records: finalLogs }), "imported data");
+    // The server's state is the truth for how many logs were added (this window may be stale)
+    let error: string | undefined;
+    let addedCount = added.length;
+    const sentIds = new Set(finalLogs.map(rec => rec.id));
+    const saved = await persist(
+      "/api/records/import",
+      jsonRequest("POST", { attendees: createdAttendees, records: finalLogs, fingerprints }),
+      "imported data",
+      {
+        onSaved: data => (addedCount = data.records.filter(rec => sentIds.has(rec.id)).length),
+        onRejected: message => (error = message),
+      }
+    );
+    return saved ? { ok: true, added: addedCount } : { ok: false, error };
   };
 
   // 5. Save notes for progress report
