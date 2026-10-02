@@ -277,7 +277,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     resetPreview();
     animateLoadingText(0);
 
-    // US-27: .csv uploads (1â€“20 files) go through the batch parser; other formats stay single-file
+    // US-27: .csv uploads (1–20 files) go through the batch parser; other formats stay single-file
     const isCsvBatch = files.every(f => extensionOf(f) === ".csv");
     const formData = new FormData();
     if (isCsvBatch) {
@@ -752,14 +752,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <div className="space-y-1">
                   <p className="font-serif font-bold text-[#1A1A1A] text-base">{files[0].name}</p>
                   <p className="text-xs text-natural-sage font-semibold">
-                    {(files[0].size / 1024).toFixed(1)} KB â€¢ Ready to compile
+                    {(files[0].size / 1024).toFixed(1)} KB • Ready to compile
                   </p>
                 </div>
               ) : files.length > 1 ? (
                 <div className="space-y-1">
                   <p className="font-serif font-bold text-[#1A1A1A] text-base">{files.length} .csv files selected</p>
                   <p className="text-xs text-natural-sage font-semibold max-w-md mx-auto break-words">
-                    {files.map(f => f.name).join(", ")} â€¢ Ready to compile
+                    {files.map(f => f.name).join(", ")} • Ready to compile
                   </p>
                 </div>
               ) : (
