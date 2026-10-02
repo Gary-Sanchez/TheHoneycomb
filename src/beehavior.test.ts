@@ -50,18 +50,6 @@ describe("computeBeehavior (US-24)", () => {
     expect(row.tier.label).toBe("Dormant");
   });
 
-  it("QA-03: events before joinedDate don't count", () => {
-    const records = [
-      rec("otro", "Music Room", "2026-05-05"),
-      rec("otro", "Music Room", "2026-05-12"),
-      rec("otro", "Music Room", "2026-05-19"),
-      rec("ana", "Music Room", "2026-06-02"),
-      rec("otro", "Music Room", "2026-06-16"),
-    ];
-    const s = stat(computeBeehavior([attendee("ana", "2026-06-01"), attendee("otro")], records), "ana", "Music Room");
-    expect(s).toMatchObject({ presents: 1, total: 2, rate: 50 });
-  });
-
   it("QA-04: a non-enrolled activity is null and stays out of Overall", () => {
     const records = [
       rec("ana", "Speakeasy", D(1)),
@@ -116,7 +104,7 @@ describe("computeBeehavior (US-24)", () => {
     expect(row.tier.label).toBe("Forager");
   });
 
-  it("a sole present on joinedDate → 100% (1/1)", () => {
+  it("a sole present in a single-event activity → 100% (1/1)", () => {
     const records = [rec("ana", "Speakeasy", "2026-06-24")];
     const row = computeBeehavior([attendee("ana", "2026-06-24")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Speakeasy")).toMatchObject({ presents: 1, total: 1, rate: 100 });
@@ -124,29 +112,86 @@ describe("computeBeehavior (US-24)", () => {
     expect(row.tier.label).toBe("Busy Bee");
   });
 
-  it("joinedDate is inclusive: the event on that day counts, the day before doesn't", () => {
-    const records = [
-      rec("otro", "Music Room", "2026-06-09"),
-      rec("otro", "Music Room", "2026-06-10"),
-      rec("ana", "Music Room", "2026-06-10"),
-      rec("otro", "Music Room", "2026-06-17"),
-    ];
-    const s = stat(computeBeehavior([attendee("ana", "2026-06-10"), attendee("otro")], records), "ana", "Music Room");
-    expect(s).toMatchObject({ presents: 1, total: 2, rate: 50 });
-  });
-
-  it("a present before joinedDate still counts, so a real date can't push presents out of the denominator", () => {
+  it("a present before joinedDate still counts, over the full activity", () => {
     const records = [rec("ana", "Speakeasy", "2026-06-24"), rec("otro", "Speakeasy", "2026-06-17")];
     const row = computeBeehavior([attendee("ana", "2026-10-01"), attendee("otro")], records)[0];
     const s = row.activityStats.find(x => x.activity === "Speakeasy")!;
-    expect(s).toMatchObject({ enrolled: true, presents: 1, total: 1, rate: 100 });
-    expect(row.overallRate).toBe(100);
+    expect(s).toMatchObject({ enrolled: true, presents: 1, total: 2, rate: 50 });
+    expect(row.overallRate).toBe(50);
   });
 
   it("counts duplicate records of the same event once and keeps rates ≤ 100%", () => {
     const records = [rec("ana", "Speakeasy", D(1)), rec("ana", "Speakeasy", D(1))];
     const s = stat(computeBeehavior([attendee("ana")], records), "ana", "Speakeasy");
     expect(s).toMatchObject({ presents: 1, total: 1, rate: 100 });
+  });
+});
+
+describe("computeBeehavior — same events for everyone (US-31)", () => {
+  const eight = Array.from({ length: 8 }, (_, i) => D(i + 1));
+
+  it("QA-01: attending only the last of 8 Speakeasy events → 13% (1/8), not 100%", () => {
+    const records = [...eight.slice(0, 7).map(d => rec("otro", "Speakeasy", d)), rec("ana", "Speakeasy", eight[7])];
+    const s = stat(computeBeehavior([attendee("ana", eight[7]), attendee("otro")], records), "ana", "Speakeasy");
+    expect(s).toMatchObject({ presents: 1, total: 8, rate: 13 });
+  });
+
+  it("QA-02: events before joinedDate count → Music Room 20% (1/5)", () => {
+    const records = [
+      rec("otro", "Music Room", "2026-05-05"),
+      rec("otro", "Music Room", "2026-05-12"),
+      rec("otro", "Music Room", "2026-05-19"),
+      rec("ana", "Music Room", "2026-06-02"),
+      rec("otro", "Music Room", "2026-06-16"),
+    ];
+    const s = stat(computeBeehavior([attendee("ana", "2026-06-01"), attendee("otro")], records), "ana", "Music Room");
+    expect(s).toMatchObject({ presents: 1, total: 5, rate: 20 });
+  });
+
+  it("QA-03: two Reading Club members (6 events) share the denominator; only presents differ", () => {
+    const six = eight.slice(0, 6);
+    const records = [...six.map(d => rec("ana", "Reading Club", d)), ...six.slice(3).map(d => rec("bea", "Reading Club", d))];
+    const rows = computeBeehavior([attendee("ana"), attendee("bea", six[3])], records);
+    expect(stat(rows, "ana", "Reading Club")).toMatchObject({ presents: 6, total: 6, rate: 100 });
+    expect(stat(rows, "bea", "Reading Club")).toMatchObject({ presents: 3, total: 6, rate: 50 });
+  });
+
+  it("QA-04: a non-enrolled activity (Writing Hood, 5 events) is — and stays out of Overall", () => {
+    const records = [rec("ana", "Speakeasy", D(1)), ...[2, 3, 4, 5, 6].map(i => rec("otro", "Writing Hood", D(i)))];
+    const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
+    expect(row.activityStats.find(s => s.activity === "Writing Hood")).toMatchObject({ enrolled: false, rate: null });
+    expect(row).toMatchObject({ overallPresents: 1, overallTotal: 1, overallRate: 100 });
+  });
+
+  it("QA-05/06: 1/8 Speakeasy + 2/4 Writing Hood → Overall 25% (3/12), Dormant (was Busy Bee under US-24)", () => {
+    const wh = [D(11), D(12), D(13), D(14)];
+    const records = [
+      ...eight.slice(0, 7).map(d => rec("otro", "Speakeasy", d)),
+      rec("ana", "Speakeasy", eight[7]),
+      rec("otro", "Writing Hood", wh[0]),
+      rec("otro", "Writing Hood", wh[1]),
+      rec("ana", "Writing Hood", wh[2]),
+      rec("ana", "Writing Hood", wh[3]),
+    ];
+    const row = computeBeehavior([attendee("ana", eight[7]), attendee("otro")], records)[0];
+    expect(row).toMatchObject({ overallPresents: 3, overallTotal: 12, overallRate: 25, isMulti: true });
+    expect(row.tier.label).toBe("Dormant");
+  });
+
+  it("QA-07: a new event raises the denominator by 1 for every member, without creating absent rows", () => {
+    const before = [rec("ana", "Speakeasy", D(1)), rec("bea", "Speakeasy", D(1))];
+    const after = [...before, rec("bea", "Speakeasy", D(8))]; // ana isn't in the new event
+    const rows = computeBeehavior([attendee("ana"), attendee("bea")], after);
+    expect(stat(rows, "ana", "Speakeasy")).toMatchObject({ presents: 1, total: 2, rate: 50 });
+    expect(stat(rows, "bea", "Speakeasy")).toMatchObject({ presents: 2, total: 2, rate: 100 });
+    expect(after.filter(r => r.status === "absent")).toHaveLength(0);
+  });
+
+  it("QA-08: a manual absent counts in the denominator and not the numerator", () => {
+    const records = [rec("ana", "Speakeasy", D(1)), rec("ana", "Speakeasy", D(8), "absent"), rec("bea", "Speakeasy", D(8))];
+    const rows = computeBeehavior([attendee("ana"), attendee("bea")], records);
+    expect(stat(rows, "ana", "Speakeasy")).toMatchObject({ presents: 1, total: 2, rate: 50 });
+    expect(stat(rows, "bea", "Speakeasy")).toMatchObject({ presents: 1, total: 2, rate: 50 });
   });
 });
 
