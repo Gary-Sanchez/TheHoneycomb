@@ -77,15 +77,40 @@ export function getHiveTier(rate: number): HiveTier {
 }
 
 // An event is each unique activity + date with at least one record in the DB, whatever its source
-// and status. Absence is deduced from the events a colleague missed — no `absent` rows are created.
+// and status. Shared by the Bee-havior Hub (US-24) and the Activities Matrix Profile cards (US-29).
+export function getEventDates(records: AttendanceRecord[]): Record<string, Set<string>> {
+  const eventDates: Record<string, Set<string>> = {};
+  for (const r of records) (eventDates[r.activity] ??= new Set()).add(r.date);
+  return eventDates;
+}
+
+export interface ActivityEventStats {
+  events: number;
+  // Present attendees per event; null → the card shows "—" (no events)
+  avgPresent: number | null;
+}
+
+// US-29: registered events of an activity and its average attendees per event (presents ÷ events).
+// Not date-filtered. A colleague is counted once per event even if they have duplicate present rows.
+export function getActivityEventStats(records: AttendanceRecord[], activity: string): ActivityEventStats {
+  const events = getEventDates(records)[activity]?.size ?? 0;
+  const presents = new Set(
+    records.filter(r => r.activity === activity && r.status === "present").map(r => `${r.attendeeId}|${r.date}`)
+  ).size;
+  return { events, avgPresent: events ? presents / events : null };
+}
+
+// One decimal ("7.5", "8.0"), or "—" when the activity has no events
+export const formatAvgAttendees = (avg: number | null) => (avg === null ? "—" : avg.toFixed(1));
+
+// Absence is deduced from the events a colleague missed — no `absent` rows are created.
 // US-31: the denominator is every event of the activity, the same for all enrolled colleagues —
 // joinedDate and the date of their first present don't trim it, so a late starter isn't inflated.
 export function computeBeehavior(attendees: Attendee[], records: AttendanceRecord[]): BeehaviorRow[] {
-  const eventDates: Record<string, Set<string>> = {};
+  const eventDates = getEventDates(records);
   const presentDates: Record<string, Set<string>> = {}; // `${attendeeId}|${activity}` → dates attended
 
   for (const r of records) {
-    (eventDates[r.activity] ??= new Set()).add(r.date);
     if (r.status === "present") {
       (presentDates[`${r.attendeeId}|${r.activity}`] ??= new Set()).add(r.date);
     }

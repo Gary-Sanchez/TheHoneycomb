@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
-import { computeBeehavior } from "../beehavior";
+import { computeBeehavior, getActivityEventStats, formatAvgAttendees } from "../beehavior";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -83,9 +83,13 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
       const totalLogs = actLogs.length;
       const presents = actLogs.filter(r => r.status === "present").length;
       const attendanceRate = totalLogs ? Math.round((presents / totalLogs) * 100) : 0;
+      // US-29: registered events + avg attendees per event, derived from records on every render
+      const { events, avgPresent } = getActivityEventStats(records, act);
 
       return {
         name: act,
+        events,
+        avgPresent,
         shortName: act.replace("English ", ""),
         "Active Attendees": activeAttendees,
         "Attendance Rate (%)": attendanceRate,
@@ -377,6 +381,16 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
                 </div>
 
                 <div className="mt-5 space-y-2">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-natural-forest/70">Events:</span>
+                    <span className="font-bold text-[#1A1A1A]">{act.events}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-natural-forest/70">Avg. attendees:</span>
+                    <span className="font-bold text-[#1A1A1A]" title="Present attendees per registered event">
+                      {formatAvgAttendees(act.avgPresent)}
+                    </span>
+                  </div>
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-natural-forest/70">Attendance rate:</span>
                     <span style={{ color: barColor }} className="font-bold">{act["Attendance Rate (%)"]}%</span>
