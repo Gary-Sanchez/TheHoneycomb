@@ -282,8 +282,9 @@ const STANDARD_ACTIVITIES = [
   "Writing Hood",
 ];
 
-// API endpoint for parsing uploaded file
-app.post("/api/parse-attendance-file", upload.single("file"), async (req, res): Promise<any> => {
+// API endpoint for parsing uploaded file. US-22: requireAdmin runs before multer, so a request
+// without an admin session gets its 401 before the upload is read into memory or parsed.
+app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), async (req, res): Promise<any> => {
   try {
     const file = req.file;
     if (!file) {
@@ -336,11 +337,13 @@ app.post("/api/parse-attendance-file", upload.single("file"), async (req, res): 
 // doesn't persist anything. The batch is rejected whole (400, nothing parsed into the preview) when
 // it has too many files, a non-.csv file, an unreadable file, or a file that declares a different
 // activity. Identical files are not an error: later copies come back as duplicates, with no records.
+// Like the single-file route, it requires an admin session before multer reads any file (US-22).
 const MAX_CSV_BATCH_FILES = 20;
 const TOO_MANY_FILES_ERROR = `Too many files: the maximum is ${MAX_CSV_BATCH_FILES} .csv files per import. The whole batch was rejected.`;
 
 app.post(
   "/api/parse-attendance-batch",
+  requireAdmin,
   (req, res, next) => {
     upload.array("files", MAX_CSV_BATCH_FILES)(req, res, (err: unknown): any => {
       if (err instanceof multer.MulterError) {

@@ -99,7 +99,12 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   `POST /api/attendees`, `PUT /api/attendees/:id/enrollment`,
   `DELETE /api/attendees/:id`, `POST /api/records`, `POST /api/records/manual`, `POST /api/records/import`,
   `PUT /api/notes/:attendeeId`, `POST /api/reset`. Any new mutating route must add it too.
-  `GET`s, `/api/parse-attendance-file` and `/api/parse-attendance-batch` (don't persist) stay public.
+- **File parsing also requires admin (US-22)**: `POST /api/parse-attendance-file` and
+  `POST /api/parse-attendance-batch` don't persist, but run `requireAdmin` **before** `multer`
+  (`upload.single` / `upload.array`), so a request without a session gets its 401 before any upload
+  is read into memory or parsed — a LAN device can't burn CPU/RAM on the parser. On that 401,
+  `DocumentParser` shows a session-expired message and calls `onSessionExpired` (→ read-only).
+  Only the `GET`s stay public.
 - **Input validation (US-10)**: every mutating route with a body also runs
   `validateBody(<zod schema>)` from `validation.ts` after `requireAdmin` → 400
   `{ error, details }` before anything reaches `db.ts`. Schemas mirror `src/types.ts`; keep them in
