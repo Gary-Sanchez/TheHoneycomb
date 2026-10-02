@@ -72,6 +72,20 @@ export function nameKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+// US-28: A→Z order for colleague names, ignoring case and accents ("Álvaro" ≡ "alvaro" < "Beatriz").
+// Fixed locale so the order doesn't depend on the machine; names equal at base level fall back to
+// a code-point comparison so the result is deterministic.
+const nameCollator = new Intl.Collator("en", { sensitivity: "base" });
+
+export function compareNames(a: string, b: string): number {
+  return nameCollator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+// Returns a sorted copy — never mutates the input (stored order stays untouched)
+export function sortByName<T extends { name: string }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => compareNames(a.name, b.name));
+}
+
 // US-26: when a .csv was imported, as "YYYY-MM-DD HH:mm" (local time). Shared by the server's
 // 409 message and the Doc Parser so both say the same thing.
 export function formatImportedAt(iso: string): string {

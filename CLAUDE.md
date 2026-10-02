@@ -45,7 +45,11 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
 - **Persistence is server-side**, not browser localStorage: `db.ts` uses `lowdb` (`JSONFilePreset`)
   against a single JSON file (`honeycomb-data.json` by default, path overridable via
   `HONEYCOMB_DB_PATH`). It stores `{ attendees, records, notes, imports }` (`imports` = US-26
-  `.csv` fingerprints). `lowdb` is loaded via a lazy
+  `.csv` fingerprints).
+  The fingerprint hash is computed over the decoded text after normalizing line endings
+  (CRLF/CR → LF) and trimming outer whitespace, not over the raw bytes — so files that differ only
+  in that count as the same file. Attendee count and names are those actually imported (rows
+  deleted in the preview excluded). `lowdb` is loaded via a lazy
   dynamic `import()` — see the comment in `db.ts` for why (Electron's bundled Node breaks on a
   static ESM-in-CJS `require`).
 - **Graceful shutdown (US-15)**: `server.ts` exports `shutdown()` (also wired to `SIGTERM`/`SIGINT`):

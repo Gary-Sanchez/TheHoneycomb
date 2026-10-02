@@ -44,7 +44,6 @@ export interface ParsedFileGroup {
   duplicateOf: string | null; // filename of the identical earlier file in the batch
   alreadyImported: PreviousImport | null; // US-26: matches a .csv imported before (blocked)
   fingerprint: string; // US-26: SHA-256 of the file content, saved with the import
-  attendeeNames: string[]; // US-26: the file's attendees after filtering, saved with the import
 }
 
 // US-26: the "fingerprint" every successfully imported .csv leaves in the database

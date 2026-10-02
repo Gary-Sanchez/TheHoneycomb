@@ -300,7 +300,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             duplicateOf: f.duplicateOf ?? null,
             alreadyImported: f.alreadyImported ?? null,
             fingerprint: f.fingerprint ?? "",
-            attendeeNames: f.attendeeNames ?? [],
           });
           if (!f.duplicateOf && !f.alreadyImported) {
             processed.push(...cleanClientRecords(f.records).map(rec => toPreviewRecord(rec, id)));
@@ -429,8 +428,9 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           filename: g.filename,
           activity: fileRecords[0].activity,
           date: fileRecords[0].date,
+          // Count and names both describe what is actually imported (rows removed in the preview excluded)
           attendeeCount: fileRecords.length,
-          attendeeNames: g.attendeeNames,
+          attendeeNames: fileRecords.map(rec => rec.name),
         }];
       });
 
