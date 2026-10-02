@@ -16,7 +16,7 @@ import {
   recordsBodySchema,
   validateBody,
 } from "./validation";
-import { duplicateImportMessage } from "./src/utils";
+import { alreadyLoadedMessage, duplicateImportMessage } from "./src/utils";
 
 dotenv.config();
 
@@ -269,6 +269,13 @@ app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), as
         duplicateOf: err.previous,
       });
     }
+    // US-33: a .csv whose event (with the date picked in the preview) already holds all its colleagues
+    if (err instanceof db.EventAlreadyLoadedError) {
+      return res.status(409).json({
+        error: `${err.filename}: ${alreadyLoadedMessage(err.event)}`,
+        alreadyLoaded: err.event,
+      });
+    }
     console.error("Error importing parsed data:", err);
     res.status(500).json({ error: "Import failed: nothing from this batch was saved." });
   }
@@ -307,8 +314,19 @@ function findCsvImportIn(
   });
 }
 
-async function findCsvImport(hash: string, activity: string, records: { name: string; activity: string; date: string }[]) {
-  return findCsvImportIn((await db.getState()).imports, hash, activity, records);
+// US-33: the event a just-parsed .csv adds nothing to, if any — checked against the records, so it
+// also catches events loaded without a fingerprint (Manual Check-In, imports before US-26). Like
+// findCsvImportIn, it needs the date the parser found; the import route re-checks with the picked one.
+function findLoadedEventIn(
+  state: Awaited<ReturnType<typeof db.getState>>,
+  activity: string,
+  records: { name: string; activity: string; date: string; status: "present" | "absent" }[]
+) {
+  return db.findLoadedEvent(state.records, state.attendees, {
+    activity: activity || records[0]?.activity || "",
+    date: records[0]?.date || "",
+    attendees: records.map(r => ({ name: r.name, status: r.status })),
+  });
 }
 
 // API endpoint for parsing uploaded file. US-22: requireAdmin runs before multer, so a request
@@ -338,9 +356,12 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
       if (isEmpty) {
         return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
       }
-      // US-26: a .csv imported before is blocked here already (no records come back)
-      const alreadyImported = await findCsvImport(fingerprint, requestedActivity, parsed.records);
-      const records = alreadyImported ? [] : parsed.records;
+      // US-26: a .csv imported before is blocked here already (no records come back);
+      // US-33: so is one whose event already holds all its colleagues
+      const state = await db.getState();
+      const alreadyImported = findCsvImportIn(state.imports, fingerprint, requestedActivity, parsed.records);
+      const alreadyLoaded = alreadyImported ? null : findLoadedEventIn(state, requestedActivity, parsed.records);
+      const records = alreadyImported || alreadyLoaded ? [] : parsed.records;
       return res.json({
         filename,
         ...parsed,
@@ -349,6 +370,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
         fingerprint,
         attendeeNames: parsed.records.map(r => r.name),
         alreadyImported,
+        alreadyLoaded,
       });
     }
 
@@ -437,21 +459,25 @@ app.post(
       }
 
       const firstByFingerprint = new Map<string, string>();
-      const { imports } = await db.getState();
+      const state = await db.getState();
       return res.json({
         activity: batchActivity,
         files: parsed.map(({ isEmpty, fingerprint, declaredActivities, ...p }) => {
           const duplicateOf = firstByFingerprint.get(fingerprint) ?? null;
           if (!duplicateOf) firstByFingerprint.set(fingerprint, p.filename);
           // US-26: a file already imported in an earlier upload is blocked (no records come back)
-          const alreadyImported = duplicateOf ? null : findCsvImportIn(imports, fingerprint, batchActivity || requestedActivity, p.records);
-          const records = duplicateOf || alreadyImported ? [] : p.records;
+          const alreadyImported = duplicateOf ? null : findCsvImportIn(state.imports, fingerprint, batchActivity || requestedActivity, p.records);
+          // US-33: ...and so is one whose event already holds all its colleagues (no fingerprint needed)
+          const alreadyLoaded =
+            duplicateOf || alreadyImported ? null : findLoadedEventIn(state, batchActivity || requestedActivity, p.records);
+          const records = duplicateOf || alreadyImported || alreadyLoaded ? [] : p.records;
           return {
             ...p,
             records,
             recordsCount: records.length,
             duplicateOf,
             alreadyImported,
+            alreadyLoaded,
             fingerprint,
             attendeeNames: p.records.map(r => r.name),
           };

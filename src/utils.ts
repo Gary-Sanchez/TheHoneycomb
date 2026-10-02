@@ -99,3 +99,8 @@ export function formatImportedAt(iso: string): string {
 export function duplicateImportMessage(previous: { filename: string; importedAt: string }): string {
   return `Duplicate file: this .csv was already imported as "${previous.filename}" on ${formatImportedAt(previous.importedAt)}. The import was blocked and no records were created.`;
 }
+
+// US-33: the message shown when a .csv is blocked because its event already holds all its colleagues
+export function alreadyLoadedMessage(event: { activity: string; date: string }): string {
+  return `Already loaded: every colleague in this .csv is already recorded in the ${event.activity} event on ${event.date}. The import was blocked and no records were created.`;
+}

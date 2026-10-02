@@ -307,20 +307,26 @@ export default function App() {
       ...added,
     ]);
 
-    // The server's state is the truth for how many logs were added (this window may be stale)
+    // The server's state is the truth for how many logs were added or turned present (this window
+    // may be stale). US-33: the server refuses (409) a .csv whose event already holds all its colleagues.
     let error: string | undefined;
     let addedCount = added.length;
     const sentIds = new Set(finalLogs.map(rec => rec.id));
+    const absentIds = new Set(records.filter(rec => rec.status === "absent").map(rec => rec.id));
+    let updatedCount = records.filter(rec => absentIds.has(rec.id) && presentKeys.has(sessionKey(rec))).length;
     const saved = await persist(
       "/api/records/import",
       jsonRequest("POST", { attendees: createdAttendees, records: finalLogs, fingerprints }),
       "imported data",
       {
-        onSaved: data => (addedCount = data.records.filter(rec => sentIds.has(rec.id)).length),
+        onSaved: data => {
+          addedCount = data.records.filter(rec => sentIds.has(rec.id)).length;
+          updatedCount = data.records.filter(rec => absentIds.has(rec.id) && rec.status === "present").length;
+        },
         onRejected: message => (error = message),
       }
     );
-    return saved ? { ok: true, added: addedCount } : { ok: false, error };
+    return saved ? { ok: true, added: addedCount, updated: updatedCount } : { ok: false, error };
   };
 
   // 5. Save notes for progress report

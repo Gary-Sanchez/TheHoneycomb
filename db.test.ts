@@ -118,3 +118,94 @@ describe("importParsedData fingerprints (US-26)", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
+
+// US-33: a .csv is also compared against the records, so an event loaded without a fingerprint
+// (Manual Check-In, an import before US-26) is recognized too
+describe("findLoadedEvent (US-33)", () => {
+  const attendees = [
+    { id: "att-1", name: "Ana Lopez", enrolledActivities: ["Speakeasy"], joinedDate: "2026-06-10" },
+    { id: "att-2", name: "Bruno Diaz", enrolledActivities: ["Speakeasy"], joinedDate: "2026-06-10" },
+  ];
+  const rec = (n: number, status: "present" | "absent" = "present") => ({
+    id: `log-${n}`, attendeeId: `att-${n}`, attendeeName: attendees[n - 1].name, activity: "Speakeasy", date: "2026-06-10", status,
+  });
+  const candidate = (names: string[], status: "present" | "absent" = "present", date = "2026-06-10") => ({
+    activity: "Speakeasy", date, attendees: names.map(name => ({ name, status })),
+  });
+  const event = { activity: "Speakeasy", date: "2026-06-10" };
+
+  it("matches when every attendee is already in the event, in any case/spacing (QA-01)", async () => {
+    const { findLoadedEvent } = await import("./db");
+    expect(findLoadedEvent([rec(1), rec(2)], attendees, candidate(["ANA  LOPEZ", "bruno diaz"]))).toEqual(event);
+    // A subset of the event adds nothing either
+    expect(findLoadedEvent([rec(1), rec(2)], attendees, candidate(["Ana Lopez"]))).toEqual(event);
+  });
+
+  it("does not match a file that adds someone, another date/activity, or no date yet (QA-04)", async () => {
+    const { findLoadedEvent } = await import("./db");
+    const records = [rec(1), rec(2)];
+    expect(findLoadedEvent(records, attendees, candidate(["Ana Lopez", "Bruno Diaz", "Carla Nueva"]))).toBeNull();
+    expect(findLoadedEvent(records, attendees, candidate(["Ana Lopez"], "present", "2026-06-17"))).toBeNull();
+    expect(findLoadedEvent(records, attendees, { ...candidate(["Ana Lopez"]), activity: "Music Room" })).toBeNull();
+    expect(findLoadedEvent(records, attendees, candidate(["Ana Lopez"], "present", ""))).toBeNull();
+    expect(findLoadedEvent(records, attendees, candidate([]))).toBeNull();
+  });
+
+  it("does not match when the file turns someone from absent to present (QA-03)", async () => {
+    const { findLoadedEvent } = await import("./db");
+    expect(findLoadedEvent([rec(1), rec(2, "absent")], attendees, candidate(["Ana Lopez", "Bruno Diaz"]))).toBeNull();
+    // ...but an absent in the file over a present record changes nothing
+    expect(findLoadedEvent([rec(1), rec(2)], attendees, candidate(["Ana Lopez", "Bruno Diaz"], "absent"))).toEqual(event);
+  });
+
+  it("uses the directory name behind attendeeId, not a stale name on the record", async () => {
+    const { findLoadedEvent } = await import("./db");
+    const stale = { ...rec(1), attendeeName: "Ana" };
+    expect(findLoadedEvent([stale], attendees, candidate(["Ana Lopez"]))).toEqual(event);
+  });
+});
+
+// US-33: the import route re-checks against the records (the date may have been picked in the
+// preview), and an import that changes nothing leaves no fingerprint
+describe("importParsedData against existing records (US-33)", () => {
+  it("refuses a .csv whose event is complete, allows absent→present, and skips no-op fingerprints", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "honeycomb-db-"));
+    process.env.HONEYCOMB_DB_PATH = path.join(dir, "data.json");
+    const { vi } = await import("vitest");
+    vi.resetModules();
+    const db = await import("./db");
+
+    const ana = { id: "att-1", name: "Ana Lopez", enrolledActivities: ["Speakeasy"], joinedDate: "2026-06-10" };
+    const bruno = { id: "att-2", name: "Bruno Diaz", enrolledActivities: ["Speakeasy"], joinedDate: "2026-06-10" };
+    const log = (att: typeof ana, status: "present" | "absent", id: string) => ({
+      id, attendeeId: att.id, attendeeName: att.name, activity: "Speakeasy", date: "2026-06-10", status,
+    });
+    const fp = (hash: string, names: string[]) => ({
+      hash: hash.repeat(64), filename: `${hash}.csv`, activity: "Speakeasy", date: "2026-06-10", attendeeCount: names.length, attendeeNames: names,
+    });
+
+    // The event comes from Manual Check-In: no fingerprint
+    await db.manualCheckIn(ana, log(ana, "present", "m1"));
+    await db.manualCheckIn(bruno, log(bruno, "absent", "m2"));
+
+    // QA-03: Bruno absent → present is a real change, so the file goes in with its fingerprint
+    const upgraded = await db.importParsedData([], [log(ana, "present", "i1"), log(bruno, "present", "i2")], [fp("a", ["Ana Lopez", "Bruno Diaz"])]);
+    expect(upgraded.records.find(r => r.id === "m2")?.status).toBe("present");
+    expect(upgraded.records).toHaveLength(2);
+    expect(upgraded.imports).toHaveLength(1);
+
+    // QA-01/02: another export of the same complete event → 409-style refusal, nothing changes
+    const snapshot = JSON.stringify(await db.getState());
+    await expect(db.importParsedData([], [log(ana, "present", "j1")], [fp("b", ["Ana Lopez"])]))
+      .rejects.toMatchObject({ event: { activity: "Speakeasy", date: "2026-06-10" }, filename: "b.csv" });
+    await expect(db.importParsedData([], [log(ana, "present", "j1")], [fp("b", ["Ana Lopez"])]))
+      .rejects.toBeInstanceOf(db.EventAlreadyLoadedError);
+    expect(JSON.stringify(await db.getState())).toBe(snapshot);
+
+    // An import with no fingerprint (not a .csv) that changes nothing leaves no fingerprint either
+    const noop = await db.importParsedData([], [log(ana, "present", "k1")], []);
+    expect(noop.records).toHaveLength(2);
+    expect(noop.imports).toHaveLength(1);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
