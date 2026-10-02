@@ -1,6 +1,6 @@
 import path from "path";
 import type { JSONFilePreset as JSONFilePresetType } from "lowdb/node";
-import { Attendee, AttendanceRecord } from "./src/types";
+import { Attendee, AttendanceRecord, ImportFingerprint, PreviousImport } from "./src/types";
 import { initialAttendees, initialAttendanceRecords } from "./src/mockData";
 import { isInvalidName, nameKey } from "./src/utils";
 import { isBlacklistedName } from "./src/blacklist";
@@ -9,13 +9,51 @@ interface HoneycombData {
   attendees: Attendee[];
   records: AttendanceRecord[];
   notes: Record<string, string>;
+  imports: ImportFingerprint[]; // US-26: one fingerprint per successfully imported .csv
 }
 
 const DEFAULT_DATA: HoneycombData = {
   attendees: [],
   records: [],
   notes: {},
+  imports: [],
 };
+
+// US-26: what a .csv being imported is compared against the stored fingerprints with
+export interface ImportCandidate {
+  hash: string;
+  activity: string;
+  date: string;
+  attendeeNames: string[];
+}
+
+const attendeeSetKey = (names: string[]) => [...new Set(names.map(nameKey))].sort().join("|");
+
+// US-26: the earlier import a .csv duplicates, or null. Duplicate = same content hash (whatever the
+// filename), or same activity + event date + set of (already filtered) attendees. Without a date
+// yet (the user still has to pick it) only the hash can match. The most recent match is reported.
+export function findPreviousImport(imports: ImportFingerprint[], candidate: ImportCandidate): PreviousImport | null {
+  const setKey = attendeeSetKey(candidate.attendeeNames);
+  for (let i = imports.length - 1; i >= 0; i--) {
+    const fp = imports[i];
+    const sameContent = fp.hash === candidate.hash;
+    const sameEvent =
+      Boolean(candidate.date) &&
+      candidate.attendeeNames.length > 0 &&
+      fp.activity === candidate.activity &&
+      fp.date === candidate.date &&
+      attendeeSetKey(fp.attendeeNames) === setKey;
+    if (sameContent || sameEvent) return { filename: fp.filename, importedAt: fp.importedAt };
+  }
+  return null;
+}
+
+// US-26: thrown by importParsedData when a .csv in the payload was already imported
+export class DuplicateImportError extends Error {
+  constructor(public readonly previous: PreviousImport, public readonly filename: string) {
+    super(`${filename} was already imported as ${previous.filename}`);
+  }
+}
 
 function seedData(): HoneycombData {
   const filteredAttendees = initialAttendees.filter(att => !isInvalidName(att.name));
@@ -28,6 +66,7 @@ function seedData(): HoneycombData {
     attendees: filteredAttendees,
     records: filteredRecords,
     notes: {},
+    imports: [], // US-26: a reset also clears the fingerprint history
   };
 }
 
@@ -55,6 +94,8 @@ async function getDb(): Promise<LowDbInstance> {
     dbPromise = import("lowdb/node")
       .then(({ JSONFilePreset }) => JSONFilePreset<HoneycombData>(getDbPath(), DEFAULT_DATA))
       .then(db => {
+        // Databases created before US-26 have no fingerprint history yet
+        db.data.imports ??= [];
         // Track every write so flush() can wait for in-flight ones without touching each mutation.
         const originalWrite = db.write.bind(db);
         db.write = () => {
@@ -168,17 +209,47 @@ export async function manualCheckIn(
 // formed and linked client-side (ids assigned, attendeeId matched by name); this appends them.
 // US-27: a whole .csv batch arrives in one call and is all-or-nothing — if the write fails, the
 // in-memory state is rolled back too, so a later successful write can't persist half a batch.
+// US-26: each imported .csv leaves a fingerprint, saved in the same write. A payload carrying a
+// .csv that was already imported is rejected whole (DuplicateImportError) before anything changes.
+// A file joining an existing date+activity event only adds the colleagues not already in it.
 export async function importParsedData(
   newAttendees: Attendee[],
-  newRecordsToSave: AttendanceRecord[]
+  newRecordsToSave: AttendanceRecord[],
+  fingerprints: Omit<ImportFingerprint, "importedAt">[] = []
 ): Promise<HoneycombData> {
   const db = await getDb();
   const previous = db.data;
+
+  for (const fp of fingerprints) {
+    const match = findPreviousImport(previous.imports, fp);
+    if (match) throw new DuplicateImportError(match, fp.filename);
+  }
+
   // US-19: server-side guard so blacklisted facilitators never reach consolidated data
+  const attendees = [...previous.attendees, ...newAttendees.filter(att => !isBlacklistedName(att.name))];
+  const nameById = new Map(attendees.map(att => [att.id, nameKey(att.name)]));
+  const sessionKey = (rec: AttendanceRecord) =>
+    `${nameById.get(rec.attendeeId) ?? nameKey(rec.attendeeName)}|${rec.date}|${rec.activity}`;
+
+  const records = previous.records.map(rec => ({ ...rec }));
+  const bySession = new Map(records.map(rec => [sessionKey(rec), rec]));
+  for (const rec of newRecordsToSave) {
+    if (isBlacklistedName(rec.attendeeName)) continue;
+    const existing = bySession.get(sessionKey(rec));
+    if (existing) {
+      if (rec.status === "present") existing.status = "present"; // "present" wins, like a batch
+      continue;
+    }
+    records.push(rec);
+    bySession.set(sessionKey(rec), rec);
+  }
+
+  const importedAt = new Date().toISOString();
   db.data = {
     ...previous,
-    attendees: [...previous.attendees, ...newAttendees.filter(att => !isBlacklistedName(att.name))],
-    records: [...previous.records, ...newRecordsToSave.filter(rec => !isBlacklistedName(rec.attendeeName))],
+    attendees,
+    records,
+    imports: [...previous.imports, ...fingerprints.map(fp => ({ ...fp, importedAt }))],
   };
   try {
     await db.write();

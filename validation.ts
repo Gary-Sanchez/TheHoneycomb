@@ -42,9 +42,21 @@ export const enrollmentBodySchema = z.object({ activities: stringArray });
 
 export const recordsBodySchema = z.object({ records: recordsArray });
 
+// US-26: the fingerprint of each imported .csv (importedAt is set by the server, not the client)
+export const importFingerprintSchema = z.object({
+  hash: z.string({ error: fieldError("must be a string") }).regex(/^[0-9a-f]{64}$/, { error: "must be a SHA-256 hex digest" }),
+  filename: nonEmptyString,
+  activity: z.enum(ACTIVITIES, { error: fieldError(`must be one of: ${ACTIVITIES.join(", ")}`) }),
+  date: isoDate,
+  attendeeCount: z.number({ error: fieldError("must be a number") }).int().nonnegative(),
+  attendeeNames: stringArray,
+});
+
 export const importBodySchema = z.object({
   attendees: z.array(attendeeSchema, { error: fieldError("must be an array of attendees") }),
   records: recordsArray,
+  // Optional: only .csv imports leave fingerprints (US-26)
+  fingerprints: z.array(importFingerprintSchema, { error: fieldError("must be an array of import fingerprints") }).optional(),
 });
 
 // US-20 manual check-in: the record must name a colleague and one of the 4 fixed activities;

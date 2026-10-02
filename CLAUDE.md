@@ -44,7 +44,8 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
 
 - **Persistence is server-side**, not browser localStorage: `db.ts` uses `lowdb` (`JSONFilePreset`)
   against a single JSON file (`honeycomb-data.json` by default, path overridable via
-  `HONEYCOMB_DB_PATH`). It stores `{ attendees, records, notes }`. `lowdb` is loaded via a lazy
+  `HONEYCOMB_DB_PATH`). It stores `{ attendees, records, notes, imports }` (`imports` = US-26
+  `.csv` fingerprints). `lowdb` is loaded via a lazy
   dynamic `import()` — see the comment in `db.ts` for why (Electron's bundled Node breaks on a
   static ESM-in-CJS `require`).
 - **Graceful shutdown (US-15)**: `server.ts` exports `shutdown()` (also wired to `SIGTERM`/`SIGINT`):
@@ -68,6 +69,14 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   and rejects the whole batch (too many files, non-.csv, or a file declaring another activity);
   identical files come back as `duplicateOf`. The confirmed batch is one `POST /api/records/import`,
   and `importParsedData` rolls back in-memory state if the write fails — all or nothing.
+- **Duplicate `.csv` across imports (US-26)**: every imported `.csv` leaves a fingerprint in
+  `imports` (SHA-256, filename, activity, date, attendee count + names, `importedAt`), saved in the
+  same `POST /api/records/import` write (that's the fingerprint route — `requireAdmin` +
+  `importFingerprintSchema`). `findPreviousImport` (`db.ts`) flags a file whose hash matches, or
+  whose activity + date + filtered attendee set match a stored fingerprint. The parse routes return
+  it as `alreadyImported` (no records); the import route re-checks (409) because the date may be
+  picked by the user. Records joining an existing date+activity event skip colleagues already in
+  it. `POST /api/reset` clears `imports`.
 - Frontend state lives in `src/App.tsx`, which owns the handlers (`handleAddAttendee`,
   `handleSaveRecords`, `handleImportParsedData`, `handleResetDatabase`, etc.) that `db.ts`'s
   functions mirror 1:1 — check the "Mirrors handleX" comments in `db.ts` when changing either side.

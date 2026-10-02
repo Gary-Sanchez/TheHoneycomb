@@ -42,6 +42,30 @@ export interface ParsedFileGroup {
   excludedByDuration: DurationExclusion[];
   excludedByBlacklist: number;
   duplicateOf: string | null; // filename of the identical earlier file in the batch
+  alreadyImported: PreviousImport | null; // US-26: matches a .csv imported before (blocked)
+  fingerprint: string; // US-26: SHA-256 of the file content, saved with the import
+  attendeeNames: string[]; // US-26: the file's attendees after filtering, saved with the import
+}
+
+// US-26: the "fingerprint" every successfully imported .csv leaves in the database
+export interface ImportFingerprint {
+  hash: string; // SHA-256 of the file content
+  filename: string;
+  activity: string;
+  date: string; // YYYY-MM-DD, the event date
+  attendeeCount: number;
+  attendeeNames: string[]; // filtered attendees, to recognize a re-exported file
+  importedAt: string; // ISO timestamp of the import
+}
+
+// Result of a Doc Parser import: how many attendance logs were actually added (US-26: colleagues
+// already in that date+activity event aren't logged again), or why the server refused it.
+export type ImportOutcome = { ok: true; added: number } | { ok: false; error?: string };
+
+// US-26: the earlier import a duplicate .csv is reported against
+export interface PreviousImport {
+  filename: string;
+  importedAt: string;
 }
 
 // Outcome of a manual check-in into a date+activity session (US-20)

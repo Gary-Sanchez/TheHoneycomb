@@ -1,6 +1,6 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
-import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ACTIVITIES } from "../types";
-import { isInvalidName, nameKey, REFERENCE_DATE } from "../utils";
+import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
+import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, formatImportedAt } from "../utils";
 import { isBlacklistedName } from "../blacklist";
 import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -8,8 +8,13 @@ import ReadOnlyNotice from "./ReadOnlyNotice";
 
 interface DocumentParserProps {
   attendees: Attendee[];
-  // Resolves to false when the server didn't save the import (US-27: nothing from the batch is kept)
-  onImportData: (newAttendees: Omit<Attendee, "id">[], newRecords: Omit<AttendanceRecord, "id">[]) => Promise<boolean> | void;
+  // Resolves to ok:false when the server didn't save the import (US-27: nothing from the batch is
+  // kept), e.g. because a .csv was already imported (US-26)
+  onImportData: (
+    newAttendees: Omit<Attendee, "id">[],
+    newRecords: Omit<AttendanceRecord, "id">[],
+    fingerprints: Omit<ImportFingerprint, "importedAt">[]
+  ) => Promise<ImportOutcome>;
   canEdit: boolean;
   onSignIn?: () => void;
 }
@@ -293,12 +298,29 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             excludedByDuration: f.excludedByDuration || [],
             excludedByBlacklist: f.excludedByBlacklist || 0,
             duplicateOf: f.duplicateOf ?? null,
+            alreadyImported: f.alreadyImported ?? null,
+            fingerprint: f.fingerprint ?? "",
+            attendeeNames: f.attendeeNames ?? [],
           });
-          if (!f.duplicateOf) {
+          if (!f.duplicateOf && !f.alreadyImported) {
             processed.push(...cleanClientRecords(f.records).map(rec => toPreviewRecord(rec, id)));
           }
         });
-        missingDate = groups.some(g => !g.dateDetected && !g.duplicateOf) || processed.some(rec => !rec.date);
+        missingDate =
+          groups.some(g => !g.dateDetected && !g.duplicateOf && !g.alreadyImported) || processed.some(rec => !rec.date);
+
+        // US-26: every file was imported before — block it, nothing to review
+        const blocked = groups.filter(g => g.alreadyImported);
+        if (blocked.length > 0 && blocked.length === groups.filter(g => !g.duplicateOf).length) {
+          setErrorMsg(
+            blocked.length === 1
+              ? duplicateImportMessage(blocked[0].alreadyImported!)
+              : `Duplicate files: ${blocked
+                  .map(g => `${g.filename} was already imported as "${g.alreadyImported!.filename}" on ${formatImportedAt(g.alreadyImported!.importedAt)}`)
+                  .join("; ")}. The import was blocked and no records were created.`
+          );
+          return;
+        }
       } else {
         const data = await postForm("/api/parse-attendance-file", formData);
         processed = cleanClientRecords(data.records).map(rec => toPreviewRecord(rec));
@@ -396,13 +418,32 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       });
     });
 
+    // US-26: each .csv in the preview leaves its fingerprint, with the date it's imported under
+    const fingerprints: Omit<ImportFingerprint, "importedAt">[] = fileGroups
+      .filter(g => !g.duplicateOf && !g.alreadyImported && g.fingerprint)
+      .flatMap(g => {
+        const fileRecords = parsedRecords.filter(rec => rec.fileId === g.id);
+        if (fileRecords.length === 0) return [];
+        return [{
+          hash: g.fingerprint,
+          filename: g.filename,
+          activity: fileRecords[0].activity,
+          date: fileRecords[0].date,
+          attendeeCount: fileRecords.length,
+          attendeeNames: g.attendeeNames,
+        }];
+      });
+
     setImporting(true);
-    const saved = await onImportData(newAttendeesToCreate, newRecordsToSave);
+    const outcome = await onImportData(newAttendeesToCreate, newRecordsToSave, fingerprints);
     setImporting(false);
 
     // US-27: the server saves the whole batch or none of it; keep the preview so it can be retried
-    if (saved === false) {
-      setErrorMsg("Import failed: nothing from this batch was saved. Check that you're signed in and the server is running, then try again.");
+    if (outcome.ok === false) {
+      setErrorMsg(
+        outcome.error ??
+          "Import failed: nothing from this batch was saved. Check that you're signed in and the server is running, then try again."
+      );
       return;
     }
 
@@ -415,7 +456,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
     setErrorMsg("");
     resetPreview();
-    setImportedCount(newRecordsToSave.length);
+    setImportedCount(outcome.added);
     setFiles([]);
   };
 
@@ -529,17 +570,19 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     const groupDate = rows[0]?.rec.date ?? "";
     const sameDateFiles = groupDate
       ? fileGroups.filter(
-          g => g.id !== group.id && !g.duplicateOf && parsedRecords.some(r => r.fileId === g.id && r.date === groupDate)
+          g => g.id !== group.id && !g.duplicateOf && !g.alreadyImported && parsedRecords.some(r => r.fileId === g.id && r.date === groupDate)
         )
       : [];
     const excludedCount = group.excludedByDuration.length;
     const showExcluded = expandedExclusions.has(group.id);
+    // Left out of the import: identical to another file of the batch, or imported before (US-26)
+    const isBlocked = Boolean(group.duplicateOf || group.alreadyImported);
 
     return (
       <div key={group.id} className="space-y-3" data-testid="file-group">
         <div
           className={`rounded-2xl border p-4 space-y-3 ${
-            group.duplicateOf ? "bg-natural-cream/20 border-natural-border/60 opacity-80" : "bg-natural-wheat/10 border-natural-border"
+            isBlocked ? "bg-natural-cream/20 border-natural-border/60 opacity-80" : "bg-natural-wheat/10 border-natural-border"
           }`}
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -549,7 +592,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 {group.filename}
               </h4>
             </div>
-            {!group.duplicateOf && (
+            {!isBlocked && (
               <label className="flex items-center gap-2 text-xs font-semibold text-natural-forest">
                 <Calendar className="h-4 w-4 text-natural-sage" />
                 Session date
@@ -589,6 +632,11 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <Copy className="h-3 w-3" />
                 Duplicate of {group.duplicateOf} (excluded)
               </span>
+            ) : group.alreadyImported ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-natural-sand/15 border border-natural-sand/40 text-natural-sand" role="alert">
+                <Copy className="h-3 w-3" />
+                Already imported as {group.alreadyImported.filename} on {formatImportedAt(group.alreadyImported.importedAt)} (blocked)
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#CCD5AE]/30 border border-[#CCD5AE]/80 text-natural-forest">
                 <CheckCircle className="h-3 w-3" />
@@ -624,12 +672,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           )}
         </div>
 
-        {!group.duplicateOf && rows.length > 0 && renderRecordsTable(rows)}
+        {!isBlocked && rows.length > 0 && renderRecordsTable(rows)}
       </div>
     );
   };
 
-  const fileCount = fileGroups.filter(g => !g.duplicateOf).length;
+  const fileCount = fileGroups.filter(g => !g.duplicateOf && !g.alreadyImported).length;
 
   return (
     <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-8 animate-fade-in" id="smart-parser-tab">
