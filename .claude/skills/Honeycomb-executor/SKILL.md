@@ -1,16 +1,16 @@
 ---
 name: Honeycomb-executor
-description: Ejecuta un ticket US-XX de The Honeycomb de punta a punta (asignación en Notion → research → desarrollo → testing → cierre con gate humana antes de commit y push) a partir de solo el número o nombre del ticket, trabajando siempre sobre una rama dedicada `gs/us-XX-...`. En cada fase evalúa si conviene delegar el trabajo a un subagente (uno de research, uno de desarrollo, uno de testing) o hacerlo directamente. Usar esta skill siempre que el usuario pegue un número de ticket ("US-05", "la US-06", "ticket 4") y pida ejecutarlo, implementarlo, resolverlo, "hacé la US-05", "arrancá con el ticket 6", "llevá adelante la historia US-04" — incluso si no menciona la skill por nombre.
+description: Ejecuta un ticket US-XX de The Honeycomb de punta a punta (asignación en Linear → research → desarrollo → testing → cierre con gate humana antes de commit y push) a partir de solo el número o nombre del ticket, trabajando siempre sobre una rama dedicada `gs/us-XX-...`. En cada fase evalúa si conviene delegar el trabajo a un subagente (uno de research, uno de desarrollo, uno de testing) o hacerlo directamente. Usar esta skill siempre que el usuario pegue un número de ticket ("US-05", "la US-06", "ticket 4") y pida ejecutarlo, implementarlo, resolverlo, "hacé la US-05", "arrancá con el ticket 6", "llevá adelante la historia US-04" — incluso si no menciona la skill por nombre.
 ---
 
 # Honeycomb Executor
 
 Toma un ticket US-XX ya redactado (ver [[Tefinha-crea-tickets]]) y lo lleva de punta a punta:
-asignártelo en Notion, investigar el código relevante, implementar los Criterios de Aceptación, y
+asignártelo en Linear, investigar el código relevante, implementar los Criterios de Aceptación, y
 verificar con los Escenarios de Prueba de QA del propio ticket — todo sobre una rama dedicada. En
 cada fase de research/desarrollo/testing decide — no asume de entrada — si conviene repartir el
 trabajo en subagentes (`Agent` tool) o hacerlo en el hilo principal. Adaptada de la skill
-`execute-ticket` de otro proyecto (NFC-MVP/Jira) al contexto de este repo (Notion + sin subtareas
+`execute-ticket` de otro proyecto (NFC-MVP/Jira) al contexto de este repo (Linear + sin subtareas
 formales), agregando lo que ese proyecto no necesitaba: autoasignación en el tablero y gates de git
 explícitos antes de `commit`/`push`.
 
@@ -27,12 +27,13 @@ caso los archivos de ticket sueltos no van a estar disponibles, porque no están
 
 - **Tickets**: archivos `US-{NN} {Título}.md`/`.txt` en la carpeta padre de este repo (no
   versionados en git).
-- **Notion**: base **The Honeycomb Board** — ver [`notion-board.md`](../Tefinha-crea-tickets/references/notion-board.md)
-  para el esquema completo (`Name`, `Status`, `Dev`, `QA`, ...) y el data source
-  (`collection://8cc326dd-ee75-415d-a78a-951a0cc146e7`).
-  > Nota Claude Code: MCP de Notion (`notion-fetch`, `notion-query-data-sources`,
-  > `notion-update-page`). `notion-fetch` con `id: "self"` da el user ID propio para asignarte
-  > (`Dev`) sin tener que preguntarlo.
+- **Linear**: proyecto **The Honeycomb** del team `Nicky Arias` (issues `NIC-{n}`, con el
+  `US-{NN}` en el título) — ver [`linear-board.md`](../Tefinha-crea-tickets/references/linear-board.md)
+  para el mapeo ticket ↔ issue, la cabecera Dev/QA y el flujo de estados. El board de Notion
+  (The Honeycomb Board) quedó solo como histórico desde la migración: no actualizarlo.
+  > Nota Claude Code: MCP de Linear (`list_issues`, `get_issue`, `save_issue`, `save_comment`,
+  > `list_issue_statuses`), cargado con ToolSearch. `assignee: "me"` te asigna sin tener que
+  > buscar tu user ID.
 - **GitHub**: `https://github.com/Gary-Sanchez/TheHoneycomb` (rama por defecto `main`, protegida —
   requiere PR, no acepta push directo).
 - **CLAUDE.md** (raíz del repo): stack, arquitectura (persistencia server-side vía `db.ts`,
@@ -41,7 +42,7 @@ caso los archivos de ticket sueltos no van a estar disponibles, porque no están
 
 ## Entrada
 
-El usuario da un número o referencia corta ("US-05", "la 5", "ticket 06", un link/ID de Notion).
+El usuario da un número o referencia corta ("US-05", "la 5", "ticket 06", un link de Linear o un ID `NIC-{n}`).
 Si describe el ticket sin ID claro y hay ambigüedad real sobre cuál es, listar los `US-*` existentes
 y preguntar — no adivinar el ticket equivocado. Si da el ID, no confirmarlo, proceder directo.
 
@@ -59,9 +60,13 @@ y preguntar — no adivinar el ticket equivocado. Si da el ID, no confirmarlo, p
 4. Repasar [`CLAUDE.md`](../../../CLAUDE.md) para ubicar qué componente/handler del código
    corresponde a la funcionalidad del ticket antes de decidir el plan — evita perder tiempo
    buscando a ciegas en la fase de research.
-5. Buscar la página del ticket en **The Honeycomb Board** (`notion-query-data-sources`, filtro
-   `Name contains "US-{NN}"`). Si no existe todavía, seguir igual con el archivo local y avisar al
-   usuario al final que no hay página que actualizar — no es bloqueante para desarrollar.
+5. Buscar el issue del ticket en Linear (`list_issues` con `project: "The Honeycomb"` y
+   `query: "US-{NN}"`, quedándote con el título que empieza exactamente con `US-{NN}:`; si te dieron
+   un `NIC-{n}` o un link, `get_issue` directo). Si no hay archivo local pero sí issue, la
+   `description` del issue **es** el ticket: extraer de ahí las mismas secciones del paso 2. Si
+   existen ambos y difieren en algo sustancial (AC, Out of Scope), avisar al usuario cuál se tomó.
+   Si no existe issue, seguir igual con el archivo local y avisar al final que no hay issue que
+   actualizar — no es bloqueante para desarrollar.
 
 **No empezar a programar sin haber leído el ticket completo.** Los Criterios de Aceptación y el
 Out of Scope son el contrato: implementar de más (ej. tocar algo que el propio ticket excluye
@@ -73,10 +78,13 @@ Estos tres pasos van juntos, apenas termina la Fase 0, **antes** de tocar códig
 destructivos ni ambiguos (autoasignarte un ticket que vas a trabajar ahora mismo), así que no
 llevan gate de confirmación — a diferencia del cierre (Fase 6), que sí lo lleva.
 
-1. Si la página de Notion existe: `notion-fetch id: "self"` para obtener tu user ID, y
-   `notion-update-page` sobre esa página con `properties: {"Dev": ["<tu user ID>"], "Status": "In Progress"}`.
-   Si el `Status` actual no era `To Do` (ej. ya estaba en otro estado), avisar la discrepancia en el
-   reporte final igual, pero no dejar de avanzar por eso — el pedido del usuario de ejecutar el
+1. Si el issue de Linear existe: `save_issue` con `id: "NIC-{n}"`, `assignee: "me"` y
+   `state: "In Progress"`, y actualizar el `**Dev:**` de la cabecera de la `description` con tu
+   nombre real (`patch`; nombres y emails en la tabla "Equipo" de
+   [`linear-board.md`](../Tefinha-crea-tickets/references/linear-board.md)). Si el issue ya tiene
+   **otro** assignee, no pisarlo: preguntar al usuario antes de reasignarlo, porque es trabajo de
+   otra persona del equipo. Si el estado actual no era `To Do`/`Backlog` (ej. ya estaba en otro
+   estado), avisar la discrepancia en el reporte final igual, pero no dejar de avanzar por eso — el pedido del usuario de ejecutar el
    ticket ya es la confirmación de que corresponde ponerlo en progreso.
 2. Confirmar que el working tree está limpio (`git status`) antes de crear rama — si hay cambios
    sin commitear de otra tarea, avisar y no pisarlos.
@@ -157,9 +165,9 @@ del PR, QA, el yo del futuro— pueda validar el cambio sin releer el ticket ent
 directamente de lo que se ejecutó de verdad en la Fase 4 (no inventar pasos hipotéticos ni
 copiar la tabla de QA tal cual si no se corrió así) — típicamente: cómo levantar la app
 ([[Start-Honeycomb]]), qué acción puntual dispara el comportamiento, y qué resultado esperar. Esta
-lista se reutiliza en la Fase 6, tanto en el mensaje de commit como en el comentario de Notion.
+lista se reutiliza en la Fase 6, tanto en el mensaje de commit como en el comentario de Linear.
 
-## Fase 6 — Cierre: gates de confirmación (git y Notion)
+## Fase 6 — Cierre: gates de confirmación (git y Linear)
 
 Todo lo de esta fase es visible para el equipo o difícil de revertir — a diferencia de la
 autoasignación de la Fase 0.5, **cada paso siguiente lleva su propio gate explícito**, incluso si
@@ -175,22 +183,32 @@ el usuario ya aprobó el paso anterior:
 2. **Gate 2 — antes de `git push`.** Aunque el commit ya se haya aprobado, pedir confirmación
    aparte antes de pushear — pushear a un branch remoto ya es visible para el equipo. Nunca asumir
    que "commit aprobado" implica "push aprobado".
-3. **Gate 3 — PR y Notion**, después de un push exitoso:
+3. **Gate 3 — PR y Linear**, después de un push exitoso:
    - Preguntar si se crea el Pull Request (rama `gs/us-{NN}-...` contra `main`; recordar que `main`
      tiene branch protection y no acepta push directo, así que un PR es obligatorio para mergear).
      Si no hay `gh` CLI autenticado disponible, dar el link directo de creación de PR que devuelve
      `git push` (`https://github.com/Gary-Sanchez/TheHoneycomb/pull/new/<rama>`) en vez de
      inventar uno. Al redactar la descripción del PR, reusar los mismos "Pasos para testear la
      solución" en su sección de test plan.
-   - Preguntar si se deja un **comentario en la página de Notion del ticket** (`notion-create-comment`)
-     con los mismos "Pasos para testear la solución" — así alguien de QA que solo mira Notion (no
+   - Si se creó el PR, agregar su link al issue (`save_issue` con
+     `links: [{url: <URL del PR>, title: "PR #<n>"}]`) — es solo un vínculo, va junto con el sí al PR.
+   - Preguntar si se deja un **comentario en el issue de Linear** (`save_comment` sobre `NIC-{n}`)
+     con los mismos "Pasos para testear la solución" — así alguien de QA que solo mira Linear (no
      el PR ni el commit) sabe cómo validar sin pedirlo por chat. Es una acción visible para el
      equipo igual que las anteriores, así que lleva el mismo gate: no postear sin un sí explícito.
-   - Preguntar si se pasa el `Status` del ticket en Notion a `QA Ready` (ver
-     [`notion-board.md`](../Tefinha-crea-tickets/references/notion-board.md)) — solo si la página
-     ya existe. Recién con un sí explícito, actualizar la página; si no hay confirmación clara,
-     dejarlo como está y avisar que queda pendiente a mano.
+   - Preguntar si se pasa el issue a `QA Ready` (ver
+     [`linear-board.md`](../Tefinha-crea-tickets/references/linear-board.md)) — solo si el issue
+     existe y el estado `QA Ready` existe en el team (`list_issue_statuses`; si falta, avisar que
+     hay que crearlo en Linear en vez de usar otro estado). Recién con un sí explícito, actualizar
+     el issue; si no hay confirmación clara, dejarlo como está y avisar que queda pendiente a mano.
+     El `assignee` sigue siendo el Dev (vos): no reasignar a QA — quien testee se anota en la
+     cabecera `**QA:**` (lo hace super-tefinha-QA). Si el usuario ya sabe quién va a hacer QA, se
+     puede preguntar si se anota en la cabecera en el mismo paso.
+
+Si en cualquier fase aparece un bloqueo externo real (dependencia de otro ticket, acceso, decisión
+de negocio pendiente), proponer mover el issue a `Blocked` con un comentario explicando el motivo —
+con el mismo tipo de gate (sí explícito), porque es visible para el equipo.
 
 No agrupar estos gates en una sola pregunta genérica ("¿aviso todo?") — son decisiones distintas y
 el usuario puede querer, por ejemplo, el commit local ya pero el push todavía no, o el PR sí pero
-el comentario en Notion no.
+el comentario en Linear no.

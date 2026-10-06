@@ -41,8 +41,9 @@ con placeholders `{...}` a rellenar. Sigue ese orden de secciones sin agregar ni
 **Encabezado y Prioridad**
 `# US-{NN}: {Título}` como H1, y en la línea siguiente `**Prioridad:** 🔴 Alta` (o 🟡 Media / 🟢
 Baja). El número de ticket lo indica el usuario; si no lo da, preguntá o usá el siguiente
-correlativo disponible (revisá si hay otros archivos `US-*.md`/`US-*.txt` en la raíz del proyecto
-para no repetir un número).
+correlativo disponible — revisá tanto los archivos `US-*.md`/`US-*.txt` de la carpeta padre del
+repo como los títulos de los issues del proyecto **The Honeycomb** en Linear (`list_issues`), y
+tomá el siguiente al mayor `US-{NN}` de ambos para no repetir un número.
 
 **Historia de Usuario**
 Bajo el encabezado `## 📝 Historia de Usuario`, formato de cita (`>`) de tres líneas con el rol y
@@ -81,13 +82,14 @@ carpeta padre de este repositorio, no la raíz del repo), nombrado `US-{NN} {Tí
 salvo que el usuario pida otra cosa. Mostrá también el contenido completo en el chat — es el paso
 previo obligatorio al gate de abajo, no un extra.
 
-## 🚧 Gate de verificación humana antes de subir a Notion
+## 🚧 Gate de verificación humana antes de subir a Linear
 
-El tablero de destino es **The Honeycomb Board** en Notion — ver
-[`references/notion-board.md`](references/notion-board.md) para su URL, esquema (`Name`,
-`Status`) y cómo mapear un ticket a una página. Es un tablero compartido por varias personas: una
-vez que una historia queda ahí, cualquiera del equipo la ve y puede empezar a trabajar sobre ella.
-Por eso nunca se crea una página en ese tablero como parte del mismo paso en el que se redacta el
+El tablero de destino es el proyecto **The Honeycomb** en Linear (team `Nicky Arias`) — ver
+[`references/linear-board.md`](references/linear-board.md) para su URL, el flujo de estados y cómo
+mapear un ticket a un issue. El board de Notion (The Honeycomb Board) quedó solo como histórico:
+no crear páginas ahí. Es un tablero compartido por varias personas: una vez que una historia queda
+ahí, cualquiera del equipo la ve y puede empezar a trabajar sobre ella.
+Por eso nunca se crea un issue en ese proyecto como parte del mismo paso en el que se redacta el
 ticket, sin importar cómo esté redactado el pedido original ("armá y subí el ticket de X", "creá
 todas las historias que falten"). Redactar y subir son dos pasos separados con una aprobación
 explícita en el medio.
@@ -95,21 +97,22 @@ explícita en el medio.
 **El flujo es siempre:**
 
 1. Redactar el/los ticket(s) siguiendo la estructura de este SKILL.md.
-2. Mostrar el contenido completo en el chat, tal cual va a quedar en Notion (título + cuerpo).
+2. Mostrar el contenido completo en el chat, tal cual va a quedar en Linear (título + cuerpo), junto
+   con la prioridad y el label que se le van a poner.
 3. **Preguntar explícitamente** si se sube al tablero — algo como: *"¿Confirmás que subo esta
-   historia a **The Honeycomb Board** en Notion con Status `To Do`?"* — y esperar una respuesta
+   historia al proyecto **The Honeycomb** en Linear con estado `To Do`?"* — y esperar una respuesta
    afirmativa clara (ej. "sí", "dale, subila", "confirmado"). Si la respuesta es ambigua, edita el
    ticket, o simplemente no contesta que sí, no se sube: se vuelve a preguntar o se ajusta el
    borrador.
-4. Recién ahí llamar a la herramienta de creación de páginas de Notion, usando el mapeo de
-   `references/notion-board.md`.
-5. Confirmar en el chat que la página se creó, con el link a la página nueva.
+4. Recién ahí crear el issue con `save_issue` del MCP de Linear, usando la sección "Cómo crear un
+   issue nuevo" de `references/linear-board.md`.
+5. Confirmar en el chat que el issue se creó, con su identificador (`NIC-{n}`) y el link.
 
 **Por qué este orden y no otro:**
 
 - La confirmación es la única oportunidad de detectar un error antes de que quede visible para
-  todo el equipo — una vez creada la página, corregirla implica editarla en Notion o dejar un
-  rastro de idas y vueltas en el historial de la página.
+  todo el equipo — una vez creado el issue, corregirlo implica editarlo en Linear o dejar un
+  rastro de idas y vueltas en el historial del issue.
 - La aprobación es **por ticket o por tanda mostrada en ese momento**, no una autorización general
   para el resto de la conversación. Si el usuario aprobó subir un ticket antes, eso no autoriza a
   subir el siguiente sin volver a mostrarlo y preguntar — cada ticket nuevo pasa por el mismo gate,
