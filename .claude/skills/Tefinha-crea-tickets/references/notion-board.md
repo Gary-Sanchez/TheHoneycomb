@@ -1,5 +1,8 @@
 # Tablero de Notion: The Honeycomb Board
 
+> ⚠️ **Histórico.** Desde el 2026-10-05 los tickets viven en Linear — ver
+> [`linear-board.md`](linear-board.md). Honeycomb-executor y super-tefinha-QA ya no usan este board.
+
 - **URL:** https://app.notion.com/p/24fea5f14da54b248862418052185c36
 - **Tipo:** Database de Notion (ya conectada por MCP, no requiere autenticación adicional).
 - **Data source (para crear páginas):** `collection://8cc326dd-ee75-415d-a78a-951a0cc146e7`
