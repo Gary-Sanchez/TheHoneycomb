@@ -1,6 +1,7 @@
 # Documento de Requisitos de Producto (PRD): The Honeycomb 4.0
 
 > **Versión:** 4.0 (borrador) · **Base:** PRD The Honeycomb 3.0 (criterios cumplidos) · **Fecha:** 2026-10-06
+> · **Actualizado:** 2026-10-07 con lo que entra al 4.0 de la Auditoría UX/UI (`UX-UI-AUDIT-2026-10-07.pdf`)
 
 ## 1. Visión General del Producto y Objetivos
 
@@ -17,7 +18,9 @@ datos y en **simplificar la carga**:
   el título de la reunión), sin tener que elegirla antes de subir;
 - **Caserits & Progress** muestra porcentajes de asistencia reales;
 - la app genera un **reporte de resultados** (Outcome Report) con los colegas más activos de cada
-  actividad y los colegas de cada Hive Status, para todo el historial o para un periodo.
+  actividad y los colegas de cada Hive Status, para todo el historial o para un periodo;
+- todas las pestañas muestran **los mismos números y las mismas etiquetas** para un mismo colega, y
+  los textos de la interfaz usan **un único vocabulario**.
 
 > **¿Por qué 4.0 y no 3.1?** Esta versión cambia la forma de trabajar: la carga de archivos deja de
 > tener pestañas por actividad, los lotes pueden mezclar actividades, el Dashboard se rediseña y los
@@ -42,11 +45,27 @@ datos y en **simplificar la carga**:
    todos los `Dormant`), para todo el historial o para un periodo específico.
 6. **Lotes de hasta 50 archivos (improvement).** La carga múltiple de `.csv` pasa de 20 a 50 archivos
    por lote, ya que un lote puede mezclar actividades.
+7. **Textos y terminología unificados (improvement).** Un glosario y un verbo por acción, y se
+   corrigen los errores de redacción detectados por la auditoría UX/UI (§2.9).
+8. **Interfaz nueva accesible (improvement).** Los componentes que agrega esta versión cumplen
+   requisitos mínimos de accesibilidad y consistencia (§2.8).
 
 ### 1.3. 🐞 Corrección de Bugs
 
 - **BUG-03: el Progress Report muestra tasas de casi 100 %.** Usa el mismo cálculo incorrecto que
-  Caserits & Progress. Detalle en §2.6.
+  Caserits & Progress. Además, solo muestra los meses abril–junio y dice que las notas se guardan
+  "localmente". Detalle en §2.6.
+- **BUG-04: tres escalas de rendimiento distintas.** Caserits & Progress y el Progress Report usan
+  una escala 90/75 (`Excellent Performance`, `Good Standing`, `Needs Support`) que contradice el
+  Hive Status del Bee-havior Hub.
+- **BUG-05: "Multi-activity" cuenta ausencias en el Overlap Cross-Referencer.** Un colega aparece
+  en una actividad a la que solo faltó.
+- **BUG-06: un colega sin datos aparece como `Dormant`.** Sin eventos contra los que calcular, se le
+  asigna el tier más bajo en lugar de indicar que no hay datos.
+- **BUG-07: el KPI `Avg. Attendance` del Dashboard da casi 100 %.** Usa `presentes ÷ registros`, el
+  mismo cálculo incorrecto de BUG-03.
+
+> BUG-04 a BUG-07 vienen de la auditoría UX/UI del 2026-10-07 (hallazgos D1, D3, D6 y D2).
 
 > Este PRD puede sumar más bugs encontrados durante la versión. Se agregarán en §2.6 a medida que
 > se reporten.
@@ -146,8 +165,8 @@ cierra con un clic. Todos respetan el periodo de §2.1.
   `Writing Hood`. Se mantiene el criterio de US-27 para no confundir palabras sueltas (ej. "email",
   "book").
 - Si el nombre (o el título, cuando corresponde) nombra **más de una** actividad, o **ninguna**, el
-  archivo queda marcado como `Activity not detected` en la vista previa.
-- Un archivo `Activity not detected` muestra en la vista previa un **selector de actividad** con las
+  archivo queda marcado como `Activity Not Detected` en la vista previa.
+- Un archivo `Activity Not Detected` muestra en la vista previa un **selector de actividad** con las
   4 actividades, para elegirla a mano (D-4). La actividad elegida se aplica a todos los registros de
   ese archivo.
 - La vista previa **Review Extracted Records** muestra, para cada archivo, la actividad y de dónde
@@ -229,7 +248,8 @@ Un reporte descargable con los resultados de asistencia, para compartir o archiv
   el reporte lo indica (ej. `Only 3 colleagues attended Reading Club in this period`).
 - **Hive Status:** se usa el tier calculado con el **Overall** del periodo, igual que en el
   Bee-havior Hub. Como la inscripción no depende del periodo (D-1), un colega inscrito que no
-  asistió a nada en el periodo aparece como `Dormant` (0%).
+  asistió a nada en el periodo aparece como `Dormant` (0%). Un colega `No data` (BUG-06) no aparece
+  en ningún tier.
 - Una actividad sin eventos en el periodo aparece en el reporte con el aviso
   `No events in this period`.
 - La blacklist y el filtro de menos de 10 minutos ya se aplicaron al importar, así que esas personas
@@ -294,12 +314,83 @@ siempre muestra `100%`. Afecta a:
 
 **Comportamiento esperado.**
 
-- **Overall Engagement** muestra el **Overall** del colega (§1.5), el mismo valor que su **Overall**
-  en el Bee-havior Hub con **All time** y su **Attendance Rate** en **Caserits & Progress**.
+- **Overall Engagement** (que pasa a llamarse **Attendance Rate**, §2.9) muestra el **Overall** del
+  colega (§1.5), el mismo valor que su **Overall** en el Bee-havior Hub con **All time** y su
+  **Attendance Rate** en **Caserits & Progress**.
 - El desglose por actividad muestra la tasa basada en eventos (§1.5): `eventos asistidos ÷ total de
   eventos de la actividad`, con la fracción como ayuda (ej. `Attended 3 of 8 events`).
 - En una actividad no inscrita, el desglose muestra `—`.
 - El cálculo se reutiliza de `src/beehavior.ts`, igual que en §2.4.
+
+**También en el Progress Report** (detectado en la auditoría UX/UI):
+
+- La evolución mensual está fija en abril, mayo y junio (`["04","05","06"]`), así que descarta los
+  registros de otros meses. Debe mostrar **los meses que tengan registros**, igual que
+  **Attendance Trends** en §2.2.
+- El texto `Notes are saved locally on this device.` es incorrecto, porque las notas se guardan en el
+  servidor. Pasa a decir `Notes are saved to The Honeycomb server.`
+
+#### 🐞 BUG-04: tres escalas de rendimiento distintas
+
+**Comportamiento actual (incorrecto).** El Bee-havior Hub clasifica a cada colega por **Hive Status**
+(0–25 / 26–50 / 51–75 / 76–100). Caserits & Progress (color del porcentaje) y el Progress Report
+(etiqueta y color) usan otra escala: `≥ 90` `Excellent Performance`, `≥ 75` `Good Standing` y el
+resto `Needs Support`, más `Unlogged` sin registros. Un colega con 70 % es `Needs Support` en el
+modal y `Forager` en el Hub.
+
+**Comportamiento esperado.**
+
+- Hay **una sola escala**: Hive Status (`Dormant`, `Hatcher`, `Forager`, `Busy Bee`), con la misma
+  función `getHiveTier` de `src/beehavior.ts`.
+- **Caserits & Progress** y el **Progress Report** muestran el Hive Status del colega (con su Overall
+  de **All time**), con la **misma etiqueta y los mismos colores** que el Bee-havior Hub.
+- Se eliminan `Excellent Performance`, `Good Standing`, `Needs Support` y sus descripciones.
+- Un colega sin datos sigue la regla de BUG-06.
+
+#### 🐞 BUG-05: "Multi-activity" cuenta ausencias en el Overlap Cross-Referencer
+
+**Comportamiento actual (incorrecto).** El Overlap Cross-Referencer considera que un colega
+participa en una actividad si tiene **cualquier** registro en ella, incluso `absent`. El Dashboard y
+`src/beehavior.ts` solo cuentan registros `present`. Las dos vistas pueden mostrar cantidades
+distintas de colegas multi-actividad, y el Cross-Referencer puede marcar una actividad a la que el
+colega solo faltó.
+
+**Comportamiento esperado.**
+
+- "Participar en una actividad" significa **estar inscrito** (al menos un `present`, §1.5), en todas
+  las vistas.
+- El filtro (`Single`, `Multi-Activity`, `Super Active`), los contadores, la matriz y la comparación
+  entre dos actividades del Cross-Referencer usan **el mismo cálculo** que el Bee-havior Hub, desde
+  `src/beehavior.ts`.
+
+#### 🐞 BUG-06: un colega sin datos aparece como `Dormant`
+
+**Comportamiento actual (incorrecto).** Cuando un colega no tiene eventos contra los que calcular
+(Overall vacío), `src/beehavior.ts` le asigna el tier de `0 %` (`getHiveTier(overallRate ?? 0)`):
+aparece como `Dormant`.
+
+**Comportamiento esperado.**
+
+- Sin Overall calculable, el Hive Status muestra `No data` (en gris, sin color de tier) y el
+  porcentaje muestra `—`.
+- Se distinguen dos casos:
+  - **inscrito que no asistió a ningún evento del periodo** (las actividades sí tuvieron eventos):
+    `0 %` y `Dormant` (D-1);
+  - **sin eventos contra los que calcular** (no inscrito en nada, o sus actividades no tuvieron
+    eventos en el periodo): `No data`.
+- En el Outcome Report, los colegas `No data` no aparecen en ningún bloque (§2.5).
+
+#### 🐞 BUG-07: el KPI `Avg. Attendance` del Dashboard da casi 100 %
+
+**Comportamiento actual (incorrecto).** El KPI se calcula como `presentes ÷ registros`. Como los
+`.csv` solo traen asistentes, da casi siempre `100%`. El subtítulo muestra `Based on N records`.
+
+**Comportamiento esperado.**
+
+- El KPI pasa a llamarse `Avg. Attendance Rate` (§2.9) y muestra el **promedio del Overall** de los
+  colegas que tienen Overall en el periodo (se excluyen los `No data`).
+- El subtítulo indica la base del cálculo, ej. `Average of 24 colleagues`.
+- Respeta el periodo de §2.1 y coincide con el promedio de la columna **Overall** del Bee-havior Hub.
 
 ### 2.7. Restricciones técnicas (se mantienen de versiones anteriores)
 
@@ -307,6 +398,127 @@ siempre muestra `100%`. Afecta a:
 - Toda ruta nueva que modifique datos usa `requireAdmin` y `validateBody`. El filtro por periodo y
   los paneles son de solo lectura y no necesitan rutas nuevas.
 - La fecha de referencia del sistema sigue fija en el **24 de junio de 2026**.
+
+### 2.8. Requisitos de interfaz para los componentes nuevos
+
+La auditoría UX/UI encontró fallas de accesibilidad y consistencia en toda la app. Su corrección
+general queda para la versión 4.1 (§4). En esta versión, **todo componente nuevo o reescrito** debe
+cumplir lo siguiente, para no sumar deuda:
+
+- **Selector de periodo (§2.1):** cada fecha tiene un `label` asociado (`htmlFor`/`id`), y el aviso
+  de rango inválido usa `role="alert"` y queda ligado al campo con `aria-describedby`.
+- **Paneles desplegables (§2.2):** el encabezado de cada panel es un `<button>` con `aria-expanded`
+  y `aria-controls`, y funciona con teclado (Enter / Espacio).
+- **Gráficos de los paneles (§2.2):**
+  - el eje de porcentajes va de `0` a `100` con `%`;
+  - un intervalo sin eventos se muestra como sin datos, no como `0 %`;
+  - la leyenda refleja las series reales;
+  - cada gráfico tiene `role="img"` y un `aria-label` que resume el dato.
+- **Panel del Outcome Report (§2.5):**
+  - es un diálogo real: `role="dialog"`, `aria-modal` y `aria-labelledby`;
+  - el foco entra al abrir y vuelve al botón al cerrar;
+  - Escape y el botón de cierre lo cierran;
+  - la página de fondo no hace scroll mientras está abierto.
+- **Selector de actividad del importador (§2.3):** tiene `label` visible o `aria-label` que nombra
+  el archivo.
+- **Lote de hasta 50 archivos (§2.3):** cada grupo colapsable usa el mismo patrón que los paneles
+  (`aria-expanded`). El resultado de la carga se anuncia en una región `aria-live`.
+- **Para todo lo nuevo:**
+  - texto con información de **12 px como mínimo**;
+  - contraste de texto **≥ 4.5:1** (y ≥ 3:1 para bordes de controles), así que no se usan sage ni
+    sand como color de texto sobre fondos claros;
+  - botones solo-ícono con `aria-label`;
+  - foco visible por teclado;
+  - los badges de Hive Status usan el `textColor` de `src/beehavior.ts`, no `color`.
+
+### 2.9. Textos y terminología
+
+Los textos de la interfaz se unifican con un glosario. Todos los textos nuevos de esta versión lo
+siguen. El alcance es **corregir errores de redacción** y **usar un solo término por concepto**.
+**No se renombran** las pestañas ni el vocabulario propio de la marca (`Import Forage Logs`,
+`Caserits & Progress`, `Overlap Cross-Referencer`, `Extract the Buzz`, `Hive Status` y sus tiers,
+`Confirm & Import Caserits`) (D-15).
+
+**Glosario**
+
+| Concepto | Término | Regla |
+|---|---|---|
+| Persona | **Caserits** / **colleague(s)** | `Caserits` en títulos, pestañas y nombres de sección (marca); `colleague` / `colleagues` en frases y botones. No se usan `attendees` ni `participants` en la interfaz (D-14). |
+| Crear un colega | **Add** | `Add Colleague`; `Add & Check In` se mantiene (agrega y registra en un paso). |
+| Cerrar un formulario sin guardar | **Cancel** | — |
+| Quitar una fila de la vista previa (aún no guardada) | **Remove** | — |
+| Descartar toda la vista previa del importador | **Discard** | Pide confirmación si hay filas revisadas. |
+| Borrar algo guardado (irreversible) | **Delete** | Siempre con confirmación que nombra al colega y avisa que también se borran sus registros y notas. |
+| Tasa de un colega | **Attendance Rate** | Es su Overall (§1.5). |
+| Registros | **attendance records** | En lugar de `logs` / `entries`. `present` / `absent` como estados. |
+| Sesión de una actividad | **event** | Las fracciones dicen `X of Y events`, nunca `days`. |
+| 2 o más actividades | **Multi-Activity** | 3 o más: **Super Active**. |
+| Importador | **Smart Doc Parser** | Un solo nombre para el título y la tarjeta del Dashboard. |
+
+**Mayúsculas y puntuación**
+
+- **Title Case** en pestañas, títulos, botones, labels de campo y badges. **Sentence case** en
+  mensajes, ayudas, tooltips, placeholders y estados vacíos (D-16).
+- Elipsis con `…` (un carácter), no `...`.
+- Rangos con guion largo y sin repetir `%`: `Hatcher (26–50%)`.
+- Sin `!` en mensajes de éxito.
+- Plurales correctos según la cantidad (`1 colleague` / `2 colleagues`), con un helper único.
+- Fechas en pantalla con el formato `Jun 24, 2026` (un solo formateador). La fecha del header sale de
+  `REFERENCE_DATE`, no de un texto fijo. En archivos generados y nombres de archivo se usa ISO
+  (`2026-06-24`).
+- Errores con **qué pasó + qué hacer**. No se muestran mensajes técnicos crudos (stack, código HTTP,
+  JSON). Los mensajes del servidor ya escritos para el usuario (ej. archivo ya importado, US-26 /
+  US-33) se mantienen.
+
+**Cambios de texto**
+
+| Pantalla | Texto actual | Texto nuevo |
+|---|---|---|
+| Manual Check-In | `Quick Add Colleague` | `Add Colleague` |
+| Manual Check-In | `Quick Register New Colleague` (título del formulario) | `Add Colleague` |
+| Manual Check-In | `Register Colleague` (botón del formulario) | `Add Colleague` |
+| Manual Check-In | `Register First Colleague` | `Add First Colleague` |
+| Manual Check-In | `Registered and checked in …` | `Added and checked in …` |
+| Manual Check-In | `Introduce new name (e.g. …)...` | `Enter the colleague's full name…` |
+| Caserits & Progress | `Register New Colleague` | `Add Colleague` |
+| Caserits & Progress | `Add Colleague to Directory` (título del formulario) | `Add Colleague` |
+| Caserits & Progress | `Register Colleague` (botón del formulario) | `Add Colleague` |
+| Caserits & Progress | `Remove Colleague` (tooltip de la papelera) | `Delete Colleague` |
+| Caserits & Progress | `(x/y days)` | `(x of y events)` |
+| Caserits & Progress | `No Logs` | `No attendance yet` |
+| Caserits & Progress | `Search colleagues by name or email...` | `Search colleagues by name or email…` |
+| Dashboard | `Avg. Attendance` · `Based on N records` | `Avg. Attendance Rate` · `Average of N colleagues` (BUG-07) |
+| Dashboard | `Inter-Activity Hub` | `Multi-Activity Caserits` |
+| Dashboard | `Multi-Activity?` (columna del Hub) | `Multi-Activity` |
+| Dashboard | `Dormant (0% - 25%)` y demás tiers | `Dormant (0–25%)`, `Hatcher (26–50%)`, `Forager (51–75%)`, `Busy Bee (76–100%)` |
+| Dashboard | `No Caserits found matching your search query.` (también con 0 colegas) | Con búsqueda: `No colleagues match your search.` · Sin colegas: `No colleagues yet.` |
+| Overlap Cross-Referencer | `Multi-Activity Overlap` | `Multi-Activity` |
+| Overlap Cross-Referencer | `Super Active Overlap` | `Super Active` |
+| Overlap Cross-Referencer | `Overlap (2+)` (filtro) | `Multi-Activity (2+)` |
+| Overlap Cross-Referencer | `Interactive Overlap Cross-Referencer` (título) | `Compare Two Activities` |
+| Overlap Cross-Referencer | `No colleagues have registered attendance in both activities yet.` | `No colleagues attended both activities yet.` |
+| Import Forage Logs | `Smart Document Parser` (título) | `Smart Doc Parser` |
+| Import Forage Logs | `Analyzing document semantics and isolating attendance logs...` | `Detecting attendance rows…` |
+| Import Forage Logs | `Compiling File Data...` | `Reading File…` |
+| Import Forage Logs | `N attendees` · `N attendees excluded (less than 10 minutes)` | `N colleague(s)` · `N colleague(s) excluded (under 10 minutes)` |
+| Import Forage Logs | `New Colleague (Registered)` | `New Colleague` (se registra al confirmar) |
+| Import Forage Logs | `Existing Colleague Linked` (texto plano) | badge `Existing Colleague`, con el mismo estilo que `New Colleague` |
+| Import Forage Logs | `Needs review` · `Not a duplicate` · `Hide excluded` | `Needs Review` · `Not a Duplicate` · `Hide Excluded` |
+| Import Forage Logs | `Remove item` | `Remove Row` |
+| Import Forage Logs | `Import Successful!` · `Successfully registered N new attendance logs and registered any new colleagues.` | `Import Complete` · `Imported N new attendance records.` (+ `Added N new colleagues.` si corresponde) |
+| Progress Report | `Overall Engagement` · `Present Rate` | `Attendance Rate` (sin etiqueta secundaria) |
+| Progress Report | `Presents` · `Absents` | `Present` · `Absent` |
+| Progress Report | `Unlogged` · `No attendance recorded yet.` · `No attendance records logged yet` · `No attendance logged yet.` | `No attendance yet` |
+| Progress Report | `Notes are saved locally on this device.` | `Notes are saved to The Honeycomb server.` (BUG-03) |
+| General | `Loading The Honeycomb...` | `Loading The Honeycomb…` |
+
+> **Textos nuevos de esta versión.** Siguen el glosario: el badge del importador es
+> `Activity Not Detected` (Title Case por ser badge), y las etiquetas de origen (`from file name`,
+> `from meeting title`, `selected manually`) y los estados vacíos (`No events in this period`) van en
+> sentence case.
+
+> **Guía de uso (`.docx`).** Cita los textos de la interfaz de forma literal. Al cerrar esta versión
+> se actualiza con los textos nuevos de esta tabla y de las secciones §2.1–§2.5.
 
 ---
 
@@ -327,11 +539,11 @@ siempre muestra `100%`. Afecta a:
 | **TC-35** | Doc Parser | Se abre **Import Forage Logs**. | No aparecen las pestañas **Select Activity Import Log**. |
 | **TC-36** | Doc Parser | `.csv` llamado `Music Room - Attendance report 6-24-26.csv` con `Meeting title: Reading Club`. | Se registra en Music Room (prioriza el nombre), con la etiqueta `from file name`. |
 | **TC-37** | Doc Parser | `.csv` llamado `attendance-6-24.csv` con `Meeting title: Reading Club – Session 12`. | Se registra en Reading Club, con la etiqueta `from meeting title`. |
-| **TC-38** | Doc Parser | `.csv` cuyo nombre y título no nombran ninguna actividad (ej. `Weekly sync.csv`). | Se marca `Activity not detected`, aparece el selector de actividad y **Confirm & Import Caserits** queda deshabilitado hasta elegir una. |
-| **TC-39** | Doc Parser | Se elige **Writing Hood** en el selector de un archivo `Activity not detected` y se confirma. | Todos sus registros se guardan en Writing Hood, con la etiqueta `selected manually`. |
-| **TC-40** | Doc Parser | `.docx` llamado `Speakeasy 2026-06-24.docx`. | Se registra en Speakeasy. Un `.xlsx` sin actividad en el nombre se marca `Activity not detected`, aunque su contenido mencione una. |
+| **TC-38** | Doc Parser | `.csv` cuyo nombre y título no nombran ninguna actividad (ej. `Weekly sync.csv`). | Se marca `Activity Not Detected`, aparece el selector de actividad y **Confirm & Import Caserits** queda deshabilitado hasta elegir una. |
+| **TC-39** | Doc Parser | Se elige **Writing Hood** en el selector de un archivo `Activity Not Detected` y se confirma. | Todos sus registros se guardan en Writing Hood, con la etiqueta `selected manually`. |
+| **TC-40** | Doc Parser | `.docx` llamado `Speakeasy 2026-06-24.docx`. | Se registra en Speakeasy. Un `.xlsx` sin actividad en el nombre se marca `Activity Not Detected`, aunque su contenido mencione una. |
 | **TC-41** | Doc Parser | Lote de 5 `.csv`: 3 de Speakeasy y 2 de Music Room. | El lote no se rechaza; cada archivo se registra en su actividad. |
-| **TC-42** | Doc Parser | Archivo cuyo nombre nombra dos actividades. | Se marca `Activity not detected`. |
+| **TC-42** | Doc Parser | Archivo cuyo nombre nombra dos actividades. | Se marca `Activity Not Detected`. |
 | **TC-43** | Doc Parser | Lote de 50 `.csv` de las 4 actividades. | Se aceptan los 50; la vista previa los agrupa por archivo y cada uno se registra en su actividad al confirmar. |
 | **TC-44** | Doc Parser | Se seleccionan 51 `.csv`. | Se rechaza la selección completa con el mensaje del máximo de 50. |
 | **TC-45** | Doc Parser | Se envían 51 `.csv` directo a `POST /api/parse-attendance-batch`, sin usar la interfaz. | El servidor rechaza el lote. |
@@ -350,8 +562,23 @@ siempre muestra `100%`. Afecta a:
 | **TC-58** | Outcome Report | Se abre el panel sin elegir ningún bloque. | **Download Report** queda deshabilitado. |
 | **TC-59** | Outcome Report | Se descarga el reporte de un **Custom range** y el de **All time**. | Los archivos se llaman `honeycomb-outcome-report_2026-10-06_2026-11-20.txt` y `honeycomb-outcome-report_all-time.txt`, y el encabezado muestra periodo, fecha de generación y criterios. |
 | **TC-60** | Outcome Report | Los porcentajes del reporte se comparan con el Bee-havior Hub, con el mismo periodo. | Coinciden. |
-| **TC-61** 🐞 | Progress Report (BUG-03) | Se abre el **Progress Report** de un colega con 1/8 en Speakeasy y 2/4 en Writing Hood. | **Overall Engagement** muestra `25%`, igual que su **Attendance Rate** en Caserits & Progress. |
+| **TC-61** 🐞 | Progress Report (BUG-03) | Se abre el **Progress Report** de un colega con 1/8 en Speakeasy y 2/4 en Writing Hood. | El KPI (antes **Overall Engagement**, ahora **Attendance Rate**) muestra `25%`, igual que su **Attendance Rate** en Caserits & Progress. |
 | **TC-62** 🐞 | Progress Report (BUG-03) | Mismo colega, desglose por actividad. | Speakeasy muestra `13%` (`Attended 1 of 8 events`), Writing Hood `50%`, y Reading Club y Music Room `—`. |
+| **TC-63** 🐞 | Progress Report (BUG-03) | Un colega tiene registros de enero a junio de 2026. | La evolución mensual muestra los 6 meses, no solo abril a junio. |
+| **TC-64** 🐞 | Progress Report (BUG-03) | Se abre el Progress Report con sesión de admin. | El texto de las notas dice `Notes are saved to The Honeycomb server.` |
+| **TC-65** 🐞 | Escala única (BUG-04) | Un colega tiene 70 % de Overall. | Caserits & Progress, Progress Report y Bee-havior Hub muestran `Forager`, con la misma etiqueta y los mismos colores. No aparece `Needs Support` en ninguna vista. |
+| **TC-66** 🐞 | Escala única (BUG-04) | Se buscan en la app los textos `Excellent Performance`, `Good Standing` y `Needs Support`. | No aparecen. |
+| **TC-67** 🐞 | Multi-activity (BUG-05) | Un colega tiene `present` en Speakeasy y solo `absent` en Music Room. | El Overlap Cross-Referencer lo cuenta como `Single`, no como `Multi-Activity`, y la matriz no marca Music Room. Los contadores coinciden con el Dashboard. |
+| **TC-68** 🐞 | Sin datos (BUG-06) | Un colega registrado no tiene ningún `present`. | El Bee-havior Hub muestra `—` y `No data` (no `Dormant`), y no aparece en el Outcome Report. |
+| **TC-69** 🐞 | Sin datos (BUG-06) | Un colega inscrito solo en Writing Hood; se elige un periodo sin eventos de Writing Hood. | Muestra `No data`. Si Writing Hood tuvo eventos en el periodo y no asistió, muestra `0%` y `Dormant`. |
+| **TC-70** 🐞 | KPI (BUG-07) | Se abre el Dashboard con colegas de distintas tasas. | El KPI se llama `Avg. Attendance Rate`, no muestra `100%` por defecto y coincide con el promedio de la columna **Overall** del Hub para el mismo periodo. |
+| **TC-71** | Interfaz nueva (§2.8) | Se recorre con Tab el selector de periodo, los paneles desplegables y el panel del Outcome Report. | Todo se alcanza y se opera con teclado, con foco visible. Los paneles exponen `aria-expanded`. |
+| **TC-72** | Interfaz nueva (§2.8) | Se abre el panel del Outcome Report y se pulsa Escape. | El panel se cierra y el foco vuelve a **Generate Outcome Report**. Mientras está abierto, la página de fondo no hace scroll. |
+| **TC-73** | Interfaz nueva (§2.8) | Se mide el texto de los componentes nuevos. | Ningún texto con información mide menos de 12 px, y el contraste del texto es ≥ 4.5:1. |
+| **TC-74** | Textos (§2.9) | Se recorren las pantallas de la tabla de cambios de texto. | Cada texto actual de la tabla fue reemplazado por el nuevo, y los nombres de las pestañas no cambiaron. |
+| **TC-75** | Textos (§2.9) | Se importa un `.csv` con un solo colega. | La vista previa dice `1 colleague`, no `1 attendees`. |
+| **TC-76** | Textos (§2.9) | Se busca `...` (tres puntos) en los textos visibles de la interfaz. | No aparece; se usa `…`. |
+| **TC-77** | Textos (§2.9) | Se intenta borrar a un colega desde Caserits & Progress. | La confirmación nombra al colega y avisa que también se borran sus registros de asistencia y sus notas. |
 
 ---
 
@@ -367,6 +594,24 @@ siempre muestra `100%`. Afecta a:
 - Comparar dos periodos lado a lado.
 - Outcome Report en `.pdf`, `.csv` o Excel; enviarlo por correo o programarlo de forma automática.
 - Incluir en el Outcome Report notas de coaching o datos de contacto de los colegas.
+- **De la auditoría UX/UI, queda para la versión 4.1** (no cambia la forma de usar la app, D-17):
+  - sistema de diseño: tokens de color, tipografía, radios, espaciado y z-index, más un lint que
+    prohíba hex arbitrarios y tamaños sueltos;
+  - fuentes servidas desde la propia app en lugar de Google Fonts;
+  - componentes base (Button, Field, Dialog, Tabs, Toast…) y su migración pantalla por pantalla;
+  - arreglos de móvil y tablet (nav oculto, desbordes, tablas recortadas);
+  - accesibilidad de las pantallas existentes (pestañas con ARIA, labels, contraste, foco global);
+  - animaciones definidas y `prefers-reduced-motion`;
+  - branding y empaquetado: `<title>`, favicon, ícono de la app y color de fondo de la ventana de
+    Electron.
+  - Los quick wins de la Fase 0 de la auditoría pueden entrar antes como un PR suelto, sin versión
+    propia.
+- **De la auditoría UX/UI, sin versión asignada** (cambiaría flujos o el vocabulario de marca, así que
+  sería una versión mayor):
+  - renombrar pestañas o términos de marca;
+  - el importador con pasos (Select → Review → Done);
+  - unificar los dos formularios de alta de Manual Check-In;
+  - editar nombres en la vista previa del importador.
 
 ## 5. Decisiones
 
@@ -391,3 +636,21 @@ siempre muestra `100%`. Afecta a:
 - **D-10 (tope de 50 MB por lote):** 50 archivos de 10 MB sumarían hasta 500 MB en la memoria del
   servidor. Los `.csv` de Teams pesan pocos KB, así que un tope de 50 MB por lote no limita el uso
   real y evita que una carga excesiva sature el servidor.
+- **D-11 (una sola escala, BUG-04):** Hive Status es la única escala de rendimiento. La escala
+  90/75 era un resto de una versión anterior y contradice al Hub.
+- **D-12 (participar = asistir, BUG-05):** una actividad cuenta para un colega solo si tiene al
+  menos un `present` en ella, en todas las vistas.
+- **D-13 (sin datos ≠ Dormant, BUG-06):** `Dormant` es para quien tuvo eventos y no asistió. Sin
+  eventos contra los que calcular, el estado es `No data`.
+- **D-14 (Caserits / colleague):** `Caserits` en títulos, pestañas y secciones (marca);
+  `colleague(s)` en frases y botones. Se dejan de usar `attendees` y `participants` en la interfaz.
+- **D-15 (alcance de los textos):** esta versión corrige errores de redacción y unifica términos.
+  No renombra pestañas ni vocabulario de marca: la guía `.docx` está escrita alrededor de ellos.
+  Esta versión ya obliga a adaptarse, así que conviene hacer aquí los cambios de texto en lugar de
+  forzar después otra versión mayor solo por ellos.
+- **D-16 (mayúsculas):** se mantiene Title Case en pestañas, títulos, botones, labels y badges, y
+  sentence case en mensajes. Es la regla mayoritaria hoy y evita cambiar textos que cita el `.docx`.
+- **D-17 (auditoría UX/UI fuera del 4.0):** el sistema de diseño, la accesibilidad de las pantallas
+  existentes, el responsive y el branding van en la versión **4.1**, porque no cambian la forma de
+  usar la app. Mezclarlos con los cambios funcionales del 4.0 multiplicaría el riesgo de
+  regresiones. Lo nuevo del 4.0 ya nace cumpliendo §2.8.
