@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
+import { getAttendedActivities } from "../beehavior";
 import { Check, Users, ShieldAlert, Award, FileSpreadsheet, ArrowRightLeft, Sparkles } from "lucide-react";
 
 interface CrossReferenceHubProps {
@@ -15,19 +16,10 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
   const [compareAct1, setCompareAct1] = useState<string>(ACTIVITIES[0]);
   const [compareAct2, setCompareAct2] = useState<string>(ACTIVITIES[1]);
 
-  // Compute a map of attendee ID to the unique list of activities they have attended
-  const attendeeActivitiesMap = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    attendees.forEach(a => {
-      map[a.id] = [];
-    });
-    records.forEach(r => {
-      if (map[r.attendeeId] && !map[r.attendeeId].includes(r.activity)) {
-        map[r.attendeeId].push(r.activity);
-      }
-    });
-    return map;
-  }, [attendees, records]);
+  // US-43: attendee ID → activities they participate in, i.e. with at least one `present` (an
+  // `absent`-only activity doesn't count). Same definition as the Dashboard and the Bee-havior Hub;
+  // it feeds the filter, the counters, the matrix and the two-activity comparison.
+  const attendeeActivitiesMap = useMemo(() => getAttendedActivities(attendees, records), [attendees, records]);
 
   // Calculations for Multi-Enrollment Analytics based on active participation
   const stats = useMemo(() => {

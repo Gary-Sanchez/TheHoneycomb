@@ -3,6 +3,7 @@ import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import {
   computeBeehavior,
   getActivityEventStats,
+  getAttendedActivities,
   formatAvgAttendees,
   filterRecordsByPeriod,
   formatPeriodLabel,
@@ -10,19 +11,8 @@ import {
   resolvePeriod,
   PeriodFilter,
 } from "../beehavior";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  Cell,
-} from "recharts";
+import { averageOverall, formatAverageBase } from "../dashboardMetrics";
+import DashboardPanels from "./DashboardPanels";
 import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle } from "lucide-react";
 
 interface DashboardStatsProps {
@@ -57,19 +47,9 @@ export default function DashboardStats({
   const periodHasNoEvents = period !== null && records.length === 0;
 
   // 1. Core KPIs
-  // Only activities the colleague actually attended count (Manual Check-In also logs absences)
-  const activitiesAttended = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    attendees.forEach(a => {
-      map[a.id] = [];
-    });
-    records.forEach(r => {
-      if (r.status === "present" && map[r.attendeeId] && !map[r.attendeeId].includes(r.activity)) {
-        map[r.attendeeId].push(r.activity);
-      }
-    });
-    return map;
-  }, [attendees, records]);
+  // US-43: same definition of "participating" as the Overlap Cross-Referencer — at least one present
+  // (Manual Check-In also logs absences, and those don't count)
+  const activitiesAttended = useMemo(() => getAttendedActivities(attendees, records), [attendees, records]);
 
   // All time: the whole directory. With a period: colleagues who attended at least one event in it.
   const totalAttendees = period
@@ -82,32 +62,7 @@ export default function DashboardStats({
     ? Math.round((multiActivityCount / totalAttendees) * 100)
     : 0;
 
-  const overallAttendanceRate = useMemo(() => {
-    if (records.length === 0) return 0;
-    const presents = records.filter(r => r.status === "present").length;
-    return Math.round((presents / records.length) * 100);
-  }, [records]);
-
-  // 2. Monthly Trend Data (April, May, June 2026)
-  const monthlyTrendData = useMemo(() => {
-    const months = ["04", "05", "06"];
-    const monthNames = { "04": "April", "05": "May", "06": "June" };
-
-    return months.map(m => {
-      const monthLogs = records.filter(r => r.date.split("-")[1] === m);
-      const total = monthLogs.length;
-      const presents = monthLogs.filter(r => r.status === "present").length;
-      const rate = total ? Math.round((presents / total) * 100) : 0;
-
-      return {
-        month: monthNames[m as keyof typeof monthNames],
-        "Attendance Rate (%)": rate,
-        "Total Logs": total,
-      };
-    });
-  }, [records]);
-
-  // 3. Activity Comparison Data
+  // 2. Activity Comparison Data
   const activityData = useMemo(() => {
     return ACTIVITIES.map(act => {
       const activeAttendees = attendees.filter(att =>
@@ -136,6 +91,9 @@ export default function DashboardStats({
   // Caserits Bee-havior table (US-24): rates are computed over recorded events, not the colleague's own logs.
   // US-35: it gets every record so enrollment ignores the period; the period only trims the events counted.
   const beehaviorData = useMemo(() => computeBeehavior(attendees, allRecords, period), [attendees, allRecords, period]);
+
+  // US-45: Avg. Attendance Rate = average of the Hub's Overall column; No data colleagues are left out
+  const avgAttendance = useMemo(() => averageOverall(beehaviorData), [beehaviorData]);
 
   // Filtered list of Bee-haviors based on search
   const filteredBeehaviorData = useMemo(() => {
@@ -256,18 +214,16 @@ export default function DashboardStats({
             <CheckCircle2 className="h-6 w-6 text-natural-forest" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance</p>
+            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance Rate</p>
+            <h3 id="kpi-attendance-rate-value" className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
+              {avgAttendance.rate === null ? "—" : `${avgAttendance.rate}%`}
+            </h3>
             {periodHasNoEvents ? (
-              emptyPeriod("kpi-attendance-rate-empty")
+              emptyPeriod("kpi-attendance-rate-empty", "mt-1")
             ) : (
-              <>
-                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-                  {overallAttendanceRate}%
-                </h3>
-                <span className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
-                  Based on {records.length} records
-                </span>
-              </>
+              <span id="kpi-attendance-rate-base" className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
+                {avgAttendance.rate === null ? "No colleagues with an Overall yet" : formatAverageBase(avgAttendance.colleagues)}
+              </span>
             )}
           </div>
         </div>
@@ -550,100 +506,15 @@ export default function DashboardStats({
         )}
       </div>
 
-      {/* Charts Grid - Moved to the bottom of the dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Trend Area Chart */}
-        <div className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-serif font-bold text-[#1A1A1A]">Attendance Trends</h3>
-              <p className="text-xs text-natural-sage font-medium">Percentage of presence logged each month</p>
-            </div>
-            <span className="text-xs font-semibold bg-natural-wheat/50 text-natural-forest border border-natural-border/40 px-3 py-1.5 rounded-full">
-              Q2 Year 2026
-            </span>
-          </div>
-          {periodHasNoEvents ? (
-            emptyPeriod("trend-empty", "h-[300px] flex items-center justify-center")
-          ) : (
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8A9A5B" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#8A9A5B" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12, fontWeight: "bold" }} />
-                <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#2D3E35",
-                    borderRadius: "16px",
-                    border: "1px solid #E9E5D9",
-                    color: "#FDFBF7",
-                  }}
-                  itemStyle={{ color: "#FAEDCD" }}
-                  labelStyle={{ fontWeight: "bold", fontFamily: "Playfair Display" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="Attendance Rate (%)"
-                  stroke="#2D3E35"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRate)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          )}
-        </div>
-
-        {/* Activity Bar Chart */}
-        <div className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-serif font-bold text-[#1A1A1A]">Cross-Activity Comparisons</h3>
-              <p className="text-xs text-natural-sage font-medium">Average Attendance rates per Activity</p>
-            </div>
-            <span className="text-xs font-semibold bg-[#CCD5AE]/30 text-natural-forest border border-[#CCD5AE]/40 px-3 py-1.5 rounded-full">
-              4 Core Activities
-            </span>
-          </div>
-          {periodHasNoEvents ? (
-            emptyPeriod("comparison-empty", "h-[300px] flex items-center justify-center")
-          ) : (
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                <XAxis dataKey="shortName" tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 11, fontWeight: "bold" }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#2D3E35",
-                    borderRadius: "16px",
-                    border: "1px solid #E9E5D9",
-                    color: "#FDFBF7",
-                  }}
-                  itemStyle={{ color: "#FAEDCD" }}
-                  labelStyle={{ fontWeight: "bold", fontFamily: "Playfair Display" }}
-                />
-                <Legend iconType="circle" />
-                <Bar dataKey="Attendance Rate (%)" fill="#2D3E35" radius={[6, 6, 0, 0]}>
-                  {activityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          )}
-        </div>
-      </div>
+      {/* US-36: Attendance Trends, Cross-Activity Comparisons and Engagement as collapsible panels */}
+      <DashboardPanels
+        attendees={attendees}
+        allRecords={allRecords}
+        period={period}
+        rows={beehaviorData}
+        periodHasNoEvents={periodHasNoEvents}
+        emptyMessage={EMPTY_PERIOD_MESSAGE}
+      />
     </div>
   );
 }
