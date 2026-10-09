@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeBeehavior, getHiveTier } from "./beehavior";
+import { computeBeehavior, getHiveStatus, getHiveTier, hasHiveData, NO_DATA_TIER } from "./beehavior";
 import type { AttendanceRecord, Attendee } from "./types";
 
 const attendee = (id: string, joinedDate = "2026-01-01"): Attendee => ({
@@ -89,7 +89,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.participatedCount).toBe(0);
     expect(row.overallRate).toBeNull();
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier.label).toBe("No data"); // US-44: was Dormant
   });
 
   it("QA-07: 2/4 Speakeasy + 3/4 Writing Hood → Overall 63% (5/8), Forager, multi-activity", () => {
@@ -207,5 +207,38 @@ describe("getHiveTier", () => {
     [100, "Busy Bee"],
   ])("%i%% → %s", (rate, label) => {
     expect(getHiveTier(rate).label).toBe(label);
+  });
+});
+
+describe("US-44: No data instead of Dormant", () => {
+  it("QA-01: a registered colleague without any present → no Overall, No data (not Dormant)", () => {
+    const records = [rec("otro", "Speakeasy", D(1))];
+    const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
+    expect(row.overallRate).toBeNull();
+    expect(row.tier).toBe(NO_DATA_TIER);
+    expect(row.tier.label).toBe("No data");
+    expect(hasHiveData(row)).toBe(false);
+  });
+
+  it("with no records at all, every colleague is No data", () => {
+    const rows = computeBeehavior([attendee("ana"), attendee("bea")], []);
+    expect(rows.map(r => r.tier.label)).toEqual(["No data", "No data"]);
+  });
+
+  it("a colleague with an Overall keeps their tier and counts as having data", () => {
+    const row = computeBeehavior([attendee("ana")], [rec("ana", "Reading Club", D(1))])[0];
+    expect(row.tier.label).toBe("Busy Bee");
+    expect(hasHiveData(row)).toBe(true);
+  });
+
+  it("getHiveStatus: null → No data; 0% (had events, attended none) → Dormant", () => {
+    expect(getHiveStatus(null)).toBe(NO_DATA_TIER);
+    expect(getHiveStatus(0).label).toBe("Dormant");
+    expect(getHiveStatus(80).label).toBe("Busy Bee");
+  });
+
+  it("No data has no icon and a grey style distinct from every tier", () => {
+    expect(NO_DATA_TIER.icon).toBe("");
+    for (const rate of [0, 26, 51, 76]) expect(getHiveTier(rate).color).not.toBe(NO_DATA_TIER.color);
   });
 });

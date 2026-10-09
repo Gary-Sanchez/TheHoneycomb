@@ -328,7 +328,7 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
                              style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
                              title={tier.meaning}
                         >
-                          <span>{tier.icon}</span>
+                          {tier.icon && <span>{tier.icon}</span>}
                           <span>{tier.label}</span>
                         </div>
                       </td>

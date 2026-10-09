@@ -76,6 +76,25 @@ export function getHiveTier(rate: number): HiveTier {
   };
 }
 
+// US-44: no events to rate the colleague on (not enrolled anywhere, or their activities had no
+// events) is not the same as attending none of them — grey, no tier color, no icon.
+export const NO_DATA_TIER: HiveTier = {
+  label: "No data",
+  color: "#6B7280",
+  bgLight: "#F3F4F6",
+  textColor: "#6B7280",
+  icon: "",
+  meaning: "No events to rate this colleague on yet.",
+};
+
+// Hive Status for an Overall rate; null (no Overall) → No data, never Dormant. Every view showing
+// the Hive Status must go through this, not getHiveTier(rate ?? 0).
+export const getHiveStatus = (rate: number | null): HiveTier => (rate === null ? NO_DATA_TIER : getHiveTier(rate));
+
+// Colleagues with an Overall. No data ones stay out of tier rankings/reports (Outcome Report, US-40)
+// and averages (Avg. Attendance Rate KPI, US-45).
+export const hasHiveData = (row: BeehaviorRow): boolean => row.overallRate !== null;
+
 // An event is each unique activity + date with at least one record in the DB, whatever its source
 // and status. Shared by the Bee-havior Hub (US-24) and the Activities Matrix Profile cards (US-29).
 export function getEventDates(records: AttendanceRecord[]): Record<string, Set<string>> {
@@ -139,7 +158,7 @@ export function computeBeehavior(attendees: Attendee[], records: AttendanceRecor
         overallRate,
         overallPresents,
         overallTotal,
-        tier: getHiveTier(overallRate ?? 0),
+        tier: getHiveStatus(overallRate),
         isMulti: participatedCount > 1,
         participatedCount,
       };
