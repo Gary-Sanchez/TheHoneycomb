@@ -1,6 +1,6 @@
 ---
 name: Honeycomb-executor
-description: Ejecuta un ticket US-XX de The Honeycomb de punta a punta (asignación en Linear → research → desarrollo → testing → cierre con gate humana antes de commit y push) a partir de solo el número o nombre del ticket, trabajando siempre sobre una rama dedicada `gs/us-XX-...`. En cada fase evalúa si conviene delegar el trabajo a un subagente (uno de research, uno de desarrollo, uno de testing) o hacerlo directamente. Usar esta skill siempre que el usuario pegue un número de ticket ("US-05", "la US-06", "ticket 4") y pida ejecutarlo, implementarlo, resolverlo, "hacé la US-05", "arrancá con el ticket 6", "llevá adelante la historia US-04" — incluso si no menciona la skill por nombre.
+description: Ejecuta un ticket US-XX de The Honeycomb de punta a punta (asignación en Linear → research → desarrollo → testing → cierre con gate humana antes de commit y push) a partir de solo el número o nombre del ticket, trabajando siempre sobre una rama dedicada `gs/us-XX-...` creada desde `main` recién sincronizado con `origin`. En cada fase evalúa si conviene delegar el trabajo a un subagente (uno de research, uno de desarrollo, uno de testing) o hacerlo directamente. Usar esta skill siempre que el usuario pegue un número de ticket ("US-05", "la US-06", "ticket 4") y pida ejecutarlo, implementarlo, resolverlo, "hacé la US-05", "arrancá con el ticket 6", "llevá adelante la historia US-04" — incluso si no menciona la skill por nombre.
 ---
 
 # Honeycomb Executor
@@ -46,6 +46,39 @@ El usuario da un número o referencia corta ("US-05", "la 5", "ticket 06", un li
 Si describe el ticket sin ID claro y hay ambigüedad real sobre cuál es, listar los `US-*` existentes
 y preguntar — no adivinar el ticket equivocado. Si da el ID, no confirmarlo, proceder directo.
 
+## Paso previo — Traer `main` actualizado (siempre, en cada ticket nuevo)
+
+**Lo primero al arrancar cualquier ticket**, antes incluso de leerlo: traer todos los cambios que
+el equipo mergeó en `main` desde la última vez. Así el `CLAUDE.md` que se lee en la Fase 0, el
+código que se investiga en la Fase 1 y la rama que se crea en la Fase 0.5 parten del estado real
+del repo — no de un `main` local viejo (un PR de otra persona mergeado ayer puede haber movido
+justo el archivo que el ticket toca). No lleva gate: es de solo lectura sobre el remoto y un
+fast-forward local, nada visible para el equipo.
+
+1. `git status`: el working tree tiene que estar limpio. Si hay cambios sin commitear (de otro
+   ticket o a medio hacer), **no** pisarlos, ni stashearlos, ni descartarlos por cuenta propia:
+   avisar al usuario qué archivos son y en qué rama está, y preguntar qué hacer.
+2. Sincronizar `main` con el remoto:
+   ```bash
+   git fetch origin --prune
+   git checkout main
+   git pull --ff-only origin main
+   ```
+   `--ff-only` a propósito: si `main` local tiene commits que no están en `origin/main` (divergió),
+   el pull falla en vez de crear un merge silencioso — en ese caso frenar y avisar al usuario, no
+   resolverlo con `reset --hard` (además el hook `guard-bash.cjs` lo bloquea).
+3. Reportar en una línea qué se trajo (`git log --oneline <HEAD-previo>..HEAD`, o "main ya estaba
+   al día"). Si entre lo traído hay cambios en `CLAUDE.md`, en la skill misma, o en archivos que el
+   ticket probablemente toque, mencionarlo — puede cambiar el plan.
+4. Si la sesión corre en un **worktree creado por la app de escritorio**, no hacer `git pull`/
+   `git merge` a mano: usar la tool `sync_with_base_branch` (ccd_host), que hace fetch + merge
+   del branch base en el host.
+
+**Si se retoma un ticket ya empezado** (la rama `gs/us-{NN}-...` ya existe, local o en `origin`),
+no crear otra: pararse en ella y traerle `main` con `git merge origin/main` (no rebase si la rama
+ya se pusheó — reescribiría historia publicada). Si hay conflictos, resolverlos y mostrarle al
+usuario cómo quedaron antes de seguir.
+
 ## Fase 0 — Localizar el ticket, leerlo completo, y no arrancar sin haberlo leído
 
 1. Buscar el archivo en la carpeta padre de este repositorio con un glob tipo `US-0{N}*` (probar
@@ -86,12 +119,16 @@ llevan gate de confirmación — a diferencia del cierre (Fase 6), que sí lo ll
    otra persona del equipo. Si el estado actual no era `To Do`/`Backlog` (ej. ya estaba en otro
    estado), avisar la discrepancia en el reporte final igual, pero no dejar de avanzar por eso — el pedido del usuario de ejecutar el
    ticket ya es la confirmación de que corresponde ponerlo en progreso.
-2. Confirmar que el working tree está limpio (`git status`) antes de crear rama — si hay cambios
-   sin commitear de otra tarea, avisar y no pisarlos.
-3. Crear y pararse en una rama dedicada desde `main` actualizado:
+2. Confirmar que sigue limpio el working tree y que `main` está al día con `origin/main` (ya se
+   sincronizó en el **Paso previo**; si pasó un rato largo entre medio, repetir `git fetch origin`
+   + `git pull --ff-only origin main`).
+3. Crear y pararse en una rama dedicada desde ese `main` actualizado:
    ```bash
-   git checkout main && git pull && git checkout -b gs/us-{NN}-{slug-del-titulo}
+   git checkout -b gs/us-{NN}-{slug-del-titulo} origin/main
    ```
+   Partir explícitamente de `origin/main` (no del `HEAD` actual) garantiza que la rama nazca de
+   lo último mergeado aunque la sesión haya quedado parada en otra rama. Verificar con
+   `git log --oneline -1` que el commit base coincide con `origin/main`.
    Formato de nombre: `gs/us-{NN}-{título en kebab-case, corto}` (ej.
    `gs/us-09-pre-commit-hooks-husky-lint-staged`) — mismas iniciales/convención ya usadas en este
    repo. **Todo** el trabajo de las fases siguientes (investigación de solo lectura aparte) se hace
