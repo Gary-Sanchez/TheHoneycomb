@@ -33,10 +33,16 @@ export interface DurationExclusion {
   seconds: number;
 }
 
-// US-27: per-file summary of a .csv batch, shown as a group in Review Extracted Records
+// US-37: where a file's activity came from; null while the file has none
+export type ActivitySource = "file name" | "meeting title" | "selected manually";
+
+// US-27: per-file summary of an import, shown as a group in Review Extracted Records
 export interface ParsedFileGroup {
   id: number;
   filename: string;
+  csv: boolean; // false for the single .xlsx/.docx/.txt...: no duration, blacklist or duplicate checks
+  activity: string; // US-37: "" while not detected and not picked yet
+  activitySource: ActivitySource | null;
   dateDetected: boolean;
   durationFilterApplied: boolean;
   excludedByDuration: DurationExclusion[];

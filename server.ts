@@ -6,7 +6,7 @@ import multer from "multer";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import * as db from "./db";
-import { extractTextFromFile, parseAttendance, parseCsvAttendance } from "./parser";
+import { extractTextFromFile, parseAttendance, parseCsvAttendance, resolveFileActivity } from "./parser";
 import {
   attendeeSchema,
   enrollmentBodySchema,
@@ -329,6 +329,21 @@ function findLoadedEventIn(
   });
 }
 
+// US-37: a .csv parsed for the import preview. Its activity is detected from the file name, then the
+// meeting title; an Activity column value still wins for its own row. A file that names no activity
+// (or several) comes back with activity "" — its rows too — and the UI asks for one.
+function parseCsvForImport(buffer: Buffer, filename: string) {
+  const { titleActivities, ...parsed } = parseCsvAttendance(buffer, "", { defaultActivity: "" });
+  const detected = resolveFileActivity(filename, titleActivities);
+  const activity = detected?.activity ?? "";
+  return {
+    ...parsed,
+    records: parsed.records.map(r => ({ ...r, activity: r.activity || activity })),
+    activity,
+    activitySource: detected?.source ?? null,
+  };
+}
+
 // API endpoint for parsing uploaded file. US-22: requireAdmin runs before multer, so a request
 // without an admin session gets its 401 before the upload is read into memory or parsed.
 app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), async (req, res): Promise<any> => {
@@ -340,7 +355,10 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
 
     const filename = file.originalname;
     const extension = path.extname(filename).toLowerCase();
-    const requestedActivity = req.body.activity || "";
+    // US-37: no activity comes from the client; it is detected from the file name only (a single
+    // file here is never a .csv batch). "" = not detected, the UI asks for it.
+    const detected = resolveFileActivity(filename);
+    const activity = detected?.activity ?? "";
     const supportedExtensions = [".txt", ".csv", ".docx", ".doc", ".xlsx", ".xls"];
 
     if (!supportedExtensions.includes(extension)) {
@@ -352,15 +370,15 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
     // US-18: .csv has its own table-aware parser that never invents a session date — with no
     // valid date in the file it returns dateDetected=false and the UI asks for one.
     if (extension === ".csv") {
-      const { isEmpty, fingerprint, declaredActivities, ...parsed } = parseCsvAttendance(file.buffer, requestedActivity);
+      const { isEmpty, fingerprint, ...parsed } = parseCsvForImport(file.buffer, filename);
       if (isEmpty) {
         return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
       }
       // US-26: a .csv imported before is blocked here already (no records come back);
       // US-33: so is one whose event already holds all its colleagues
       const state = await db.getState();
-      const alreadyImported = findCsvImportIn(state.imports, fingerprint, requestedActivity, parsed.records);
-      const alreadyLoaded = alreadyImported ? null : findLoadedEventIn(state, requestedActivity, parsed.records);
+      const alreadyImported = findCsvImportIn(state.imports, fingerprint, parsed.activity, parsed.records);
+      const alreadyLoaded = alreadyImported ? null : findLoadedEventIn(state, parsed.activity, parsed.records);
       const records = alreadyImported || alreadyLoaded ? [] : parsed.records;
       return res.json({
         filename,
@@ -380,12 +398,16 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
       return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
     }
 
-    const records = parseAttendance(fileTextContent, requestedActivity);
+    // The parser's own content/default guess is discarded: with no activity in the name the
+    // records carry "" and the user picks one in the preview.
+    const records = parseAttendance(fileTextContent, activity).map(r => ({ ...r, activity }));
 
     return res.json({
       filename,
       recordsCount: records.length,
       records,
+      activity,
+      activitySource: detected?.source ?? null,
     });
   } catch (err: any) {
     console.error("Error parsing attendance file:", err);
@@ -395,10 +417,11 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
   }
 });
 
-// US-27: parse 1–20 .csv files of ONE activity in a single request. Like the single-file route it
-// doesn't persist anything. The batch is rejected whole (400, nothing parsed into the preview) when
-// it has too many files, a non-.csv file, an unreadable file, or a file that declares a different
-// activity. Identical files are not an error: later copies come back as duplicates, with no records.
+// US-27: parse 1–20 .csv files in a single request. Like the single-file route it doesn't persist
+// anything. The batch is rejected whole (400, nothing parsed into the preview) when it has too many
+// files, a non-.csv file, or an unreadable file. US-37: the files may belong to different activities,
+// each one detected on its own (see parseCsvForImport). Identical files are not an error: later copies
+// come back as duplicates, with no records.
 // Like the single-file route, it requires an admin session before multer reads any file (US-22).
 const MAX_CSV_BATCH_FILES = 20;
 const TOO_MANY_FILES_ERROR = `Too many files: the maximum is ${MAX_CSV_BATCH_FILES} .csv files per import. The whole batch was rejected.`;
@@ -431,8 +454,7 @@ app.post(
         });
       }
 
-      const requestedActivity: string = req.body.activity || "";
-      const parsed = files.map(f => ({ filename: f.originalname, ...parseCsvAttendance(f.buffer, requestedActivity) }));
+      const parsed = files.map(f => ({ filename: f.originalname, ...parseCsvForImport(f.buffer, f.originalname) }));
 
       const empty = parsed.filter(p => p.isEmpty);
       if (empty.length > 0) {
@@ -441,35 +463,16 @@ app.post(
         });
       }
 
-      // Every file must belong to the batch's activity: the one the user picked or, without one,
-      // the single activity the files declare.
-      const declared = [...new Set(parsed.flatMap(p => p.declaredActivities))];
-      const batchActivity = requestedActivity || (declared.length === 1 ? declared[0] : "");
-      const mismatched = batchActivity
-        ? parsed.filter(p => p.declaredActivities.some(a => a !== batchActivity))
-        : parsed.filter(p => p.declaredActivities.length > 0);
-      if (mismatched.length > 0) {
-        const list = mismatched.map(p => `${p.filename} (${p.declaredActivities.join(", ")})`).join(", ");
-        return res.status(400).json({
-          error: batchActivity
-            ? `Batch rejected: every file must belong to ${batchActivity}. These files belong to a different activity: ${list}. Nothing was imported.`
-            : `Batch rejected: all files must belong to the same activity. Files found: ${list}. Nothing was imported.`,
-          mismatchedFiles: mismatched.map(p => ({ filename: p.filename, activities: p.declaredActivities })),
-        });
-      }
-
       const firstByFingerprint = new Map<string, string>();
       const state = await db.getState();
       return res.json({
-        activity: batchActivity,
-        files: parsed.map(({ isEmpty, fingerprint, declaredActivities, ...p }) => {
+        files: parsed.map(({ isEmpty, fingerprint, ...p }) => {
           const duplicateOf = firstByFingerprint.get(fingerprint) ?? null;
           if (!duplicateOf) firstByFingerprint.set(fingerprint, p.filename);
           // US-26: a file already imported in an earlier upload is blocked (no records come back)
-          const alreadyImported = duplicateOf ? null : findCsvImportIn(state.imports, fingerprint, batchActivity || requestedActivity, p.records);
+          const alreadyImported = duplicateOf ? null : findCsvImportIn(state.imports, fingerprint, p.activity, p.records);
           // US-33: ...and so is one whose event already holds all its colleagues (no fingerprint needed)
-          const alreadyLoaded =
-            duplicateOf || alreadyImported ? null : findLoadedEventIn(state, batchActivity || requestedActivity, p.records);
+          const alreadyLoaded = duplicateOf || alreadyImported ? null : findLoadedEventIn(state, p.activity, p.records);
           const records = duplicateOf || alreadyImported || alreadyLoaded ? [] : p.records;
           return {
             ...p,
