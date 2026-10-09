@@ -85,6 +85,17 @@ export function getEventDates(records: AttendanceRecord[]): Record<string, Set<s
   return eventDates;
 }
 
+// US-43: the activities each colleague participates in — at least one `present` in them (an
+// `absent`-only activity doesn't count), in ACTIVITIES order. The one definition of "participating"
+// shared by the Overlap Cross-Referencer and the Dashboard; pass period-filtered records for a period.
+export function getAttendedActivities(attendees: Attendee[], records: AttendanceRecord[]): Record<string, string[]> {
+  const attended = new Set<string>();
+  for (const r of records) if (r.status === "present") attended.add(`${r.attendeeId}|${r.activity}`);
+  return Object.fromEntries(
+    attendees.map(att => [att.id, ACTIVITIES.filter(activity => attended.has(`${att.id}|${activity}`))])
+  );
+}
+
 export interface ActivityEventStats {
   events: number;
   // Present attendees per event; null → the card shows "—" (no events)
