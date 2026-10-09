@@ -55,7 +55,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Reading Club")).toMatchObject({ presents: 1, total: 4, rate: 25 });
     expect(row.overallRate).toBe(25);
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier?.label).toBe("Dormant");
   });
 
   it("QA-04: a non-enrolled activity is null and stays out of Overall", () => {
@@ -97,7 +97,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.participatedCount).toBe(0);
     expect(row.overallRate).toBeNull();
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier?.label).toBe("Dormant");
   });
 
   it("QA-07: 2/4 Speakeasy + 3/4 Writing Hood → Overall 63% (5/8), Forager, multi-activity", () => {
@@ -109,7 +109,7 @@ describe("computeBeehavior (US-24)", () => {
     ];
     const row = computeBeehavior([attendee("ana")], records)[0];
     expect(row).toMatchObject({ overallPresents: 5, overallTotal: 8, overallRate: 63, isMulti: true, participatedCount: 2 });
-    expect(row.tier.label).toBe("Forager");
+    expect(row.tier?.label).toBe("Forager");
   });
 
   it("a sole present in a single-event activity → 100% (1/1)", () => {
@@ -117,7 +117,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana", "2026-06-24")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Speakeasy")).toMatchObject({ presents: 1, total: 1, rate: 100 });
     expect(row.overallRate).toBe(100);
-    expect(row.tier.label).toBe("Busy Bee");
+    expect(row.tier?.label).toBe("Busy Bee");
   });
 
   it("a present before joinedDate still counts, over the full activity", () => {
@@ -183,7 +183,7 @@ describe("computeBeehavior — same events for everyone (US-31)", () => {
     ];
     const row = computeBeehavior([attendee("ana", eight[7]), attendee("otro")], records)[0];
     expect(row).toMatchObject({ overallPresents: 3, overallTotal: 12, overallRate: 25, isMulti: true });
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier?.label).toBe("Dormant");
   });
 
   it("QA-07: a new event raises the denominator by 1 for every member, without creating absent rows", () => {
@@ -233,8 +233,35 @@ describe("period filter (US-35)", () => {
       total: 2,
       rate: 0,
     });
-    expect(row).toMatchObject({ overallPresents: 0, overallTotal: 2, overallRate: 0, participatedCount: 1 });
-    expect(row.tier.label).toBe("Dormant");
+    expect(row).toMatchObject({ overallPresents: 0, overallTotal: 2, overallRate: 0 });
+    expect(row.tier?.label).toBe("Dormant");
+  });
+
+  it("Multi-Activity counts activities attended in the period, in step with the Inter-Activity KPI", () => {
+    const records = [
+      rec("ana", "Speakeasy", may(5)), // ana enrolls in both activities in May...
+      rec("ana", "Reading Club", may(6)),
+      rec("otro", "Speakeasy", june(2)), // ...but only Speakeasy has June events she attends
+      rec("ana", "Speakeasy", june(9)),
+      rec("otro", "Reading Club", june(3)),
+    ];
+    const ana = (p: typeof JUNE | null) => computeBeehavior([attendee("ana"), attendee("otro")], records, p)[0];
+
+    // All time: present in 2 activities → multi
+    expect(ana(null)).toMatchObject({ participatedCount: 2, isMulti: true });
+    // June: present only in Speakeasy → single, although still enrolled (0%) in Reading Club
+    expect(ana(JUNE)).toMatchObject({ participatedCount: 1, isMulti: false });
+    expect(stat([ana(JUNE)], "ana", "Reading Club")).toMatchObject({ enrolled: true, presents: 0, total: 1, rate: 0 });
+  });
+
+  it("an enrolled colleague with no events in the range has no Overall and no Hive Status", () => {
+    const records = [rec("ana", "Writing Hood", may(5)), rec("otro", "Speakeasy", june(2))];
+    const row = computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE)[0];
+    expect(row.attendee.id).toBe("ana");
+    expect(row.overallRate).toBeNull();
+    expect(row.tier).toBeNull();
+    // All time keeps US-24: no rate → Dormant
+    expect(computeBeehavior([attendee("nuevo")], records, null)[0].tier?.label).toBe("Dormant");
   });
 
   it("QA-04: an activity without events in the range is — for everyone and stays out of Overall", () => {

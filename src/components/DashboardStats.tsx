@@ -453,13 +453,17 @@ export default function DashboardStats({
 
                       {/* Hive Status (Tiers) */}
                       <td className="p-4 text-center">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm"
-                             style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
-                             title={tier.meaning}
-                        >
-                          <span>{tier.icon}</span>
-                          <span>{tier.label}</span>
-                        </div>
+                        {tier ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm"
+                               style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
+                               title={tier.meaning}
+                          >
+                            <span>{tier.icon}</span>
+                            <span>{tier.label}</span>
+                          </div>
+                        ) : (
+                          <span className="text-natural-sage/50 text-[11px]">—</span>
+                        )}
                       </td>
 
                       {/* Multi-Activity Column */}

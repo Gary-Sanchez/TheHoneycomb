@@ -28,7 +28,8 @@ export interface BeehaviorRow {
   overallRate: number | null;
   overallPresents: number;
   overallTotal: number;
-  tier: HiveTier;
+  // null only with an active period and no event to rate the colleague on → the table shows "—"
+  tier: HiveTier | null;
   isMulti: boolean;
   participatedCount: number;
 }
@@ -190,7 +191,9 @@ export function computeBeehavior(
       const overallPresents = activityStats.reduce((sum, s) => sum + s.presents, 0);
       const overallTotal = activityStats.reduce((sum, s) => sum + s.total, 0);
       const overallRate = overallTotal ? percent(overallPresents, overallTotal) : null;
-      const participatedCount = activityStats.filter(s => s.enrolled).length;
+      // Activities attended in the period (all time: same as enrolled, since an enrolling present counts).
+      // Keeps Multi-Activity in step with the Inter-Activity Hub KPI, which also counts presences in the period.
+      const participatedCount = activityStats.filter(s => s.presents > 0).length;
 
       return {
         attendee: att,
@@ -198,7 +201,9 @@ export function computeBeehavior(
         overallRate,
         overallPresents,
         overallTotal,
-        tier: getHiveTier(overallRate ?? 0),
+        // With a period, no events in it → no rate → no tier ("—"), not a misleading Dormant.
+        // All time keeps the US-24 behavior: a colleague without any rate is Dormant.
+        tier: overallRate === null && period ? null : getHiveTier(overallRate ?? 0),
         isMulti: participatedCount > 1,
         participatedCount,
       };
