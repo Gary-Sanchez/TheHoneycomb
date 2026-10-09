@@ -1,6 +1,6 @@
 ---
 name: Tefinha-crea-tickets
-description: Redacta historias de usuario ("tickets" US-XX) para el proyecto The Honeycomb en markdown enriquecido (negritas, bullets, tablas, emojis de color), listas para subir a un tablero de seguimiento con varios usuarios (Jira, Azure DevOps, Notion, Trello, GitHub Issues). Sigue la misma estructura de secciones que el ticket de referencia US-03 (Prioridad, Historia de Usuario, Criterios de Aceptación, Out of Scope, Escenarios de Prueba de QA en tabla, QA Checks como checklist). Usar esta skill siempre que el usuario pida crear, redactar, generar o formatear un ticket, una historia de usuario, un "US-XX", una user story, o criterios de aceptación / escenarios QA para una nueva funcionalidad de The Honeycomb — incluso si no menciona la skill por nombre o solo describe la funcionalidad en términos generales (ej. "necesito un ticket para X", "arma la historia de usuario de Y", "quiero documentar los criterios de aceptación de Z").
+description: Redacta historias de usuario ("tickets" US-XX) para el proyecto The Honeycomb en markdown enriquecido (negritas, bullets, tablas, emojis de color), listas para subir a un tablero de seguimiento con varios usuarios (Linear, Jira, Azure DevOps, Trello, GitHub Issues). Sigue la misma estructura de secciones que el ticket de referencia US-03 (Prioridad, Historia de Usuario, Criterios de Aceptación, Out of Scope, Escenarios de Prueba de QA en tabla, QA Checks como checklist). Usar esta skill siempre que el usuario pida crear, redactar, generar o formatear un ticket, una historia de usuario, un "US-XX", una user story, o criterios de aceptación / escenarios QA para una nueva funcionalidad de The Honeycomb — incluso si no menciona la skill por nombre o solo describe la funcionalidad en términos generales (ej. "necesito un ticket para X", "arma la historia de usuario de Y", "quiero documentar los criterios de aceptación de Z").
 ---
 
 # Tefinha crea tickets
@@ -19,8 +19,8 @@ con placeholders `{...}` a rellenar. Sigue ese orden de secciones sin agregar ni
 
 - **El contenido y el orden de las secciones no cambian** respecto a US-03 (Prioridad → Historia de
   Usuario → Criterios de Aceptación → Out of Scope → Escenarios de Prueba de QA → QA Checks); lo
-  que cambia es el *formato* — de texto plano a markdown — para que un tablero (Jira, Azure DevOps,
-  Notion, Trello, GitHub Issues) lo renderice con jerarquía visual en vez de un bloque de texto.
+  que cambia es el *formato* — de texto plano a markdown — para que un tablero (Linear, Jira, Azure DevOps,
+  Trello, GitHub Issues) lo renderice con jerarquía visual en vez de un bloque de texto.
 - **La Prioridad usa un emoji como indicador de color** (🔴 Alta, 🟡 Media, 🟢 Baja) porque el
   markdown estándar no soporta color de texto, y estos boards sí renderizan emoji de forma
   consistente — es la forma más portable de dar esa señal visual a simple vista en una lista de

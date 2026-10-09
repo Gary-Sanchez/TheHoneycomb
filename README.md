@@ -125,20 +125,19 @@ claude mcp add --transport http context7 https://mcp.context7.com/mcp
 
 (Si tu instalación de Claude Code ya lo trae configurado globalmente, podés omitir este paso.)
 
-### Notion (tablero de tickets — "The Honeycomb Board")
+### Linear (tablero de tickets — "The Honeycomb")
 
-Se usa para crear/actualizar los tickets `US-XX` en Notion vía las skills `Tefinha-crea-tickets`,
-`Honeycomb-executor` y `super-tefinha-QA` (ver `.claude/skills/Tefinha-crea-tickets/references/notion-board.md` para el
-detalle del tablero y su esquema).
+Se usa para crear/actualizar los tickets `US-XX` en Linear (workspace `nicky-arias`, team `NIC`) vía las
+skills `Tefinha-crea-tickets`, `Honeycomb-executor` y `super-tefinha-QA` (ver
+`.claude/skills/Tefinha-crea-tickets/references/linear-board.md` para el detalle del tablero, su esquema
+y el flujo de estados).
 
-1. Agregar el MCP server de Notion:
+1. Agregar el MCP server de Linear:
    ```bash
-   claude mcp add --transport http notion https://mcp.notion.com/mcp
+   claude mcp add --transport http linear https://mcp.linear.app/mcp
    ```
-2. Al primer uso, Claude te va a pedir autorización: se abre una pantalla de Notion
-   ("Connect with Notion MCP") pidiendo que selecciones el workspace (ej. el que tiene acceso a
-   **The Honeycomb Board**) y confirmes con **Continue**. Con eso queda autorizado — no hace
-   falta repetir este paso en cada sesión.
+2. Al primer uso, autorizar desde Claude Code con `/mcp` → `linear`: se abre el login de Linear en el
+   navegador; elegí el workspace `nicky-arias` y aceptá. No hace falta repetir este paso en cada sesión.
 3. Verificá que quedó conectado:
    ```bash
    claude mcp list
