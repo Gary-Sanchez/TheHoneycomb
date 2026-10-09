@@ -98,7 +98,7 @@ export function validateBody(schema: z.ZodType, errorMessage?: string) {
     const result = schema.safeParse(req.body ?? {});
     if (!result.success) {
       const details = result.error.issues.map(describeIssue);
-      return res.status(400).json({ error: errorMessage ?? `Invalid request body: ${details[0]}`, details });
+      return res.status(400).json({ error: errorMessage ?? "Some of the data sent was invalid, so nothing was saved. Reload the page and try again.", details });
     }
     req.body = result.data;
     next();

@@ -23,6 +23,8 @@ import {
   Legend,
   Cell,
 } from "recharts";
+import HiveStatusBadge from "./HiveStatusBadge";
+import { pluralize } from "../utils";
 import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle } from "lucide-react";
 
 interface DashboardStatsProps {
@@ -233,7 +235,7 @@ export default function DashboardStats({
             <Users className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Total Unique Attendees</p>
+            <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Total Caserits</p>
             {periodHasNoEvents ? (
               emptyPeriod("kpi-total-attendees-empty")
             ) : (
@@ -281,7 +283,7 @@ export default function DashboardStats({
             <Award className="h-6 w-6 text-natural-sand" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Inter-Activity Hub</p>
+            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Multi-Activity Caserits</p>
             {periodHasNoEvents ? (
               emptyPeriod("kpi-multi-enrollment-empty")
             ) : (
@@ -290,7 +292,7 @@ export default function DashboardStats({
                   {multiActivityPercentage}%
                 </h3>
                 <span className="text-xs text-natural-sand font-semibold flex items-center mt-1">
-                  {multiActivityCount} colleagues active in 2+ activities
+                  {pluralize(multiActivityCount, "colleague")} in 2+ activities
                 </span>
               </>
             )}
@@ -310,7 +312,7 @@ export default function DashboardStats({
             <ArrowUpRight className="h-5 w-5 text-natural-sand" />
           </div>
           <div className="mt-4">
-            <p className="text-[10px] uppercase tracking-widest text-[#CCD5AE] font-bold">Import Logs & Files</p>
+            <p className="text-[10px] uppercase tracking-widest text-[#CCD5AE] font-bold">Import Forage Logs</p>
             <h4 className="text-lg font-serif font-bold mt-1 text-white leading-tight">Smart Doc Parser</h4>
             <p className="text-xs text-natural-wheat/70 mt-1">Upload Excel, .docx, or .txt</p>
           </div>
@@ -325,7 +327,7 @@ export default function DashboardStats({
               <span className="text-2xl">🍯</span> Caserits Bee-havior Hub
             </h3>
             <p className="text-xs text-natural-sage font-medium mt-1">
-              Overview of all active Caserits (participants), sorted alphabetically, mapping individual attendance rates across our four distinct activities and assigning custom engagement tiers.
+              Every colleague, sorted alphabetically, with their attendance rate in each of the four activities and their Hive Status.
             </p>
           </div>
           
@@ -334,7 +336,7 @@ export default function DashboardStats({
             <Search className="absolute left-3.5 top-3 h-4 w-4 text-natural-sage" />
             <input
               type="text"
-              placeholder="Search Caserits by name..."
+              placeholder="Search colleagues by name…"
               value={beeSearchQuery}
               onChange={(e) => setBeeSearchQuery(e.target.value)}
               className="w-full bg-natural-cream/30 border border-natural-border rounded-2xl pl-10 pr-4 py-2 text-xs text-[#1A1A1A] placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-medium"
@@ -351,28 +353,28 @@ export default function DashboardStats({
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/60 border border-natural-border/30">
             <span className="text-2xl pt-1">💤</span>
             <div>
-              <h5 className="text-xs font-bold text-[#2F4F4F]">Dormant (0% - 25%)</h5>
+              <h5 className="text-xs font-bold text-[#2F4F4F]">Dormant (0–25%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Hibernating. Rare sightings. Still getting to know the honeycomb.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FEFBEA]/60 border border-[#F0E68C]/40">
             <span className="text-2xl pt-1">🥚</span>
             <div>
-              <h5 className="text-xs font-bold text-[#6B5800]">Hatcher (26% - 50%)</h5>
+              <h5 className="text-xs font-bold text-[#6B5800]">Hatcher (26–50%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Getting cozy. Halfway to becoming a regular flyer.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFF7E6]/60 border border-[#FFA500]/30">
             <span className="text-2xl pt-1">🌸</span>
             <div>
-              <h5 className="text-xs font-bold text-[#804C00]">Forager (51% - 75%)</h5>
+              <h5 className="text-xs font-bold text-[#804C00]">Forager (51–75%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Honey maker. Solid presence, regularly contributing to the buzz.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFFDF0]/60 border border-[#FFD700]/30">
             <span className="text-2xl pt-1">🐝</span>
             <div>
-              <h5 className="text-xs font-bold text-[#7A5E00]">Busy Bee (76% - 100%)</h5>
+              <h5 className="text-xs font-bold text-[#7A5E00]">Busy Bee (76–100%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Queen's favorite. Elite attendance and top-tier dedication.</p>
             </div>
           </div>
@@ -389,18 +391,18 @@ export default function DashboardStats({
                 ))}
                 <th className="p-4 text-center">Overall</th>
                 <th className="p-4 text-center">Hive Status</th>
-                <th className="p-4 pr-6 text-center">Multi-Activity?</th>
+                <th className="p-4 pr-6 text-center">Multi-Activity</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-natural-border/50 text-xs text-natural-forest font-medium">
               {filteredBeehaviorData.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-natural-sage italic font-medium bg-natural-cream/15">
-                    No Caserits found matching your search query.
+                    {beehaviorData.length === 0 ? "No colleagues yet." : "No colleagues match your search."}
                   </td>
                 </tr>
               ) : (
-                filteredBeehaviorData.map(({ attendee, activityStats, overallRate, overallTotal, overallPresents, tier, isMulti, participatedCount }) => {
+                filteredBeehaviorData.map(({ attendee, activityStats, overallRate, overallTotal, overallPresents, isMulti, participatedCount }) => {
                   return (
                     <tr key={attendee.id} className="hover:bg-natural-cream/15 transition duration-150">
                       {/* Name Card */}
@@ -453,24 +455,15 @@ export default function DashboardStats({
 
                       {/* Hive Status (Tiers) */}
                       <td className="p-4 text-center">
-                        {tier ? (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm"
-                               style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
-                               title={tier.meaning}
-                          >
-                            <span>{tier.icon}</span>
-                            <span>{tier.label}</span>
-                          </div>
-                        ) : (
-                          <span className="text-natural-sage/50 text-[11px]">—</span>
-                        )}
+                        {/* US-42: the shared badge (textColor for contrast); no Overall → No data (US-44) */}
+                        <HiveStatusBadge rate={overallRate} />
                       </td>
 
                       {/* Multi-Activity Column */}
                       <td className="p-4 pr-6 text-center">
                         {isMulti ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#FAEDCD] text-[#855B32] border border-[#D4A373]/30 animate-pulse-subtle">
-                            🍯 Yes ({participatedCount} Clubs)
+                            🍯 Yes ({participatedCount} Activities)
                           </span>
                         ) : (
                           <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
@@ -524,8 +517,8 @@ export default function DashboardStats({
                     <span className="font-bold text-[#1A1A1A]">{act.events}</span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-natural-forest/70">Avg. attendees:</span>
-                    <span className="font-bold text-[#1A1A1A]" title="Present attendees per registered event">
+                    <span className="text-natural-forest/70">Avg. colleagues per event:</span>
+                    <span className="font-bold text-[#1A1A1A]" title="Present colleagues per event">
                       {formatAvgAttendees(act.avgPresent)}
                     </span>
                   </div>

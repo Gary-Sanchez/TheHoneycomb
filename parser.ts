@@ -1223,7 +1223,7 @@ export function parseCsvAttendance(buffer: Buffer, requestedActivity: string = "
       const bySection = durations.get(key);
       if (unreadableDuration.has(key) || !bySection) {
         const raw = unreadableDuration.get(key);
-        reviewReasons.set(key, raw ? `Duration could not be read: "${raw}"` : "No duration found for this attendee");
+        reviewReasons.set(key, raw ? `Duration could not be read: "${raw}"` : "No duration found for this colleague");
         continue;
       }
       const seconds = Math.max(...bySection.values());
