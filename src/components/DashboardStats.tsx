@@ -1,6 +1,15 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
-import { computeBeehavior, getActivityEventStats, formatAvgAttendees } from "../beehavior";
+import {
+  computeBeehavior,
+  getActivityEventStats,
+  formatAvgAttendees,
+  filterRecordsByPeriod,
+  formatPeriodLabel,
+  isValidPeriod,
+  resolvePeriod,
+  PeriodFilter,
+} from "../beehavior";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -19,18 +28,37 @@ import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpC
 interface DashboardStatsProps {
   attendees: Attendee[];
   records: AttendanceRecord[];
+  // US-35: the period lives in App so it survives switching tabs
+  periodFilter: PeriodFilter;
+  onPeriodFilterChange: (filter: PeriodFilter) => void;
   onNavigate: (tab: string) => void;
 }
 
-export default function DashboardStats({ attendees, records, onNavigate }: DashboardStatsProps) {
+const EMPTY_PERIOD_MESSAGE = "No events in this period";
+
+export default function DashboardStats({
+  attendees,
+  records: allRecords,
+  periodFilter,
+  onPeriodFilterChange,
+  onNavigate,
+}: DashboardStatsProps) {
   // State for search query in Bee-havior table
   const [beeSearchQuery, setBeeSearchQuery] = useState("");
 
-  // 1. Core KPIs
-  const totalAttendees = attendees.length;
+  // US-35: the range actually applied (null → All time). An incomplete or inverted custom range isn't applied.
+  const period = useMemo(() => resolvePeriod(periodFilter), [periodFilter]);
+  const invalidRange =
+    periodFilter.mode === "custom" &&
+    Boolean(periodFilter.start && periodFilter.end) &&
+    !isValidPeriod(periodFilter.start, periodFilter.end);
+  // Every metric below except enrollment is computed over the events inside the period
+  const records = useMemo(() => filterRecordsByPeriod(allRecords, period), [allRecords, period]);
+  const periodHasNoEvents = period !== null && records.length === 0;
 
+  // 1. Core KPIs
   // Only activities the colleague actually attended count (Manual Check-In also logs absences)
-  const multiActivityCount = useMemo(() => {
+  const activitiesAttended = useMemo(() => {
     const map: Record<string, string[]> = {};
     attendees.forEach(a => {
       map[a.id] = [];
@@ -40,8 +68,15 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
         map[r.attendeeId].push(r.activity);
       }
     });
-    return attendees.filter(att => (map[att.id] || []).length > 1).length;
+    return map;
   }, [attendees, records]);
+
+  // All time: the whole directory. With a period: colleagues who attended at least one event in it.
+  const totalAttendees = period
+    ? attendees.filter(att => (activitiesAttended[att.id] || []).length > 0).length
+    : attendees.length;
+
+  const multiActivityCount = attendees.filter(att => (activitiesAttended[att.id] || []).length > 1).length;
 
   const multiActivityPercentage = totalAttendees
     ? Math.round((multiActivityCount / totalAttendees) * 100)
@@ -82,7 +117,8 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
       const actLogs = records.filter(r => r.activity === act);
       const totalLogs = actLogs.length;
       const presents = actLogs.filter(r => r.status === "present").length;
-      const attendanceRate = totalLogs ? Math.round((presents / totalLogs) * 100) : 0;
+      // null → the card shows "—" (the activity has no events in the active period)
+      const attendanceRate = totalLogs ? Math.round((presents / totalLogs) * 100) : null;
       // US-29: registered events + avg attendees per event, derived from records on every render
       const { events, avgPresent } = getActivityEventStats(records, act);
 
@@ -97,8 +133,9 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
     });
   }, [attendees, records]);
 
-  // Caserits Bee-havior table (US-24): rates are computed over recorded events, not the colleague's own logs
-  const beehaviorData = useMemo(() => computeBeehavior(attendees, records), [attendees, records]);
+  // Caserits Bee-havior table (US-24): rates are computed over recorded events, not the colleague's own logs.
+  // US-35: it gets every record so enrollment ignores the period; the period only trims the events counted.
+  const beehaviorData = useMemo(() => computeBeehavior(attendees, allRecords, period), [attendees, allRecords, period]);
 
   // Filtered list of Bee-haviors based on search
   const filteredBeehaviorData = useMemo(() => {
@@ -113,8 +150,78 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
   // Accent colors for the 4 activities (Sage, Forest, Sand, Moss)
   const COLORS = ["#8A9A5B", "#2D3E35", "#D4A373", "#CCD5AE"];
 
+  const emptyPeriod = (id: string, className = "") => (
+    <p id={id} className={`text-sm text-natural-forest italic font-medium ${className}`}>
+      {EMPTY_PERIOD_MESSAGE}
+    </p>
+  );
+
+  const dateFieldClass =
+    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
+
   return (
     <div className="space-y-8 animate-fade-in" id="dashboard-tab">
+      {/* US-35: period selector. Only changes the view, never the stored data. */}
+      <section
+        id="period-selector"
+        aria-label="Dashboard period"
+        className="bg-white rounded-[24px] border border-[#E9E5D9] shadow-sm p-5 space-y-3"
+      >
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="period-mode" className="text-sm font-bold text-natural-forest">Period</label>
+            <select
+              id="period-mode"
+              value={periodFilter.mode}
+              onChange={(e) => onPeriodFilterChange({ ...periodFilter, mode: e.target.value as PeriodFilter["mode"] })}
+              className={dateFieldClass}
+            >
+              <option value="all">All time</option>
+              <option value="custom">Custom range</option>
+            </select>
+          </div>
+
+          {periodFilter.mode === "custom" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="period-start" className="text-sm font-bold text-natural-forest">Start date</label>
+                <input
+                  id="period-start"
+                  type="date"
+                  value={periodFilter.start}
+                  onChange={(e) => onPeriodFilterChange({ ...periodFilter, start: e.target.value })}
+                  aria-invalid={invalidRange}
+                  aria-describedby={invalidRange ? "period-error" : undefined}
+                  className={dateFieldClass}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="period-end" className="text-sm font-bold text-natural-forest">End date</label>
+                <input
+                  id="period-end"
+                  type="date"
+                  value={periodFilter.end}
+                  onChange={(e) => onPeriodFilterChange({ ...periodFilter, end: e.target.value })}
+                  aria-invalid={invalidRange}
+                  aria-describedby={invalidRange ? "period-error" : undefined}
+                  className={dateFieldClass}
+                />
+              </div>
+            </>
+          )}
+
+          <p id="period-showing" className="text-sm font-semibold text-natural-forest ml-auto">
+            Showing: {period ? formatPeriodLabel(period) : "All time"}
+          </p>
+        </div>
+
+        {invalidRange && (
+          <p id="period-error" role="alert" className="text-sm font-semibold text-red-800 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            The start date must be on or before the end date. The range was not applied.
+          </p>
+        )}
+      </section>
+
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Card 1: Total Attendees */}
@@ -127,10 +234,16 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Total Unique Attendees</p>
-            <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{totalAttendees}</h3>
-            <span className="text-xs text-natural-forest/60 font-medium flex items-center mt-1">
-              Active across all clubs
-            </span>
+            {periodHasNoEvents ? (
+              emptyPeriod("kpi-total-attendees-empty")
+            ) : (
+              <>
+                <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{totalAttendees}</h3>
+                <span className="text-xs text-natural-forest/60 font-medium flex items-center mt-1">
+                  {period ? "Attended in this period" : "Active across all clubs"}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -144,12 +257,18 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance</p>
-            <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-              {overallAttendanceRate}%
-            </h3>
-            <span className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
-              Based on {records.length} records
-            </span>
+            {periodHasNoEvents ? (
+              emptyPeriod("kpi-attendance-rate-empty")
+            ) : (
+              <>
+                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
+                  {overallAttendanceRate}%
+                </h3>
+                <span className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
+                  Based on {records.length} records
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -163,12 +282,18 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Inter-Activity Hub</p>
-            <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-              {multiActivityPercentage}%
-            </h3>
-            <span className="text-xs text-natural-sand font-semibold flex items-center mt-1">
-              {multiActivityCount} colleagues active in 2+ activities
-            </span>
+            {periodHasNoEvents ? (
+              emptyPeriod("kpi-multi-enrollment-empty")
+            ) : (
+              <>
+                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
+                  {multiActivityPercentage}%
+                </h3>
+                <span className="text-xs text-natural-sand font-semibold flex items-center mt-1">
+                  {multiActivityCount} colleagues active in 2+ activities
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -217,6 +342,10 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
           </div>
         </div>
 
+        {periodHasNoEvents ? (
+          emptyPeriod("beehavior-empty", "p-12 text-center bg-natural-cream/15 rounded-3xl border border-natural-border")
+        ) : (
+        <>
         {/* Engagement Tier Toggles / Interactive Legend */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-natural-cream/20 rounded-3xl border border-natural-border/40">
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/60 border border-natural-border/30">
@@ -352,11 +481,16 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
             </tbody>
           </table>
         </div>
+        </>
+        )}
       </div>
 
       {/* Activity Status Cards */}
       <div className="space-y-4">
         <h3 className="text-lg font-serif font-bold text-natural-forest">Activities Matrix Profile</h3>
+        {periodHasNoEvents ? (
+          emptyPeriod("matrix-empty", "p-8 text-center bg-white rounded-[24px] border border-[#E9E5D9]")
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {activityData.map((act, index) => {
             const barColor = COLORS[index % COLORS.length];
@@ -393,13 +527,15 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-natural-forest/70">Attendance rate:</span>
-                    <span style={{ color: barColor }} className="font-bold">{act["Attendance Rate (%)"]}%</span>
+                    <span style={{ color: barColor }} className="font-bold">
+                      {act["Attendance Rate (%)"] === null ? "—" : `${act["Attendance Rate (%)"]}%`}
+                    </span>
                   </div>
                   {/* Visual Progress bar */}
                   <div className="h-2 bg-natural-cream rounded-full border border-natural-border/30 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${act["Attendance Rate (%)"]}%`, backgroundColor: barColor }}
+                      style={{ width: `${act["Attendance Rate (%)"] ?? 0}%`, backgroundColor: barColor }}
                     ></div>
                   </div>
                 </div>
@@ -407,6 +543,7 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Charts Grid - Moved to the bottom of the dashboard */}
@@ -422,6 +559,9 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
               Q2 Year 2026
             </span>
           </div>
+          {periodHasNoEvents ? (
+            emptyPeriod("trend-empty", "h-[300px] flex items-center justify-center")
+          ) : (
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -455,6 +595,7 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
 
         {/* Activity Bar Chart */}
@@ -468,6 +609,9 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
               4 Core Activities
             </span>
           </div>
+          {periodHasNoEvents ? (
+            emptyPeriod("comparison-empty", "h-[300px] flex items-center justify-center")
+          ) : (
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -493,6 +637,7 @@ export default function DashboardStats({ attendees, records, onNavigate }: Dashb
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
       </div>
     </div>

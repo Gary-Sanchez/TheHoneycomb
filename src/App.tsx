@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Attendee, AttendanceRecord, AuthStatus, ImportFingerprint, ImportOutcome, ManualCheckInResult } from "./types";
 import { nameKey, REFERENCE_DATE } from "./utils";
+import { ALL_TIME, PeriodFilter } from "./beehavior";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
 import AttendeeDirectory from "./components/AttendeeDirectory";
@@ -14,6 +15,9 @@ type ServerState = { attendees: Attendee[]; records: AttendanceRecord[]; notes: 
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+  // US-35: Dashboard period. Lives here because DashboardStats unmounts on tab change; in memory
+  // only, so a reload goes back to All time.
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(ALL_TIME);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -490,6 +494,8 @@ export default function App() {
           <DashboardStats
             attendees={attendees}
             records={records}
+            periodFilter={periodFilter}
+            onPeriodFilterChange={setPeriodFilter}
             onNavigate={(tab) => setActiveTab(tab)}
           />
         )}
