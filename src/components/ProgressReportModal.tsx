@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
+import { Attendee, AttendanceRecord } from "../types";
+import { computeBeehavior, getMonthlyRates } from "../beehavior";
 import { X, Calendar, CheckCircle, XCircle, Award, AwardIcon, MessageSquare, Plus, Save, BookOpen } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
@@ -31,53 +32,41 @@ export default function ProgressReportModal({
   }, [records, attendee]);
 
   // 2. Calculations
-  const totalLogs = attLogs.length;
-  const presentLogs = attLogs.filter(r => r.status === "present").length;
+  // US-41: event-based Overall (attended events ÷ all events of the colleague's activities), the
+  // same All-time value as the Bee-havior Hub — not presents ÷ the colleague's own records (~100%).
+  // Only the colleague's row is needed; event totals come from every record.
+  const beehavior = useMemo(() => computeBeehavior([attendee], records, null)[0], [attendee, records]);
+  const rate = beehavior.overallRate; // null → no event to rate them on → "—"
+  const presentLogs = beehavior.overallPresents;
+  const totalLogs = beehavior.overallTotal;
   const absentLogs = totalLogs - presentLogs;
-  const rate = totalLogs ? Math.round((presentLogs / totalLogs) * 100) : 0;
 
-  // 3. Activity specific breakdown across all core activities
+  // 3. Activity specific breakdown across all core activities (US-41: event-based, from computeBeehavior)
   const activityBreakdown = useMemo(() => {
-    return ACTIVITIES.map(act => {
-      const logs = attLogs.filter(r => r.activity === act);
-      const total = logs.length;
-      const presents = logs.filter(r => r.status === "present").length;
-      const actRate = total ? Math.round((presents / total) * 100) : 0;
-      return {
-        activity: act,
-        total,
-        presents,
-        absents: total - presents,
-        rate: actRate,
-      };
-    });
-  }, [attLogs]);
+    return beehavior.activityStats.map(s => ({
+      activity: s.activity,
+      total: s.total,
+      presents: s.presents,
+      absents: s.total - s.presents,
+      rate: s.rate, // null → not enrolled (or no events) → "—"
+    }));
+  }, [beehavior]);
 
-  // 4. Monthly Trend for this colleague
+  // 4. Monthly Trend for this colleague (US-41: every month with a rate, not fixed April–June)
   const monthlyData = useMemo(() => {
-    const months = ["04", "05", "06"];
-    const monthNames = { "04": "April", "05": "May", "06": "June" };
-
-    return months.map(m => {
-      const monthLogs = attLogs.filter(r => r.date.split("-")[1] === m);
-      const total = monthLogs.length;
-      const presents = monthLogs.filter(r => r.status === "present").length;
-      const rateVal = total ? Math.round((presents / total) * 100) : 0;
-
-      return {
-        month: monthNames[m as keyof typeof monthNames],
-        "Attendance (%)": rateVal,
-      };
-    });
-  }, [attLogs]);
+    return getMonthlyRates(attendee, records).map(m => ({
+      month: m.label,
+      "Attendance (%)": m.rate,
+    }));
+  }, [attendee, records]);
 
   // 5. Generate progress status text
   const progressStatus = useMemo(() => {
-    if (totalLogs === 0) return { title: "Unlogged", color: "text-natural-sage bg-natural-cream/40", desc: "No attendance recorded yet." };
+    if (rate === null) return { title: "Unlogged", color: "text-natural-sage bg-natural-cream/40", desc: "No attendance recorded yet." };
     if (rate >= 90) return { title: "Excellent Performance", color: "text-natural-forest bg-[#CCD5AE]/30", desc: "Demonstrating consistent engagement and participation." };
     if (rate >= 75) return { title: "Good Standing", color: "text-natural-sand bg-natural-wheat/40", desc: "Steady participation. Keeps pace with activities nicely." };
     return { title: "Needs Support", color: "text-natural-sand bg-[#E9E5D9]/50", desc: "Recommend direct outreach or follow-up email to re-engage." };
-  }, [rate, totalLogs]);
+  }, [rate]);
 
   const handleSaveNotes = () => {
     if (!canEdit) return;
@@ -122,8 +111,8 @@ export default function ProgressReportModal({
                 <div>
                   <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider">Overall Engagement</h4>
                   <div className="flex items-baseline space-x-2 mt-4">
-                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{totalLogs === 0 ? "—" : `${rate}%`}</span>
-                    {totalLogs > 0 && <span className="text-xs text-natural-sage font-bold">Present Rate</span>}
+                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{rate === null ? "—" : `${rate}%`}</span>
+                    {rate !== null && <span className="text-xs text-natural-sage font-bold">Present Rate</span>}
                   </div>
                   <div className="flex justify-between items-center text-xs text-natural-sage font-semibold border-t border-natural-border/60 pt-3 mt-4">
                     <span>Present: <strong className="text-natural-forest">{presentLogs}</strong></span>
@@ -142,7 +131,7 @@ export default function ProgressReportModal({
             {/* Attendance Chart Column */}
             <div className="md:col-span-2 bg-natural-cream/30 rounded-[24px] p-5 border border-natural-border/60">
               <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider mb-4">Monthly Trends Progress</h4>
-              {totalLogs === 0 ? (
+              {monthlyData.length === 0 ? (
                 <div className="h-[140px] flex items-center justify-center text-xs text-natural-sage italic font-medium">
                   No attendance records logged yet
                 </div>
@@ -181,13 +170,24 @@ export default function ProgressReportModal({
               {activityBreakdown.map(bd => (
                 <div key={bd.activity} className="border border-natural-border rounded-[20px] p-4 bg-white hover:border-natural-sage transition">
                   <div className="flex justify-between items-start">
-                    <h5 className="font-serif font-bold text-[#1A1A1A] text-sm">{bd.activity}</h5>
-                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                      bd.total === 0 ? "bg-natural-cream text-natural-sage" :
-                      bd.rate >= 90 ? "bg-[#CCD5AE]/40 text-natural-forest" :
-                      bd.rate >= 75 ? "bg-natural-wheat text-natural-sand" : "bg-[#E9E5D9] text-natural-sand"
-                    }`}>
-                      {bd.total === 0 ? "No Logs" : `${bd.rate}%`}
+                    <div>
+                      <h5 className="font-serif font-bold text-[#1A1A1A] text-sm">{bd.activity}</h5>
+                      {/* US-41: the fraction behind the event-based rate */}
+                      {bd.rate !== null && (
+                        <p className="text-[10px] text-natural-sage font-medium mt-0.5">
+                          Attended {bd.presents} of {bd.total} events
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      title={bd.rate === null ? undefined : `Attended ${bd.presents} of ${bd.total} events`}
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                        bd.rate === null ? "bg-natural-cream text-natural-sage" :
+                        bd.rate >= 90 ? "bg-[#CCD5AE]/40 text-natural-forest" :
+                        bd.rate >= 75 ? "bg-natural-wheat text-natural-sand" : "bg-[#E9E5D9] text-natural-sand"
+                      }`}
+                    >
+                      {bd.rate === null ? "—" : `${bd.rate}%`}
                     </span>
                   </div>
 
@@ -234,7 +234,7 @@ export default function ProgressReportModal({
 
                 <div className="flex justify-between items-center">
                   <span className="text-[11px] text-natural-sage font-bold">
-                    {canEdit ? "Notes are saved locally on this device." : "Read-only. Sign in as admin in Settings to edit notes."}
+                    {canEdit ? "Notes are saved to The Honeycomb server." : "Read-only. Sign in as admin in Settings to edit notes."}
                   </span>
 
                   <button
