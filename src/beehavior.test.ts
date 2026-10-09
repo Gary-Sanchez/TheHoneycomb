@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { computeBeehavior, getHiveTier } from "./beehavior";
+import {
+  ALL_TIME,
+  computeBeehavior,
+  filterRecordsByPeriod,
+  formatPeriodLabel,
+  getHiveTier,
+  isValidPeriod,
+  resolvePeriod,
+} from "./beehavior";
 import type { AttendanceRecord, Attendee } from "./types";
 
 const attendee = (id: string, joinedDate = "2026-01-01"): Attendee => ({
@@ -47,7 +55,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Reading Club")).toMatchObject({ presents: 1, total: 4, rate: 25 });
     expect(row.overallRate).toBe(25);
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier?.label).toBe("Dormant");
   });
 
   it("QA-04: a non-enrolled activity is null and stays out of Overall", () => {
@@ -89,7 +97,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.participatedCount).toBe(0);
     expect(row.overallRate).toBeNull();
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier?.label).toBe("Dormant");
   });
 
   it("QA-07: 2/4 Speakeasy + 3/4 Writing Hood → Overall 63% (5/8), Forager, multi-activity", () => {
@@ -101,7 +109,7 @@ describe("computeBeehavior (US-24)", () => {
     ];
     const row = computeBeehavior([attendee("ana")], records)[0];
     expect(row).toMatchObject({ overallPresents: 5, overallTotal: 8, overallRate: 63, isMulti: true, participatedCount: 2 });
-    expect(row.tier.label).toBe("Forager");
+    expect(row.tier?.label).toBe("Forager");
   });
 
   it("a sole present in a single-event activity → 100% (1/1)", () => {
@@ -109,7 +117,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana", "2026-06-24")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Speakeasy")).toMatchObject({ presents: 1, total: 1, rate: 100 });
     expect(row.overallRate).toBe(100);
-    expect(row.tier.label).toBe("Busy Bee");
+    expect(row.tier?.label).toBe("Busy Bee");
   });
 
   it("a present before joinedDate still counts, over the full activity", () => {
@@ -175,7 +183,7 @@ describe("computeBeehavior — same events for everyone (US-31)", () => {
     ];
     const row = computeBeehavior([attendee("ana", eight[7]), attendee("otro")], records)[0];
     expect(row).toMatchObject({ overallPresents: 3, overallTotal: 12, overallRate: 25, isMulti: true });
-    expect(row.tier.label).toBe("Dormant");
+    expect(row.tier?.label).toBe("Dormant");
   });
 
   it("QA-07: a new event raises the denominator by 1 for every member, without creating absent rows", () => {
@@ -192,6 +200,113 @@ describe("computeBeehavior — same events for everyone (US-31)", () => {
     const rows = computeBeehavior([attendee("ana"), attendee("bea")], records);
     expect(stat(rows, "ana", "Speakeasy")).toMatchObject({ presents: 1, total: 2, rate: 50 });
     expect(stat(rows, "bea", "Speakeasy")).toMatchObject({ presents: 1, total: 2, rate: 50 });
+  });
+});
+
+describe("period filter (US-35)", () => {
+  const may = (n: number) => `2026-05-${String(n).padStart(2, "0")}`;
+  const june = (n: number) => `2026-06-${String(n).padStart(2, "0")}`;
+  const JUNE = { start: "2026-06-01", end: "2026-06-30" };
+
+  // Speakeasy: 4 events in May, 4 in June; "ana" attended the 4 June ones, "otro" defines the May ones
+  const speakeasy = () => [
+    ...[1, 8, 15, 22].map(n => rec("otro", "Speakeasy", may(n))),
+    ...[1, 8, 15, 22].map(n => rec("ana", "Speakeasy", june(n))),
+  ];
+
+  it("QA-02: 4/4 inside June → 100%, All time → 50% (4/8)", () => {
+    const rows = (p: typeof JUNE | null) => computeBeehavior([attendee("ana"), attendee("otro")], speakeasy(), p);
+    expect(stat(rows(JUNE), "ana", "Speakeasy")).toMatchObject({ presents: 4, total: 4, rate: 100 });
+    expect(stat(rows(null), "ana", "Speakeasy")).toMatchObject({ presents: 4, total: 8, rate: 50 });
+  });
+
+  it("QA-03: enrolled but absent from every event in the range → 0% (0/2), counted in Overall", () => {
+    const records = [
+      rec("ana", "Reading Club", may(5)), // enrolls ana, outside the range
+      rec("otro", "Reading Club", june(2)),
+      rec("otro", "Reading Club", june(16)),
+    ];
+    const row = computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE)[0];
+    expect(row.activityStats.find(s => s.activity === "Reading Club")).toMatchObject({
+      enrolled: true,
+      presents: 0,
+      total: 2,
+      rate: 0,
+    });
+    expect(row).toMatchObject({ overallPresents: 0, overallTotal: 2, overallRate: 0 });
+    expect(row.tier?.label).toBe("Dormant");
+  });
+
+  it("Multi-Activity counts activities attended in the period, in step with the Inter-Activity KPI", () => {
+    const records = [
+      rec("ana", "Speakeasy", may(5)), // ana enrolls in both activities in May...
+      rec("ana", "Reading Club", may(6)),
+      rec("otro", "Speakeasy", june(2)), // ...but only Speakeasy has June events she attends
+      rec("ana", "Speakeasy", june(9)),
+      rec("otro", "Reading Club", june(3)),
+    ];
+    const ana = (p: typeof JUNE | null) => computeBeehavior([attendee("ana"), attendee("otro")], records, p)[0];
+
+    // All time: present in 2 activities → multi
+    expect(ana(null)).toMatchObject({ participatedCount: 2, isMulti: true });
+    // June: present only in Speakeasy → single, although still enrolled (0%) in Reading Club
+    expect(ana(JUNE)).toMatchObject({ participatedCount: 1, isMulti: false });
+    expect(stat([ana(JUNE)], "ana", "Reading Club")).toMatchObject({ enrolled: true, presents: 0, total: 1, rate: 0 });
+  });
+
+  it("an enrolled colleague with no events in the range has no Overall and no Hive Status", () => {
+    const records = [rec("ana", "Writing Hood", may(5)), rec("otro", "Speakeasy", june(2))];
+    const row = computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE)[0];
+    expect(row.attendee.id).toBe("ana");
+    expect(row.overallRate).toBeNull();
+    expect(row.tier).toBeNull();
+    // All time keeps US-24: no rate → Dormant
+    expect(computeBeehavior([attendee("nuevo")], records, null)[0].tier?.label).toBe("Dormant");
+  });
+
+  it("QA-04: an activity without events in the range is — for everyone and stays out of Overall", () => {
+    const records = [
+      rec("ana", "Writing Hood", may(5)), // enrolled, but the only event is outside the range
+      rec("ana", "Speakeasy", june(1)),
+      rec("otro", "Speakeasy", june(8)),
+    ];
+    const rows = computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE);
+    expect(stat(rows, "ana", "Writing Hood")).toMatchObject({ enrolled: true, total: 0, rate: null });
+    expect(stat(rows, "otro", "Writing Hood")).toMatchObject({ enrolled: false, rate: null });
+    expect(rows[0].overallTotal).toBe(2); // Speakeasy only
+  });
+
+  it("a colleague not enrolled in an activity stays — even when it has events in the range", () => {
+    const records = [rec("ana", "Speakeasy", june(1)), rec("otro", "Music Room", june(2))];
+    const rows = computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE);
+    expect(stat(rows, "ana", "Music Room")).toMatchObject({ enrolled: false, rate: null });
+  });
+
+  it("both ends of the range are included", () => {
+    const records = [rec("ana", "Speakeasy", "2026-06-01"), rec("ana", "Speakeasy", "2026-06-30"), rec("ana", "Speakeasy", "2026-07-01")];
+    expect(filterRecordsByPeriod(records, JUNE).map(r => r.date)).toEqual(["2026-06-01", "2026-06-30"]);
+  });
+
+  it("a null period returns every record and leaves the input untouched", () => {
+    const records = speakeasy();
+    const before = JSON.stringify(records);
+    expect(filterRecordsByPeriod(records, null)).toBe(records);
+    computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE);
+    expect(JSON.stringify(records)).toBe(before);
+  });
+
+  it("isValidPeriod / resolvePeriod: only a complete, ordered custom range is applied", () => {
+    expect(isValidPeriod("2026-06-01", "2026-06-01")).toBe(true);
+    expect(isValidPeriod("2026-06-30", "2026-06-01")).toBe(false);
+    expect(isValidPeriod("2026-06-01", "")).toBe(false);
+    expect(resolvePeriod(ALL_TIME)).toBeNull();
+    expect(resolvePeriod({ mode: "custom", start: "2026-06-30", end: "2026-06-01" })).toBeNull();
+    expect(resolvePeriod({ mode: "custom", start: "2026-06-01", end: "2026-06-30" })).toEqual(JUNE);
+  });
+
+  it("formatPeriodLabel: same year once, spanning years on both ends", () => {
+    expect(formatPeriodLabel(JUNE)).toBe("Jun 1 – Jun 30, 2026");
+    expect(formatPeriodLabel({ start: "2025-12-01", end: "2026-01-31" })).toBe("Dec 1, 2025 – Jan 31, 2026");
   });
 });
 
