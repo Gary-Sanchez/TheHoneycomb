@@ -69,10 +69,20 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   back to the reference date, and returns `dateDetected: false` so the UI requires a date. It also
   drops attendees under 10 minutes when the file has a duration column (US-25, summed per table
   section, max across sections so Teams' two tables aren't double counted).
-- **CSV batches (US-27)**: `POST /api/parse-attendance-batch` parses 1–20 `.csv` of one activity
-  and rejects the whole batch (too many files, non-.csv, or a file declaring another activity);
-  identical files come back as `duplicateOf`. The confirmed batch is one `POST /api/records/import`,
-  and `importParsedData` rolls back in-memory state if the write fails — all or nothing.
+- **CSV batches (US-27)**: `POST /api/parse-attendance-batch` parses 1–20 `.csv` and rejects the
+  whole batch (too many files, non-.csv, or an unreadable file); identical files come back as
+  `duplicateOf`. The confirmed batch is one `POST /api/records/import`, and `importParsedData` rolls
+  back in-memory state if the write fails — all or nothing.
+- **Activity per file (US-37)**: the client sends no activity (the "Select Activity Import Log" tabs
+  are gone). `resolveFileActivity` (`parser.ts`) detects it per file — file name first, then the
+  `.csv`'s meeting title; other formats use the name only — and only a literal mention of one of the
+  4 activities counts (case/accent-insensitive; "email"/"book" don't). 0 or >1 mentions →
+  `activity: ""`, shown as `Activity Not Detected` with a per-file selector, and Confirm stays
+  disabled. Responses carry `activity` + `activitySource` per file; a `.csv` Activity column still wins
+  for its own row, and a manual pick applies to every record of the file. A batch may mix activities.
+  `parseCsvForImport` (`server.ts`) passes `defaultActivity: ""` so nothing silently becomes
+  Speakeasy. `alreadyImported`/`alreadyLoaded` are computed at parse time with the detected activity:
+  after a manual pick the `POST /api/records/import` 409 is what re-checks them.
 - **Duplicate `.csv` across imports (US-26)**: every imported `.csv` leaves a fingerprint in
   `imports` (SHA-256, filename, activity, date, attendee count + names, `importedAt`), saved in the
   same `POST /api/records/import` write (that's the fingerprint route — `requireAdmin` +
