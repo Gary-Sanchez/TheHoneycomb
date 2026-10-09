@@ -4,6 +4,7 @@ import { Search, UserPlus, FileBarChart2, X, Check, Mail, Calendar, Settings, Tr
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
 import { sortByName } from "../utils";
+import { computeBeehavior } from "../beehavior";
 
 interface AttendeeDirectoryProps {
   attendees: Attendee[];
@@ -43,15 +44,29 @@ export default function AttendeeDirectory({
   const [editingEnrollmentId, setEditingEnrollmentId] = useState<string | null>(null);
 
   // Compute individual attendance rates
+  // US-39: `rate` is the colleague's Overall from the Bee-havior Hub (All time) — attended events in
+  // their enrolled activities ÷ all events of those activities (US-31), via computeBeehavior so both
+  // views share the math. null (no present at all) renders "—". `total`/`present` still count the
+  // colleague's own records for the "No Logs" / "(x/y days)" texts (US-46).
   const attendeeStats = useMemo(() => {
-    const stats: Record<string, { total: number; present: number; rate: number }> = {};
-    
+    const stats: Record<string, {
+      total: number; present: number; rate: number | null; overallPresents: number; overallTotal: number;
+    }> = {};
+
+    const overallById = new Map(computeBeehavior(attendees, records, null).map(row => [row.attendee.id, row]));
+
     attendees.forEach(att => {
       const attLogs = records.filter(r => r.attendeeId === att.id);
       const total = attLogs.length;
       const present = attLogs.filter(r => r.status === "present").length;
-      const rate = total ? Math.round((present / total) * 100) : 0;
-      stats[att.id] = { total, present, rate };
+      const row = overallById.get(att.id);
+      stats[att.id] = {
+        total,
+        present,
+        rate: row?.overallRate ?? null,
+        overallPresents: row?.overallPresents ?? 0,
+        overallTotal: row?.overallTotal ?? 0,
+      };
     });
 
     return stats;
@@ -107,8 +122,8 @@ export default function AttendeeDirectory({
     onUpdateEnrollment(attendee.id, nextActivities);
   };
 
-  const getAttendanceBadgeClass = (rate: number, total: number) => {
-    if (total === 0) return "bg-natural-cream text-natural-sage border border-natural-border/40";
+  const getAttendanceBadgeClass = (rate: number | null, total: number) => {
+    if (total === 0 || rate === null) return "bg-natural-cream text-natural-sage border border-natural-border/40";
     if (rate >= 90) return "bg-[#CCD5AE]/40 text-natural-forest font-bold border border-[#CCD5AE]/80";
     if (rate >= 75) return "bg-natural-wheat text-natural-forest font-bold border border-natural-border/60";
     return "bg-natural-sand/15 text-natural-sand font-bold border border-natural-sand/35";
@@ -251,7 +266,7 @@ export default function AttendeeDirectory({
               </thead>
               <tbody className="divide-y divide-natural-border/60 text-sm text-natural-forest">
                 {filteredAttendees.map(att => {
-                  const stat = attendeeStats[att.id] || { total: 0, present: 0, rate: 0 };
+                  const stat = attendeeStats[att.id] || { total: 0, present: 0, rate: null, overallPresents: 0, overallTotal: 0 };
 
                   return (
                     <tr key={att.id} className="hover:bg-natural-cream/10 transition">
@@ -276,8 +291,11 @@ export default function AttendeeDirectory({
                       {/* Attendance Stats badge */}
                       <td className="p-4">
                         <div className="flex items-center space-x-2">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${getAttendanceBadgeClass(stat.rate, stat.total)}`}>
-                            {stat.total === 0 ? "No Logs" : `${stat.rate}%`}
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${getAttendanceBadgeClass(stat.rate, stat.total)}`}
+                            title={stat.rate === null ? undefined : `Attended ${stat.overallPresents} of ${stat.overallTotal} events`}
+                          >
+                            {stat.total === 0 ? "No Logs" : stat.rate === null ? "—" : `${stat.rate}%`}
                           </span>
                           {stat.total > 0 && (
                             <span className="text-xs text-natural-sage font-mono font-medium">
