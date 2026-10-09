@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Attendee, AttendanceRecord, AuthStatus, ImportFingerprint, ImportOutcome, ManualCheckInResult } from "./types";
-import { nameKey, REFERENCE_DATE } from "./utils";
+import { formatDisplayDate, nameKey, REFERENCE_DATE } from "./utils";
 import { ALL_TIME, PeriodFilter } from "./beehavior";
 import DashboardStats from "./components/DashboardStats";
 import AttendanceLogger from "./components/AttendanceLogger";
@@ -349,7 +349,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-natural-cream flex flex-col items-center justify-center gap-3 font-sans text-natural-forest">
         <Loader2 className="h-8 w-8 animate-spin text-natural-sage" />
-        <p className="text-sm font-semibold text-natural-sage">Loading The Honeycomb...</p>
+        <p className="text-sm font-semibold text-natural-sage">Loading The Honeycomb…</p>
       </div>
     );
   }
@@ -374,7 +374,8 @@ export default function App() {
           <div className="flex items-center space-x-4 self-end sm:self-auto text-xs text-natural-forest/80 font-medium">
             <span className="flex items-center gap-1.5 bg-natural-wheat/40 px-3 py-1.5 rounded-lg border border-natural-border/60">
               <Clock className="h-3.5 w-3.5 text-natural-sage" />
-              <span>June 24, 2026</span>
+              {/* US-46: the header date comes from REFERENCE_DATE, in the one display format */}
+              <span>{formatDisplayDate(REFERENCE_DATE)}</span>
             </span>
             <button
               type="button"
