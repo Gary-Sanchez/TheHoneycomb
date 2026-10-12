@@ -4,8 +4,11 @@ import {
   computeBeehavior,
   filterRecordsByPeriod,
   formatPeriodLabel,
+  getHiveStatus,
   getHiveTier,
+  hasHiveData,
   isValidPeriod,
+  NO_DATA_TIER,
   resolvePeriod,
 } from "./beehavior";
 import type { AttendanceRecord, Attendee } from "./types";
@@ -55,7 +58,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Reading Club")).toMatchObject({ presents: 1, total: 4, rate: 25 });
     expect(row.overallRate).toBe(25);
-    expect(row.tier?.label).toBe("Dormant");
+    expect(row.tier.label).toBe("Dormant");
   });
 
   it("QA-04: a non-enrolled activity is null and stays out of Overall", () => {
@@ -97,7 +100,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
     expect(row.participatedCount).toBe(0);
     expect(row.overallRate).toBeNull();
-    expect(row.tier?.label).toBe("Dormant");
+    expect(row.tier.label).toBe("No data"); // US-44: was Dormant
   });
 
   it("QA-07: 2/4 Speakeasy + 3/4 Writing Hood → Overall 63% (5/8), Forager, multi-activity", () => {
@@ -109,7 +112,7 @@ describe("computeBeehavior (US-24)", () => {
     ];
     const row = computeBeehavior([attendee("ana")], records)[0];
     expect(row).toMatchObject({ overallPresents: 5, overallTotal: 8, overallRate: 63, isMulti: true, participatedCount: 2 });
-    expect(row.tier?.label).toBe("Forager");
+    expect(row.tier.label).toBe("Forager");
   });
 
   it("a sole present in a single-event activity → 100% (1/1)", () => {
@@ -117,7 +120,7 @@ describe("computeBeehavior (US-24)", () => {
     const row = computeBeehavior([attendee("ana", "2026-06-24")], records)[0];
     expect(row.activityStats.find(s => s.activity === "Speakeasy")).toMatchObject({ presents: 1, total: 1, rate: 100 });
     expect(row.overallRate).toBe(100);
-    expect(row.tier?.label).toBe("Busy Bee");
+    expect(row.tier.label).toBe("Busy Bee");
   });
 
   it("a present before joinedDate still counts, over the full activity", () => {
@@ -183,7 +186,7 @@ describe("computeBeehavior — same events for everyone (US-31)", () => {
     ];
     const row = computeBeehavior([attendee("ana", eight[7]), attendee("otro")], records)[0];
     expect(row).toMatchObject({ overallPresents: 3, overallTotal: 12, overallRate: 25, isMulti: true });
-    expect(row.tier?.label).toBe("Dormant");
+    expect(row.tier.label).toBe("Dormant");
   });
 
   it("QA-07: a new event raises the denominator by 1 for every member, without creating absent rows", () => {
@@ -234,7 +237,7 @@ describe("period filter (US-35)", () => {
       rate: 0,
     });
     expect(row).toMatchObject({ overallPresents: 0, overallTotal: 2, overallRate: 0 });
-    expect(row.tier?.label).toBe("Dormant");
+    expect(row.tier.label).toBe("Dormant");
   });
 
   it("Multi-Activity counts activities attended in the period, in step with the Inter-Activity KPI", () => {
@@ -254,14 +257,14 @@ describe("period filter (US-35)", () => {
     expect(stat([ana(JUNE)], "ana", "Reading Club")).toMatchObject({ enrolled: true, presents: 0, total: 1, rate: 0 });
   });
 
-  it("an enrolled colleague with no events in the range has no Overall and no Hive Status", () => {
+  it("US-44 QA-02: enrolled only in Writing Hood, no Writing Hood events in the range → no Overall, No data", () => {
     const records = [rec("ana", "Writing Hood", may(5)), rec("otro", "Speakeasy", june(2))];
     const row = computeBeehavior([attendee("ana"), attendee("otro")], records, JUNE)[0];
     expect(row.attendee.id).toBe("ana");
     expect(row.overallRate).toBeNull();
-    expect(row.tier).toBeNull();
-    // All time keeps US-24: no rate → Dormant
-    expect(computeBeehavior([attendee("nuevo")], records, null)[0].tier?.label).toBe("Dormant");
+    expect(row.tier).toBe(NO_DATA_TIER);
+    // All time, no present at all → also No data (was Dormant before US-44)
+    expect(computeBeehavior([attendee("nuevo")], records, null)[0].tier.label).toBe("No data");
   });
 
   it("QA-04: an activity without events in the range is — for everyone and stays out of Overall", () => {
@@ -322,5 +325,38 @@ describe("getHiveTier", () => {
     [100, "Busy Bee"],
   ])("%i%% → %s", (rate, label) => {
     expect(getHiveTier(rate).label).toBe(label);
+  });
+});
+
+describe("US-44: No data instead of Dormant", () => {
+  it("QA-01: a registered colleague without any present → no Overall, No data (not Dormant)", () => {
+    const records = [rec("otro", "Speakeasy", D(1))];
+    const row = computeBeehavior([attendee("ana"), attendee("otro")], records)[0];
+    expect(row.overallRate).toBeNull();
+    expect(row.tier).toBe(NO_DATA_TIER);
+    expect(row.tier.label).toBe("No data");
+    expect(hasHiveData(row)).toBe(false);
+  });
+
+  it("with no records at all, every colleague is No data", () => {
+    const rows = computeBeehavior([attendee("ana"), attendee("bea")], []);
+    expect(rows.map(r => r.tier.label)).toEqual(["No data", "No data"]);
+  });
+
+  it("a colleague with an Overall keeps their tier and counts as having data", () => {
+    const row = computeBeehavior([attendee("ana")], [rec("ana", "Reading Club", D(1))])[0];
+    expect(row.tier.label).toBe("Busy Bee");
+    expect(hasHiveData(row)).toBe(true);
+  });
+
+  it("getHiveStatus: null → No data; 0% (had events, attended none) → Dormant", () => {
+    expect(getHiveStatus(null)).toBe(NO_DATA_TIER);
+    expect(getHiveStatus(0).label).toBe("Dormant");
+    expect(getHiveStatus(80).label).toBe("Busy Bee");
+  });
+
+  it("No data has no icon and a grey style distinct from every tier", () => {
+    expect(NO_DATA_TIER.icon).toBe("");
+    for (const rate of [0, 26, 51, 76]) expect(getHiveTier(rate).color).not.toBe(NO_DATA_TIER.color);
   });
 });

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { getAttendedActivities } from "../beehavior";
+import { pluralize } from "../utils";
 import { Check, Users, ShieldAlert, Award, FileSpreadsheet, ArrowRightLeft, Sparkles } from "lucide-react";
 
 interface CrossReferenceHubProps {
@@ -79,7 +80,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
         const rate = Math.round((shared / totalAct1) * 100);
         if (rate >= 30 && shared > 0) {
           insights.push(
-            `💡 High Overlap: ${rate}% of colleagues in "${act1.replace("English ", "")}" also attend "${act2.replace("English ", "")}" (${shared} shared colleagues).`
+            `💡 High overlap: ${rate}% of colleagues in ${act1} also attend ${act2} (${pluralize(shared, "shared colleague")}).`
           );
         }
       });
@@ -87,12 +88,12 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
     if (stats.super > 0) {
       insights.push(
-        `🏆 Highly Active: We have ${stats.super} colleagues participating in 3 or more English activities simultaneously, showing great dedication.`
+        `🏆 Super Active: ${pluralize(stats.super, "colleague")} attended 3 or more activities.`
       );
     }
 
     if (insights.length === 0) {
-      insights.push("✏️ No major activity overlap trends detected yet. Log more sessions to extract participation patterns!");
+      insights.push("✏️ No strong overlap between activities yet. It will show up as more attendance records are added.");
     }
 
     return insights;
@@ -112,7 +113,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
           <div>
             <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Single Activity Only</p>
             <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{stats.single}</h3>
-            <span className="text-xs text-natural-sage font-semibold">Participating in one activity</span>
+            <span className="text-xs text-natural-sage font-semibold">Attended one activity</span>
           </div>
         </div>
 
@@ -122,7 +123,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
             <ArrowRightLeft className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Multi-Activity Overlap</p>
+            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Multi-Activity</p>
             <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{stats.multi}</h3>
             <span className="text-xs text-natural-sand font-semibold">Active in 2+ activities</span>
           </div>
@@ -134,7 +135,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
             <Award className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-[#8A9A5B] font-bold mb-1">Super Active Overlap</p>
+            <p className="text-xs uppercase tracking-wider text-[#8A9A5B] font-bold mb-1">Super Active</p>
             <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">{stats.super}</h3>
             <span className="text-xs text-[#8A9A5B] font-semibold">Active in 3+ activities</span>
           </div>
@@ -150,10 +151,10 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-[#CCD5AE]" />
-              <h3 className="text-lg font-serif font-bold text-white">Interactive Overlap Cross-Referencer</h3>
+              <h3 className="text-lg font-serif font-bold text-white">Compare Two Activities</h3>
             </div>
             <p className="text-xs text-natural-wheat/80 leading-relaxed">
-              Select any two English activities to find the exact cohort of colleagues who have logged attendance in both. Ideal for understanding social overlaps and optimizing company activity calendars.
+              Select two activities to see the colleagues who attended both. Useful for spotting overlaps when planning the activity calendar.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -195,9 +196,9 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
             </h4>
 
             {compareAct1 === compareAct2 ? (
-              <p className="text-xs text-natural-wheat/65 italic">Please select two different activities to cross reference.</p>
+              <p className="text-xs text-natural-wheat/65 italic">Select two different activities to compare.</p>
             ) : intersectingAttendees.length === 0 ? (
-              <p className="text-xs text-natural-wheat/65 italic">No colleagues have registered attendance in both activities yet.</p>
+              <p className="text-xs text-natural-wheat/65 italic">No colleagues attended both activities yet.</p>
             ) : (
               <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto">
                 {intersectingAttendees.map(att => (
@@ -272,7 +273,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                 overlapFilter === "multi" ? "bg-white text-natural-forest shadow-sm border border-natural-border/40" : "hover:text-natural-forest text-natural-sage"
               }`}
             >
-              Overlap (2+) ({stats.multi})
+              Multi-Activity (2+) ({stats.multi})
             </button>
             <button
               type="button"
@@ -281,7 +282,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                 overlapFilter === "super" ? "bg-white text-natural-forest shadow-sm border border-natural-border/40" : "hover:text-natural-forest text-natural-sage"
               }`}
             >
-              Super ({stats.super})
+              Super Active ({stats.super})
             </button>
           </div>
         </div>
@@ -313,11 +314,11 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                           <span>{att.name}</span>
                           {numActivities >= 3 ? (
                             <span className="text-[9px] uppercase font-black tracking-widest bg-natural-forest text-natural-cream border border-natural-forest/30 px-1.5 py-0.5 rounded">
-                              Super
+                              Super Active
                             </span>
                           ) : numActivities >= 2 ? (
                             <span className="text-[9px] uppercase font-black tracking-widest bg-natural-wheat text-natural-sand border border-natural-border/60 px-1.5 py-0.5 rounded">
-                              Overlap
+                              Multi-Activity
                             </span>
                           ) : null}
                         </div>
