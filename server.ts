@@ -390,7 +390,8 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
   } catch (err: any) {
     console.error("Error parsing attendance file:", err);
     return res.status(500).json({
-      error: "An error occurred while parsing the file. " + (err.message || ""),
+      // US-46: the raw exception stays in the server log; the user gets what happened and what to do
+      error: "The file couldn't be read. Check that it's a valid attendance file and try again.",
     });
   }
 });
@@ -409,7 +410,12 @@ app.post(
   (req, res, next) => {
     upload.array("files", MAX_CSV_BATCH_FILES)(req, res, (err: unknown): any => {
       if (err instanceof multer.MulterError) {
-        const error = err.code === "LIMIT_UNEXPECTED_FILE" ? TOO_MANY_FILES_ERROR : `Upload rejected: ${err.message}`;
+        const error =
+          err.code === "LIMIT_UNEXPECTED_FILE"
+            ? TOO_MANY_FILES_ERROR
+            : err.code === "LIMIT_FILE_SIZE"
+              ? "A file is larger than 10 MB, so the whole batch was rejected. Remove that file and try again."
+              : "The upload could not be read, so the whole batch was rejected. Try again.";
         return res.status(400).json({ error });
       }
       next(err);
@@ -485,7 +491,9 @@ app.post(
       });
     } catch (err: any) {
       console.error("Error parsing attendance batch:", err);
-      return res.status(500).json({ error: "An error occurred while parsing the files. " + (err.message || "") });
+      return res.status(500).json({
+        error: "The files couldn't be read, so the whole batch was rejected. Check that they're valid attendance files and try again.",
+      });
     }
   }
 );
@@ -578,9 +586,12 @@ export async function startServer() {
   // Global Express error handler to ensure we always return JSON instead of HTML on error
   app.use((err: any, req: any, res: any, next: any) => {
     console.error("Global Express error caught:", err);
-    res.status(err.status || err.statusCode || 500).json({
-      error: err.message || "An unexpected error occurred on the server."
-    });
+    // US-46: never echo raw exception text to the user
+    const error =
+      err?.code === "LIMIT_FILE_SIZE"
+        ? "The file is larger than 10 MB. Upload a smaller file."
+        : "Something went wrong on the server. Try again; if it keeps happening, restart The Honeycomb.";
+    res.status(err.status || err.statusCode || 500).json({ error });
   });
 
   // Localhost-only by default; exposing the API to the LAN is an explicit opt-in (US-11).

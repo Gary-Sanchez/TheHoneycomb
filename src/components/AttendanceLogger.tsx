@@ -1,6 +1,6 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES, ActivityType, ManualCheckInResult } from "../types";
-import { REFERENCE_DATE } from "../utils";
+import { REFERENCE_DATE, formatDisplayDate } from "../utils";
 import { Calendar, Check, X, UserPlus, AlertCircle, Sparkles } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
@@ -74,12 +74,12 @@ export default function AttendanceLogger({
     });
 
     const sessionNote = alreadyInSession
-      ? "already in this session — no duplicate created"
+      ? "already in this event, no duplicate created"
       : joinedExistingSession
-        ? "joined existing session"
-        : "new session created";
+        ? "joined the existing event"
+        : "new event created";
     setSuccessMsg(
-      `${isNew ? "Registered and checked in" : "Checked in"} ${attendee.name} for ${selectedActivity} on ${selectedDate} (${sessionNote}).`
+      `${isNew ? "Added and checked in" : "Checked in"} ${attendee.name} for ${selectedActivity} on ${formatDisplayDate(selectedDate)} (${sessionNote}).`
     );
     setTimeout(() => setSuccessMsg(""), 4000);
   };
@@ -148,7 +148,7 @@ export default function AttendanceLogger({
       origin: { y: 0.8 }
     });
 
-    setSuccessMsg(`Successfully added ${newAtt.name} to the directory!`);
+    setSuccessMsg(`Added ${newAtt.name} to the directory.`);
     setTimeout(() => setSuccessMsg(""), 4000);
   };
 
@@ -171,7 +171,7 @@ export default function AttendanceLogger({
       origin: { y: 0.8 }
     });
 
-    setSuccessMsg(`Attendance saved successfully for ${selectedActivity} on ${selectedDate}!`);
+    setSuccessMsg(`Attendance saved for ${selectedActivity} on ${formatDisplayDate(selectedDate)}.`);
     setStatuses({}); // Clear status buffer
     setTimeout(() => setSuccessMsg(""), 4000);
   };
@@ -182,7 +182,7 @@ export default function AttendanceLogger({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-natural-border pb-6">
         <div>
           <h2 className="text-2xl font-serif font-bold text-[#1A1A1A]">Log Session Attendance</h2>
-          <p className="text-sm text-natural-sage font-medium">Select date and activity to check in attendees</p>
+          <p className="text-sm text-natural-sage font-medium">Select a date and activity to check in colleagues.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
@@ -216,7 +216,7 @@ export default function AttendanceLogger({
             className="flex items-center gap-1.5 bg-natural-wheat border border-natural-border/40 hover:bg-natural-wheat/80 text-natural-forest font-semibold px-4 py-2 rounded-xl text-sm transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UserPlus className="h-4 w-4 text-natural-sage" />
-            <span>Quick Add Colleague</span>
+            <span>Add Colleague</span>
           </button>
         </div>
       </div>
@@ -273,19 +273,19 @@ export default function AttendanceLogger({
         <fieldset disabled={!canEdit} className="contents">
         <h3 className="text-xs font-bold uppercase tracking-wider text-natural-forest flex items-center gap-1.5">
           <UserPlus className="h-4 w-4 text-natural-sage" />
-          Introduce and Check In a New Name
+          Add and Check In a Colleague
         </h3>
         <p className="text-xs text-natural-sage font-medium">
-          Type a colleague's name to register them (or find them in the directory) and save them as <strong>Present</strong> in the session for the selected date and activity.
+          Type a colleague's name to add them (or find them in the directory) and save them as <strong>Present</strong> in the event for the selected date and activity.
         </p>
         <div id="manual-session-target" className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-bold text-natural-forest bg-white border border-natural-border rounded-lg px-2.5 py-1">
-            {selectedActivity} · {selectedDate || "No date selected"}
+            {selectedActivity} · {selectedDate ? formatDisplayDate(selectedDate) : "No date selected"}
           </span>
           <span className="font-semibold text-natural-sage">
             {existingRecords.length > 0
-              ? `Joins existing session (${sessionPresent.length} present)`
-              : "A new session will be created"}
+              ? `Joins the existing event (${sessionPresent.length} present)`
+              : "A new event will be created"}
           </span>
         </div>
         {sessionPresent.length > 0 && (
@@ -303,7 +303,7 @@ export default function AttendanceLogger({
         <div className="flex gap-3">
           <input
             type="text"
-            placeholder="Introduce new name (e.g. Fabiola Arias)..."
+            placeholder="Enter the colleague's full name…"
             value={inlineName}
             onChange={(e) => setInlineName(e.target.value)}
             className="flex-1 bg-white border border-natural-border rounded-xl px-4 py-2.5 text-natural-forest text-sm focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-medium placeholder-natural-sage/50"
@@ -324,11 +324,12 @@ export default function AttendanceLogger({
           <div className="flex justify-between items-center">
             <h3 className="font-serif font-bold text-natural-forest flex items-center gap-2">
               <UserPlus className="h-4 w-4 text-natural-sage" />
-              Quick Register New Colleague
+              Add Colleague
             </h3>
             <button
               type="button"
               onClick={() => setShowQuickAdd(false)}
+              aria-label="Cancel"
               className="text-natural-sage hover:text-natural-forest"
             >
               <X className="h-4 w-4" />
@@ -372,7 +373,7 @@ export default function AttendanceLogger({
               type="submit"
               className="px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold rounded-xl transition"
             >
-              Register Colleague
+              Add Colleague
             </button>
           </div>
         </form>
@@ -387,7 +388,7 @@ export default function AttendanceLogger({
           {existingRecords.length > 0 && (
             <span className="text-xs font-semibold bg-[#FAEDCD]/40 text-natural-sand border border-[#D4A373]/30 px-3 py-1 rounded-full flex items-center gap-1.5">
               <AlertCircle className="h-3.5 w-3.5 text-natural-sand" />
-              Existing entries for this day will be updated
+              Existing attendance records for this event will be updated
             </span>
           )}
         </div>
@@ -401,7 +402,7 @@ export default function AttendanceLogger({
               disabled={!canEdit}
               className="inline-flex items-center gap-1 bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <UserPlus className="h-3.5 w-3.5" /> Register First Colleague
+              <UserPlus className="h-3.5 w-3.5" /> Add First Colleague
             </button>
           </div>
         ) : (
