@@ -2,9 +2,10 @@ import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
 import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt } from "../utils";
 import { isBlacklistedName } from "../blacklist";
-import { UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
+import { ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
+import { MAX_CSV_BATCH_FILES, checkCsvBatch } from "../uploadLimits";
 
 interface DocumentParserProps {
   attendees: Attendee[];
@@ -26,8 +27,8 @@ const SESSION_EXPIRED_MESSAGE = "Your admin session has expired. Sign in again i
 class SessionExpiredError extends Error {}
 
 const VALID_EXTENSIONS = [".txt", ".csv", ".docx", ".doc", ".xlsx", ".xls"];
-// US-27: up to 20 .csv files of one activity per import; every other format stays one file at a time
-const MAX_CSV_FILES = 20;
+// US-38: with more file groups than this, the preview starts with every group collapsed
+const COLLAPSE_GROUPS_FROM = 4;
 
 const extensionOf = (f: File) => f.name.substring(f.name.lastIndexOf(".")).toLowerCase();
 
@@ -76,6 +77,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // US-25/US-27: one entry per uploaded .csv (empty for other formats)
   const [fileGroups, setFileGroups] = useState<ParsedFileGroup[]>([]);
   const [expandedExclusions, setExpandedExclusions] = useState<Set<number>>(new Set());
+  // US-38: file groups whose records table is hidden (a 50-file preview stays light)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
   // Logs added and logs turned from absent to present by the last confirmed import
   const [importResult, setImportResult] = useState<{ added: number; updated: number } | null>(null);
   const [importing, setImporting] = useState(false);
@@ -130,6 +133,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     setParsedRecords([]);
     setFileGroups([]);
     setExpandedExclusions(new Set());
+    setCollapsedGroups(new Set());
     setImportResult(null);
   };
 
@@ -173,13 +177,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       return;
     }
     if (selected.length > 1) {
-      // US-27: the whole selection is rejected, never trimmed to the first 20
-      if (selected.length > MAX_CSV_FILES) {
-        setErrorMsg(`You selected ${selected.length} files. The maximum is ${MAX_CSV_FILES} .csv files per import, so the whole selection was rejected.`);
-        return;
-      }
       if (selected.some(f => extensionOf(f) !== ".csv")) {
         setErrorMsg("Only .csv files can be selected together. Upload .xlsx, .xls, .docx, .doc and .txt files one at a time.");
+        return;
+      }
+      // US-27/US-38: the whole selection is rejected (never trimmed) past 50 files or 50 MB in total
+      const limitError = checkCsvBatch(selected);
+      if (limitError) {
+        setErrorMsg(limitError);
         return;
       }
     }
@@ -287,7 +292,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     resetPreview();
     animateLoadingText(0);
 
-    // US-27: .csv uploads (1–20 files) go through the batch parser; other formats stay single-file
+    // US-27/US-38: .csv uploads (1–50 files) go through the batch parser; other formats stay single-file
     const isCsvBatch = files.every(f => extensionOf(f) === ".csv");
     const formData = new FormData();
     if (isCsvBatch) {
@@ -349,6 +354,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       setParsedRecords(processed);
       setFileGroups(groups);
+      setCollapsedGroups(groups.length >= COLLAPSE_GROUPS_FROM ? new Set(groups.map(g => g.id)) : new Set());
       setDateRequired(missingDate);
       if (missingDate) {
         setBatchDate("");
@@ -488,6 +494,15 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     setParsedRecords((prev) => prev.filter((_, i) => i !== indexToDelete));
   };
 
+  const toggleGroup = (groupId: number) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
   const toggleExclusions = (groupId: number) => {
     setExpandedExclusions(prev => {
       const next = new Set(prev);
@@ -600,6 +615,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     const excludedCount = group.excludedByDuration.length;
     const showExcluded = expandedExclusions.has(group.id);
     const isBlocked = isBlockedGroup(group);
+    const isCollapsed = collapsedGroups.has(group.id);
 
     return (
       <div key={group.id} className="space-y-3" data-testid="file-group">
@@ -609,12 +625,26 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           }`}
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="h-4 w-4 text-natural-sage shrink-0" />
-              <h4 className="font-serif font-bold text-[#1A1A1A] text-sm truncate" title={group.filename}>
-                {group.filename}
-              </h4>
-            </div>
+            <h4 className="min-w-0">
+              {/* US-38: each file group collapses so a 50-file preview stays easy to scroll */}
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                aria-expanded={!isCollapsed}
+                aria-controls={`file-group-${group.id}-rows`}
+                disabled={isBlocked || rows.length === 0}
+                className="flex items-center gap-2 min-w-0 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest disabled:cursor-default"
+              >
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`h-4 w-4 shrink-0 text-natural-forest transition-transform ${isCollapsed ? "-rotate-90" : ""} ${isBlocked || rows.length === 0 ? "invisible" : ""}`}
+                />
+                <FileText className="h-4 w-4 text-natural-sage shrink-0" />
+                <span className="font-serif font-bold text-[#1A1A1A] text-sm truncate" title={group.filename}>
+                  {group.filename}
+                </span>
+              </button>
+            </h4>
             {!isBlocked && (
               <label className="flex items-center gap-2 text-xs font-semibold text-natural-forest">
                 <Calendar className="h-4 w-4 text-natural-sage" />
@@ -700,7 +730,11 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           )}
         </div>
 
-        {!isBlocked && rows.length > 0 && renderRecordsTable(rows)}
+        {!isBlocked && rows.length > 0 && (
+          <div id={`file-group-${group.id}-rows`} hidden={isCollapsed}>
+            {!isCollapsed && renderRecordsTable(rows)}
+          </div>
+        )}
       </div>
     );
   };
@@ -762,6 +796,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
 
+      {/* US-38: the import result is announced to screen readers */}
+      <div aria-live="polite" aria-atomic="true">
       {importResult !== null && (importResult.added > 0 || importResult.updated > 0) && (
         <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-6 py-4 rounded-xl flex items-center gap-4 animate-bounce-subtle">
           <CheckCircle className="h-8 w-8 text-natural-sage shrink-0" />
@@ -777,7 +813,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {/* US-33: an import that changed nothing is not a success — those colleagues were already logged */}
       {importResult !== null && importResult.added === 0 && importResult.updated === 0 && (
-        <div className="bg-amber-50 border border-amber-300 text-amber-800 px-6 py-4 rounded-xl flex items-center gap-4" role="alert">
+        <div className="bg-amber-50 border border-amber-300 text-amber-800 px-6 py-4 rounded-xl flex items-center gap-4">
           <AlertTriangle className="h-8 w-8 text-amber-600 shrink-0" />
           <div>
             <h4 className="font-serif font-bold text-base">No new attendance logs</h4>
@@ -787,6 +823,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           </div>
         </div>
       )}
+      </div>
 
       {errorMsg && (
         <div className="bg-natural-sand/10 border border-natural-sand/30 text-natural-sand px-4 py-3 rounded-xl text-sm flex items-start gap-2.5" role="alert">
@@ -847,7 +884,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                     Drag and drop your attendance file here
                   </p>
                   <p className="text-sm text-natural-sage max-w-sm mx-auto font-medium">
-                    Supports Excel spreadsheets, Word text logs, and plaintext CSVs. Select up to {MAX_CSV_FILES} .csv files of the same activity at once.
+                    Supports Excel spreadsheets, Word text logs, and plaintext CSVs. Select up to {MAX_CSV_BATCH_FILES} .csv files of the same activity at once.
                   </p>
                   <span className="inline-block mt-4 text-xs font-bold text-natural-forest bg-natural-wheat border border-natural-border/40 px-3.5 py-1.5 rounded-lg hover:bg-natural-wheat/80 transition shadow-sm">
                     Browse Files
@@ -1010,6 +1047,25 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               </button>
             </div>
           </div>
+
+          {fileGroups.length >= COLLAPSE_GROUPS_FROM && (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCollapsedGroups(new Set())}
+                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+              >
+                Expand All
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollapsedGroups(new Set(fileGroups.map(g => g.id)))}
+                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+              >
+                Collapse All
+              </button>
+            </div>
+          )}
 
           {fileGroups.length > 0
             ? fileGroups.map(renderFileGroup)
