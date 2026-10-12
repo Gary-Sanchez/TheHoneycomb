@@ -78,12 +78,13 @@ export function getHiveTier(rate: number): HiveTier {
 }
 
 // US-44: no events to rate the colleague on (not enrolled anywhere, or their activities had no
-// events) is not the same as attending none of them — grey, no tier color, no icon.
+// events) is not the same as attending none of them — grey, no tier color, no icon. textColor is
+// darker than `color` so the label keeps ≥ 4.5:1 on bgLight (US-42).
 export const NO_DATA_TIER: HiveTier = {
   label: "No data",
   color: "#6B7280",
   bgLight: "#F3F4F6",
-  textColor: "#6B7280",
+  textColor: "#4B5563",
   icon: "",
   meaning: "No events to rate this colleague on yet.",
 };

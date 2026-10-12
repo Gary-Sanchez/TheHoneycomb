@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { X, Calendar, CheckCircle, XCircle, Award, AwardIcon, MessageSquare, Plus, Save, BookOpen } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { computeBeehavior } from "../beehavior";
+import HiveStatusBadge from "./HiveStatusBadge";
 
 interface ProgressReportModalProps {
   attendee: Attendee;
@@ -71,13 +73,9 @@ export default function ProgressReportModal({
     });
   }, [attLogs]);
 
-  // 5. Generate progress status text
-  const progressStatus = useMemo(() => {
-    if (totalLogs === 0) return { title: "Unlogged", color: "text-natural-sage bg-natural-cream/40", desc: "No attendance recorded yet." };
-    if (rate >= 90) return { title: "Excellent Performance", color: "text-natural-forest bg-[#CCD5AE]/30", desc: "Demonstrating consistent engagement and participation." };
-    if (rate >= 75) return { title: "Good Standing", color: "text-natural-sand bg-natural-wheat/40", desc: "Steady participation. Keeps pace with activities nicely." };
-    return { title: "Needs Support", color: "text-natural-sand bg-[#E9E5D9]/50", desc: "Recommend direct outreach or follow-up email to re-engage." };
-  }, [rate, totalLogs]);
+  // 5. US-42: Hive Status from the colleague's All-time Overall, the same one the Bee-havior Hub shows
+  // (the old 90% / 75% performance scale is gone)
+  const overallRate = useMemo(() => computeBeehavior([attendee], records)[0]?.overallRate ?? null, [attendee, records]);
 
   const handleSaveNotes = () => {
     if (!canEdit) return;
@@ -132,9 +130,9 @@ export default function ProgressReportModal({
                   </div>
                 </div>
 
-                <div className={`mt-5 p-3 rounded-xl border ${progressStatus.color} border-current/10`}>
-                  <p className="font-bold text-xs leading-none">{progressStatus.title}</p>
-                  <p className="text-[11px] leading-tight mt-1 opacity-90">{progressStatus.desc}</p>
+                <div className="mt-5 space-y-1.5" id="report-hive-status">
+                  <p className="text-xs font-bold text-natural-sage uppercase tracking-wider">Hive Status</p>
+                  <HiveStatusBadge rate={overallRate} size="md" />
                 </div>
               </div>
             </div>
@@ -182,11 +180,7 @@ export default function ProgressReportModal({
                 <div key={bd.activity} className="border border-natural-border rounded-[20px] p-4 bg-white hover:border-natural-sage transition">
                   <div className="flex justify-between items-start">
                     <h5 className="font-serif font-bold text-[#1A1A1A] text-sm">{bd.activity}</h5>
-                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                      bd.total === 0 ? "bg-natural-cream text-natural-sage" :
-                      bd.rate >= 90 ? "bg-[#CCD5AE]/40 text-natural-forest" :
-                      bd.rate >= 75 ? "bg-natural-wheat text-natural-sand" : "bg-[#E9E5D9] text-natural-sand"
-                    }`}>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-natural-cream text-natural-forest border border-natural-border/60">
                       {bd.total === 0 ? "No Logs" : `${bd.rate}%`}
                     </span>
                   </div>
