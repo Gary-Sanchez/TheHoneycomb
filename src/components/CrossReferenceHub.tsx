@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { getAttendedActivities } from "../beehavior";
 import { pluralize } from "../utils";
+import { getAttendedActivities } from "../beehavior";
 import { Check, Users, ShieldAlert, Award, FileSpreadsheet, ArrowRightLeft, Sparkles } from "lucide-react";
 
 interface CrossReferenceHubProps {
