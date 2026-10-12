@@ -37,6 +37,8 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
 - Electron 44 / electron-builder 26. electron-builder 26 drops anything listed in `devDependencies`
   from `app.asar`, so runtime deps (e.g. `vite`, imported by `server.ts`) must be **only** in
   `dependencies` — a duplicate in `devDependencies` breaks the packaged app at startup.
+- `package.json` → `overrides` (`global-agent` ^4, `argparse` ^2 under `mammoth`) keep the unfixable
+  `sprintf-js` advisory out of the tree. Don't drop them until upstream makes them redundant.
 - npm ≥ 11 blocks dependency install scripts unless listed in `package.json` → `allowScripts`.
   After a bump, run `npm install-scripts ls` and approve the new versions (esbuild needs it).
 

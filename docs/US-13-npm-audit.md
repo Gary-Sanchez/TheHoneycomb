@@ -96,3 +96,66 @@ found 0 vulnerabilities
 Verificado después de los cambios: `npm ci` limpio, `npm run lint`, `npm run build`, `npm run dev`
 (API + frontend, subida real de `.xlsx` y `.xls`), `npm run test:e2e` (smoke de Electron 44), y
 `npm run electron:build` + arranque del ejecutable empaquetado (`/api/health` → ok, ventana abierta).
+
+## Regresión del 2026-10-12 — advisories nuevos, no un merge
+
+Una pasada de QA el 2026-10-12 sobre `main` @ `90fb3ca` encontró **13 vulnerabilidades — 1 crítica,
+2 altas, 10 moderadas**.
+
+**Origen**: ningún merge las introdujo. Desde US-13 (`ded28df`) solo un merge tocó
+`package-lock.json` (US-12, `99479c6`), y las versiones de los paquetes afectados son idénticas en
+`ded28df` y en `90fb3ca`. El cambio fue la base de advisories: `npm audit` solo usa advisories
+revisados por GitHub, y estos cuatro se revisaron **después** de cerrar US-13 (2026-09-30):
+
+| Advisory | Paquete | Severidad | Revisado por GitHub | Corregido en |
+|---|---|---|---|---|
+| [GHSA-ch52-4w7c-c8xp](https://github.com/advisories/GHSA-ch52-4w7c-c8xp) | `http-cache-semantics` ≤ 4.2.0 | alta | 2026-10-02 | 4.3.0 |
+| [GHSA-jqcg-44mw-7w3h](https://github.com/advisories/GHSA-jqcg-44mw-7w3h) | `proxy-addr` 1.1.0 – 2.0.7 (vía `express`) | **crítica** | 2026-10-05 | 2.0.8 |
+| [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q) | `source-map-js` 1.0.0 – 1.2.1 | alta | 2026-10-05 | 1.2.2 |
+| [GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c) | `sprintf-js` ≤ 1.1.3 (todas las versiones) | moderada | 2026-10-05 | **sin fix** |
+
+Las 10 moderadas son `sprintf-js` y la cadena que lo arrastra:
+`mammoth` → `argparse@1` → `sprintf-js`, y
+`electron-builder` → `app-builder-lib` → `@electron/get@3` → `global-agent@3` → `roarr` → `sprintf-js`.
+
+### 1. `npm audit fix` (sin `--force`)
+
+`proxy-addr` 2.0.7 → 2.0.8, `source-map-js` 1.2.1 → 1.2.2, `http-cache-semantics` 4.2.0 → 4.3.0.
+De paso subió dentro de los rangos ya declarados en `package.json`: `electron-builder` (y familia)
+26.15.3 → 26.17.0 y `mammoth` 1.12.0 → 1.13.0.
+
+### 2. `sprintf-js` — sacado del árbol con `overrides`
+
+`npm audit fix --force` proponía bajar `mammoth` a 0.3.29 (un downgrade de años), así que se
+descartó. Como `sprintf-js` no tiene versión corregida, se eliminaron los dos caminos que lo traen,
+con `overrides` acotados en `package.json`:
+
+| Override | Por qué es seguro |
+|---|---|
+| `"global-agent": "^4.1.3"` | `global-agent` 4 ya no depende de `roarr` (ni de `sprintf-js`). `@electron/get` solo llama a `require('global-agent').bootstrap()`, que v4 sigue exportando, y esa llamada ya está dentro de un `try/catch`. Es una dependencia **opcional** de dev, usada solo por electron-builder para descargar Electron detrás de un proxy. |
+| `"mammoth": { "argparse": "^2.0.1" }` | `mammoth` usa `argparse` **solo** en su CLI (`bin/mammoth`). La app usa la API de librería (`mammoth.convertToHtml` en `parser.ts`), que no lo toca. Contra: el CLI `npx mammoth` deja de funcionar (la API de argparse 2 cambió). No lo usamos. Está acotado a `mammoth`, así que `js-yaml` sigue con su `argparse@2` propio. |
+
+**Mantenimiento**: borrar cada override cuando upstream lo haga innecesario: `@electron/get` reemplace
+`global-agent` (hay un TODO en su `proxy.js`) o lo suba a v4, o `mammoth` pase a `argparse@2`.
+Hasta entonces, no quitarlos o vuelven las 10 moderadas.
+
+### Install scripts
+
+`npm install-scripts ls` → `No packages with unreviewed install scripts.` Ninguna versión nueva
+pide aprobación (`esbuild` y `electron-winstaller` no cambiaron).
+
+### Estado final
+
+```
+$ npm audit
+found 0 vulnerabilities
+```
+
+Verificado (Node 24.20.0 / npm 11.19.0): `npm audit` → 0, `npm run lint`, `npm run build`,
+`npm test` (142/142, incluye los casos `.docx` de `parser.test.ts`), smoke de `mammoth.convertToHtml`
+sobre un `.docx` generado, `global-agent.bootstrap` exportado, y `npm run electron:build` (descarga
+de Electron por `@electron/get` + NSIS) + arranque del ejecutable empaquetado (`/api/health` → ok).
+
+> **Lección**: `npm audit` = 0 es un estado que vence con el tiempo, no una propiedad del código.
+> Un advisory nuevo puede romperlo sin que nadie toque el lockfile, así que conviene que CI
+> corra `npm audit` en cada PR y también de forma programada sobre `main`.
