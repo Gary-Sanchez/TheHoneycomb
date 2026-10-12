@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
-import { Check, Users, ShieldAlert, Award, FileSpreadsheet, ArrowRightLeft, Sparkles } from "lucide-react";
+import { Check, Users, Award, ArrowRightLeft, Sparkles } from "lucide-react";
 
 interface CrossReferenceHubProps {
   attendees: Attendee[];
@@ -87,7 +87,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
         const rate = Math.round((shared / totalAct1) * 100);
         if (rate >= 30 && shared > 0) {
           insights.push(
-            `💡 High Overlap: ${rate}% of colleagues in "${act1.replace("English ", "")}" also attend "${act2.replace("English ", "")}" (${shared} shared colleagues).`
+            `💡 High Overlap: ${rate}% of colleagues in "${act1}" also attend "${act2}" (${shared} shared colleagues).`
           );
         }
       });
@@ -166,8 +166,9 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">First Activity</label>
+                <label htmlFor="compare-activity-1" className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">First Activity</label>
                 <select
+                  id="compare-activity-1"
                   value={compareAct1}
                   onChange={(e) => setCompareAct1(e.target.value)}
                   className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-natural-sage/50"
@@ -181,8 +182,9 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">Second Activity</label>
+                <label htmlFor="compare-activity-2" className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">Second Activity</label>
                 <select
+                  id="compare-activity-2"
                   value={compareAct2}
                   onChange={(e) => setCompareAct2(e.target.value)}
                   className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-natural-sage/50"
@@ -303,7 +305,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                   <th className="p-4 pl-6">Colleague Name</th>
                   {ACTIVITIES.map(act => (
                     <th key={act} className="p-4 text-center max-w-[150px] truncate">
-                      {act.replace("English ", "")}
+                      {act}
                     </th>
                   ))}
                   <th className="p-4 text-center">Total Activities</th>
@@ -339,10 +341,14 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                             <div className="flex justify-center">
                               {isParticipating ? (
                                 <div className="h-6 w-6 rounded-full bg-natural-cream border border-natural-border text-natural-sage flex items-center justify-center font-bold">
-                                  <Check className="h-4 w-4 stroke-[3.5]" />
+                                  <Check className="h-4 w-4 stroke-[3.5]" aria-hidden="true" />
+                                  <span className="sr-only">Attended</span>
                                 </div>
                               ) : (
-                                <span className="text-natural-wheat font-black">—</span>
+                                <>
+                                  <span className="text-natural-wheat font-black" aria-hidden="true">—</span>
+                                  <span className="sr-only">Not attended</span>
+                                </>
                               )}
                             </div>
                           </td>

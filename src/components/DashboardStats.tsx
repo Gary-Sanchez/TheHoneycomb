@@ -23,7 +23,7 @@ import {
   Legend,
   Cell,
 } from "recharts";
-import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle } from "lucide-react";
+import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search } from "lucide-react";
 
 interface DashboardStatsProps {
   attendees: Attendee[];
@@ -126,7 +126,7 @@ export default function DashboardStats({
         name: act,
         events,
         avgPresent,
-        shortName: act.replace("English ", ""),
+        shortName: act,
         "Active Attendees": activeAttendees,
         "Attendance Rate (%)": attendanceRate,
       };
@@ -301,7 +301,16 @@ export default function DashboardStats({
         <div
           id="kpi-quick-parse"
           className="bg-natural-forest text-natural-cream rounded-[32px] p-6 border border-natural-forest/25 shadow-lg flex flex-col justify-between hover:shadow-xl hover:bg-[#213028] transition-all duration-300 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          aria-label="Open Import Forage Logs"
           onClick={() => onNavigate("parser")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onNavigate("parser");
+            }
+          }}
         >
           <div className="flex justify-between items-start">
             <div className="p-2.5 bg-white/10 text-natural-wheat rounded-xl">
@@ -322,7 +331,7 @@ export default function DashboardStats({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h3 className="text-xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
-              <span className="text-2xl">🍯</span> Caserits Bee-havior Hub
+              <span className="text-2xl" aria-hidden="true">🍯</span> Caserits Bee-havior Hub
             </h3>
             <p className="text-xs text-natural-sage font-medium mt-1">
               Overview of all active Caserits (participants), sorted alphabetically, mapping individual attendance rates across our four distinct activities and assigning custom engagement tiers.
@@ -331,8 +340,9 @@ export default function DashboardStats({
           
           {/* Quick Search */}
           <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-natural-sage" />
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-natural-sage" aria-hidden="true" />
             <input
+              aria-label="Search Caserits"
               type="text"
               placeholder="Search Caserits by name..."
               value={beeSearchQuery}
@@ -349,28 +359,28 @@ export default function DashboardStats({
         {/* Engagement Tier Toggles / Interactive Legend */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-natural-cream/20 rounded-3xl border border-natural-border/40">
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/60 border border-natural-border/30">
-            <span className="text-2xl pt-1">💤</span>
+            <span className="text-2xl pt-1" aria-hidden="true">💤</span>
             <div>
               <h5 className="text-xs font-bold text-[#2F4F4F]">Dormant (0% - 25%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Hibernating. Rare sightings. Still getting to know the honeycomb.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FEFBEA]/60 border border-[#F0E68C]/40">
-            <span className="text-2xl pt-1">🥚</span>
+            <span className="text-2xl pt-1" aria-hidden="true">🥚</span>
             <div>
               <h5 className="text-xs font-bold text-[#6B5800]">Hatcher (26% - 50%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Getting cozy. Halfway to becoming a regular flyer.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFF7E6]/60 border border-[#FFA500]/30">
-            <span className="text-2xl pt-1">🌸</span>
+            <span className="text-2xl pt-1" aria-hidden="true">🌸</span>
             <div>
               <h5 className="text-xs font-bold text-[#804C00]">Forager (51% - 75%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Honey maker. Solid presence, regularly contributing to the buzz.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFFDF0]/60 border border-[#FFD700]/30">
-            <span className="text-2xl pt-1">🐝</span>
+            <span className="text-2xl pt-1" aria-hidden="true">🐝</span>
             <div>
               <h5 className="text-xs font-bold text-[#7A5E00]">Busy Bee (76% - 100%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Queen's favorite. Elite attendance and top-tier dedication.</p>
@@ -457,7 +467,7 @@ export default function DashboardStats({
                              style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
                              title={tier.meaning}
                         >
-                          {tier.icon && <span>{tier.icon}</span>}
+                          {tier.icon && <span aria-hidden="true">{tier.icon}</span>}
                           <span>{tier.label}</span>
                         </div>
                       </td>
@@ -466,7 +476,7 @@ export default function DashboardStats({
                       <td className="p-4 pr-6 text-center">
                         {isMulti ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#FAEDCD] text-[#855B32] border border-[#D4A373]/30 animate-pulse-subtle">
-                            🍯 Yes ({participatedCount} Clubs)
+                            <span aria-hidden="true">🍯</span> Yes ({participatedCount} Clubs)
                           </span>
                         ) : (
                           <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
