@@ -23,6 +23,7 @@ import {
   Legend,
   Cell,
 } from "recharts";
+import { averageOverall, formatAverageBase } from "../dashboardMetrics";
 import { pluralize } from "../utils";
 import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle } from "lucide-react";
 
@@ -83,12 +84,6 @@ export default function DashboardStats({
     ? Math.round((multiActivityCount / totalAttendees) * 100)
     : 0;
 
-  const overallAttendanceRate = useMemo(() => {
-    if (records.length === 0) return 0;
-    const presents = records.filter(r => r.status === "present").length;
-    return Math.round((presents / records.length) * 100);
-  }, [records]);
-
   // 2. Monthly Trend Data (April, May, June 2026)
   const monthlyTrendData = useMemo(() => {
     const months = ["04", "05", "06"];
@@ -137,6 +132,9 @@ export default function DashboardStats({
   // Caserits Bee-havior table (US-24): rates are computed over recorded events, not the colleague's own logs.
   // US-35: it gets every record so enrollment ignores the period; the period only trims the events counted.
   const beehaviorData = useMemo(() => computeBeehavior(attendees, allRecords, period), [attendees, allRecords, period]);
+
+  // US-45: Avg. Attendance Rate = average of the Hub's Overall column; No data colleagues are left out
+  const avgAttendance = useMemo(() => averageOverall(beehaviorData), [beehaviorData]);
 
   // Filtered list of Bee-haviors based on search
   const filteredBeehaviorData = useMemo(() => {
@@ -257,18 +255,16 @@ export default function DashboardStats({
             <CheckCircle2 className="h-6 w-6 text-natural-forest" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance</p>
+            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance Rate</p>
+            <h3 id="kpi-attendance-rate-value" className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
+              {avgAttendance.rate === null ? "—" : `${avgAttendance.rate}%`}
+            </h3>
             {periodHasNoEvents ? (
-              emptyPeriod("kpi-attendance-rate-empty")
+              emptyPeriod("kpi-attendance-rate-empty", "mt-1")
             ) : (
-              <>
-                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-                  {overallAttendanceRate}%
-                </h3>
-                <span className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
-                  Based on {records.length} records
-                </span>
-              </>
+              <span id="kpi-attendance-rate-base" className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
+                {avgAttendance.rate === null ? "No colleagues with an Overall yet" : formatAverageBase(avgAttendance.colleagues)}
+              </span>
             )}
           </div>
         </div>
