@@ -3,6 +3,7 @@ import { Attendee, AttendanceRecord } from "../types";
 import { computeBeehavior, getMonthlyRates } from "../beehavior";
 import { X, Calendar, CheckCircle, XCircle, Award, AwardIcon, MessageSquare, Plus, Save, BookOpen } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { formatDisplayDate } from "../utils";
 
 interface ProgressReportModalProps {
   attendee: Attendee;
@@ -63,6 +64,7 @@ export default function ProgressReportModal({
   // 5. Generate progress status text
   const progressStatus = useMemo(() => {
     if (rate === null) return { title: "Unlogged", color: "text-natural-sage bg-natural-cream/40", desc: "No attendance recorded yet." };
+    if (totalLogs === 0) return { title: "No attendance yet", color: "text-natural-sage bg-natural-cream/40", desc: "" };
     if (rate >= 90) return { title: "Excellent Performance", color: "text-natural-forest bg-[#CCD5AE]/30", desc: "Demonstrating consistent engagement and participation." };
     if (rate >= 75) return { title: "Good Standing", color: "text-natural-sand bg-natural-wheat/40", desc: "Steady participation. Keeps pace with activities nicely." };
     return { title: "Needs Support", color: "text-natural-sand bg-[#E9E5D9]/50", desc: "Recommend direct outreach or follow-up email to re-engage." };
@@ -93,6 +95,7 @@ export default function ProgressReportModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="p-2 text-natural-sage hover:text-natural-forest hover:bg-natural-cream rounded-xl transition"
           >
             <X className="h-5 w-5" />
@@ -109,21 +112,22 @@ export default function ProgressReportModal({
             <div className="space-y-4">
               <div className="bg-natural-cream/30 rounded-[24px] p-5 border border-natural-border/60 flex flex-col justify-between h-full">
                 <div>
-                  <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider">Overall Engagement</h4>
+                  <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider">Attendance Rate</h4>
                   <div className="flex items-baseline space-x-2 mt-4">
                     <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{rate === null ? "—" : `${rate}%`}</span>
                     {rate !== null && <span className="text-xs text-natural-sage font-bold">Present Rate</span>}
+                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{totalLogs === 0 ? "—" : `${rate}%`}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs text-natural-sage font-semibold border-t border-natural-border/60 pt-3 mt-4">
                     <span>Present: <strong className="text-natural-forest">{presentLogs}</strong></span>
                     <span>Absent: <strong className="text-natural-sand">{absentLogs}</strong></span>
-                    <span>Total Logs: <strong>{totalLogs}</strong></span>
+                    <span>Records: <strong>{totalLogs}</strong></span>
                   </div>
                 </div>
 
                 <div className={`mt-5 p-3 rounded-xl border ${progressStatus.color} border-current/10`}>
                   <p className="font-bold text-xs leading-none">{progressStatus.title}</p>
-                  <p className="text-[11px] leading-tight mt-1 opacity-90">{progressStatus.desc}</p>
+                  {progressStatus.desc && <p className="text-[11px] leading-tight mt-1 opacity-90">{progressStatus.desc}</p>}
                 </div>
               </div>
             </div>
@@ -133,7 +137,7 @@ export default function ProgressReportModal({
               <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider mb-4">Monthly Trends Progress</h4>
               {monthlyData.length === 0 ? (
                 <div className="h-[140px] flex items-center justify-center text-xs text-natural-sage italic font-medium">
-                  No attendance records logged yet
+                  No attendance yet
                 </div>
               ) : (
                 <div className="h-[140px]">
@@ -188,20 +192,27 @@ export default function ProgressReportModal({
                       }`}
                     >
                       {bd.rate === null ? "—" : `${bd.rate}%`}
+                    <h5 className="font-serif font-bold text-[#1A1A1A] text-sm">{bd.activity}</h5>
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                      bd.total === 0 ? "bg-natural-cream text-natural-sage" :
+                      bd.rate >= 90 ? "bg-[#CCD5AE]/40 text-natural-forest" :
+                      bd.rate >= 75 ? "bg-natural-wheat text-natural-sand" : "bg-[#E9E5D9] text-natural-sand"
+                    }`}>
+                      {bd.total === 0 ? "No attendance yet" : `${bd.rate}%`}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mt-3 text-center border-t border-natural-border/60 pt-3 text-[11px] text-[#1A1A1A]">
                     <div>
-                      <p className="text-natural-sage font-medium">Presents</p>
+                      <p className="text-natural-sage font-medium">Present</p>
                       <p className="font-bold text-natural-forest mt-0.5">{bd.presents}</p>
                     </div>
                     <div>
-                      <p className="text-natural-sage font-medium">Absents</p>
+                      <p className="text-natural-sage font-medium">Absent</p>
                       <p className="font-bold text-natural-sand mt-0.5">{bd.absents}</p>
                     </div>
                     <div>
-                      <p className="text-natural-sage font-medium">Total logged</p>
+                      <p className="text-natural-sage font-medium">Total</p>
                       <p className="font-bold text-natural-forest mt-0.5">{bd.total}</p>
                     </div>
                   </div>
@@ -226,7 +237,7 @@ export default function ProgressReportModal({
                     setTeacherNotes(e.target.value);
                     if (isSaved) setIsSaved(false);
                   }}
-                  placeholder="Record learning milestones, speaking progress, pronunciation issues, or assignment submissions here..."
+                  placeholder="Record learning milestones, speaking progress, pronunciation issues, or assignment submissions here…"
                   rows={6}
                   readOnly={!canEdit}
                   className="w-full bg-white border border-natural-border rounded-xl p-4 text-sm text-natural-forest placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150 resize-none font-medium read-only:bg-natural-cream/30"
@@ -258,12 +269,12 @@ export default function ProgressReportModal({
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-natural-sage" />
-                Session History Log
+                Attendance History
               </h4>
 
               {attLogs.length === 0 ? (
                 <div className="py-12 text-center text-xs text-natural-sage italic border border-dashed border-natural-border rounded-xl font-medium">
-                  No attendance logged yet.
+                  No attendance yet
                 </div>
               ) : (
                 <div className="border border-natural-border rounded-[20px] overflow-hidden shadow-inner max-h-[220px] overflow-y-auto divide-y divide-natural-border/60">
@@ -271,7 +282,7 @@ export default function ProgressReportModal({
                     <div key={log.id} className="flex justify-between items-center p-3 bg-white text-xs hover:bg-natural-cream/30">
                       <div>
                         <p className="font-bold text-[#1A1A1A]">{log.activity.replace("English ", "")}</p>
-                        <p className="text-[10px] text-natural-sage font-mono mt-0.5">{log.date}</p>
+                        <p className="text-[10px] text-natural-sage font-mono mt-0.5">{formatDisplayDate(log.date)}</p>
                       </div>
 
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold ${
