@@ -144,4 +144,4 @@ y el flujo de estados).
    ```
 
 Con ambos MCPs conectados, las skills del repo (`Tefinha-crea-tickets`, `Honeycomb-executor`,
-`Start-Honeycomb`, `super-tefinha-QA`) quedan operativas tal como están documentadas en `.claude/skills/`.
+`Start-Honeycomb`, `super-tefinha-QA`, `garyale-sobreexplotados`) quedan operativas tal como están documentadas en `.claude/skills/`.
