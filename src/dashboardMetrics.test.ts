@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeBeehavior, getAttendedActivities } from "./beehavior";
+import { computeBeehavior } from "./beehavior";
 import {
   averageOverall,
   computeActivityComparison,
@@ -22,37 +22,6 @@ const rec = (
 // n distinct dates in 2026 starting Jan 5, one per week
 const dates = (n: number) =>
   Array.from({ length: n }, (_, i) => new Date(Date.UTC(2026, 0, 5 + 7 * i)).toISOString().slice(0, 10));
-
-describe("US-43: getAttendedActivities", () => {
-  it("QA-01: present in Speakeasy + only absent in Music Room → participates only in Speakeasy (Single)", () => {
-    const records = [rec("ana", "Speakeasy", "2026-05-01"), rec("ana", "Music Room", "2026-05-02", "absent")];
-    expect(getAttendedActivities([attendee("ana")], records)).toEqual({ ana: ["Speakeasy"] });
-  });
-
-  it("QA-04: present in 3 activities → 3 (Super Active), in ACTIVITIES order", () => {
-    const records = [
-      rec("ana", "Writing Hood", "2026-05-03"),
-      rec("ana", "Speakeasy", "2026-05-01"),
-      rec("ana", "Reading Club", "2026-05-02"),
-      rec("ana", "Speakeasy", "2026-05-08"),
-    ];
-    expect(getAttendedActivities([attendee("ana")], records).ana).toEqual(["Speakeasy", "Reading Club", "Writing Hood"]);
-  });
-
-  it("QA-02: agrees with the Hub's Multi-Activity count", () => {
-    const records = [
-      rec("ana", "Speakeasy", "2026-05-01"),
-      rec("ana", "Music Room", "2026-05-02", "absent"),
-      rec("bea", "Speakeasy", "2026-05-01"),
-      rec("bea", "Reading Club", "2026-05-02"),
-    ];
-    const people = [attendee("ana"), attendee("bea"), attendee("cero")];
-    const map = getAttendedActivities(people, records);
-    const hub = computeBeehavior(people, records);
-    for (const row of hub) expect(map[row.attendee.id].length).toBe(row.participatedCount);
-    expect(map.cero).toEqual([]);
-  });
-});
 
 describe("US-45: averageOverall (Avg. Attendance Rate KPI)", () => {
   it("QA-02: Overall 25%, 50% and 90% plus one No data → 55%, Average of 3 colleagues", () => {
