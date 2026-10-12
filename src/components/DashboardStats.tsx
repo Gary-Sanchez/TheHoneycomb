@@ -241,7 +241,7 @@ export default function DashboardStats({
               <>
                 <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{totalAttendees}</h3>
                 <span className="text-xs text-natural-forest/60 font-medium flex items-center mt-1">
-                  {period ? "Attended in this period" : "Active across all clubs"}
+                  {period ? "Attended in this period" : "Active across all activities"}
                 </span>
               </>
             )}
@@ -512,7 +512,7 @@ export default function DashboardStats({
                     <span className="text-xs text-natural-sage font-semibold">Voluntary participation</span>
                   </div>
                   <h4 className="font-serif font-bold text-[#1A1A1A] text-base mt-3 leading-snug line-clamp-1">{act.name}</h4>
-                  <p className="text-xs text-[#8A9A5B] mt-1">{isWeekly ? "Weekly sessions" : "Biweekly sessions"}</p>
+                  <p className="text-xs text-[#8A9A5B] mt-1">{isWeekly ? "Weekly events" : "Biweekly events"}</p>
                 </div>
 
                 <div className="mt-5 space-y-2">

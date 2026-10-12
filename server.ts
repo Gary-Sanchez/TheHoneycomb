@@ -277,7 +277,10 @@ app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), as
       });
     }
     console.error("Error importing parsed data:", err);
-    res.status(500).json({ error: "Import failed: nothing from this batch was saved." });
+    // US-46: what happened and what to do; the preview stays on screen, so retrying is one click
+    res.status(500).json({
+      error: "Import failed: nothing from this batch was saved. Click Confirm & Import Caserits to try again; if it keeps failing, restart The Honeycomb.",
+    });
   }
 });
 
@@ -335,7 +338,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
   try {
     const file = req.file;
     if (!file) {
-      return res.status(400).json({ error: "No file uploaded." });
+      return res.status(400).json({ error: "No file was received. Select an attendance file and click Extract the Buzz again." });
     }
 
     const filename = file.originalname;
@@ -354,7 +357,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
     if (extension === ".csv") {
       const { isEmpty, fingerprint, declaredActivities, ...parsed } = parseCsvAttendance(file.buffer, requestedActivity);
       if (isEmpty) {
-        return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
+        return res.status(400).json({ error: "The file is empty or couldn't be read. Check that it's a valid attendance file and try again." });
       }
       // US-26: a .csv imported before is blocked here already (no records come back);
       // US-33: so is one whose event already holds all its colleagues
@@ -377,7 +380,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
     const fileTextContent = await extractTextFromFile(file.buffer, extension);
 
     if (!fileTextContent.trim()) {
-      return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
+      return res.status(400).json({ error: "The file is empty or couldn't be read. Check that it's a valid attendance file and try again." });
     }
 
     const records = parseAttendance(fileTextContent, requestedActivity);
@@ -425,7 +428,7 @@ app.post(
     try {
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       if (files.length === 0) {
-        return res.status(400).json({ error: "No file uploaded." });
+        return res.status(400).json({ error: "No files were received. Select the .csv files and click Extract the Buzz again." });
       }
       if (files.length > MAX_CSV_BATCH_FILES) {
         return res.status(400).json({ error: TOO_MANY_FILES_ERROR });
@@ -433,7 +436,7 @@ app.post(
       const notCsv = files.filter(f => path.extname(f.originalname).toLowerCase() !== ".csv");
       if (notCsv.length > 0) {
         return res.status(400).json({
-          error: `Only .csv files can be imported together. Not a .csv: ${notCsv.map(f => f.originalname).join(", ")}.`,
+          error: `Only .csv files can be imported together. Not a .csv: ${notCsv.map(f => f.originalname).join(", ")}. Upload other formats one at a time.`,
         });
       }
 
@@ -443,7 +446,7 @@ app.post(
       const empty = parsed.filter(p => p.isEmpty);
       if (empty.length > 0) {
         return res.status(400).json({
-          error: `The whole batch was rejected because these files are empty or could not be read: ${empty.map(p => p.filename).join(", ")}.`,
+          error: `The whole batch was rejected because these files are empty or couldn't be read: ${empty.map(p => p.filename).join(", ")}. Remove or replace them and try again.`,
         });
       }
 

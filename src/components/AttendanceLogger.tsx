@@ -181,7 +181,7 @@ export default function AttendanceLogger({
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-natural-border pb-6">
         <div>
-          <h2 className="text-2xl font-serif font-bold text-[#1A1A1A]">Log Session Attendance</h2>
+          <h2 className="text-2xl font-serif font-bold text-[#1A1A1A]">Log Event Attendance</h2>
           <p className="text-sm text-natural-sage font-medium">Select a date and activity to check in colleagues.</p>
         </div>
         
@@ -236,7 +236,7 @@ export default function AttendanceLogger({
         <div className="space-y-2">
           <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80 flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5 text-natural-sage" />
-            Session Date
+            Event Date
           </label>
           <input
             type="date"
