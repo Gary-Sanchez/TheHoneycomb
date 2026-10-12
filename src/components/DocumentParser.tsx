@@ -884,7 +884,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                     Drag and drop your attendance file here
                   </p>
                   <p className="text-sm text-natural-sage max-w-sm mx-auto font-medium">
-                    Supports Excel spreadsheets, Word text logs, and plaintext CSVs. Select up to {MAX_CSV_BATCH_FILES} .csv files of the same activity at once.
+                    Supports Excel spreadsheets, Word text logs, and plaintext CSVs. Select up to {MAX_CSV_BATCH_FILES} .csv files at once.
                   </p>
                   <span className="inline-block mt-4 text-xs font-bold text-natural-forest bg-natural-wheat border border-natural-border/40 px-3.5 py-1.5 rounded-lg hover:bg-natural-wheat/80 transition shadow-sm">
                     Browse Files
