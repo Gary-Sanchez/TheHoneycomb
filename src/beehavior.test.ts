@@ -4,6 +4,7 @@ import {
   computeBeehavior,
   filterRecordsByPeriod,
   formatPeriodLabel,
+  getAttendedActivities,
   getHiveStatus,
   getHiveTier,
   hasHiveData,
@@ -358,5 +359,36 @@ describe("US-44: No data instead of Dormant", () => {
   it("No data has no icon and a grey style distinct from every tier", () => {
     expect(NO_DATA_TIER.icon).toBe("");
     for (const rate of [0, 26, 51, 76]) expect(getHiveTier(rate).color).not.toBe(NO_DATA_TIER.color);
+  });
+});
+
+describe("US-43: getAttendedActivities", () => {
+  it("QA-01: present in Speakeasy + only absent in Music Room → participates only in Speakeasy (Single)", () => {
+    const records = [rec("ana", "Speakeasy", "2026-05-01"), rec("ana", "Music Room", "2026-05-02", "absent")];
+    expect(getAttendedActivities([attendee("ana")], records)).toEqual({ ana: ["Speakeasy"] });
+  });
+
+  it("QA-04: present in 3 activities → 3 (Super Active), in ACTIVITIES order", () => {
+    const records = [
+      rec("ana", "Writing Hood", "2026-05-03"),
+      rec("ana", "Speakeasy", "2026-05-01"),
+      rec("ana", "Reading Club", "2026-05-02"),
+      rec("ana", "Speakeasy", "2026-05-08"),
+    ];
+    expect(getAttendedActivities([attendee("ana")], records).ana).toEqual(["Speakeasy", "Reading Club", "Writing Hood"]);
+  });
+
+  it("QA-02: agrees with the Hub's Multi-Activity count", () => {
+    const records = [
+      rec("ana", "Speakeasy", "2026-05-01"),
+      rec("ana", "Music Room", "2026-05-02", "absent"),
+      rec("bea", "Speakeasy", "2026-05-01"),
+      rec("bea", "Reading Club", "2026-05-02"),
+    ];
+    const people = [attendee("ana"), attendee("bea"), attendee("cero")];
+    const map = getAttendedActivities(people, records);
+    const hub = computeBeehavior(people, records);
+    for (const row of hub) expect(map[row.attendee.id].length).toBe(row.participatedCount);
+    expect(map.cero).toEqual([]);
   });
 });
