@@ -157,5 +157,8 @@ sobre un `.docx` generado, `global-agent.bootstrap` exportado, y `npm run electr
 de Electron por `@electron/get` + NSIS) + arranque del ejecutable empaquetado (`/api/health` → ok).
 
 > **Lección**: `npm audit` = 0 es un estado que vence con el tiempo, no una propiedad del código.
-> Un advisory nuevo puede romperlo sin que nadie toque el lockfile, así que conviene que CI
-> corra `npm audit` en cada PR y también de forma programada sobre `main`.
+> Un advisory nuevo puede romperlo sin que nadie toque el lockfile. Por eso `ci.yml` tiene ahora
+> un job `audit` (`npm audit`, falla con cualquier vulnerabilidad) que corre en cada PR y push a
+> `main`, y además a diario sobre `main` (`schedule`, 11:00 UTC; en esa corrida se saltea
+> `lint-and-build`). Si el job programado falla sin cambios en el código, es un advisory nuevo:
+> seguir este documento.
