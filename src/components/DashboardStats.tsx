@@ -3,6 +3,7 @@ import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import {
   computeBeehavior,
   getActivityEventStats,
+  getAttendedActivities,
   formatAvgAttendees,
   filterRecordsByPeriod,
   formatPeriodLabel,
@@ -58,19 +59,9 @@ export default function DashboardStats({
   const periodHasNoEvents = period !== null && records.length === 0;
 
   // 1. Core KPIs
-  // Only activities the colleague actually attended count (Manual Check-In also logs absences)
-  const activitiesAttended = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    attendees.forEach(a => {
-      map[a.id] = [];
-    });
-    records.forEach(r => {
-      if (r.status === "present" && map[r.attendeeId] && !map[r.attendeeId].includes(r.activity)) {
-        map[r.attendeeId].push(r.activity);
-      }
-    });
-    return map;
-  }, [attendees, records]);
+  // US-43: same definition of "participating" as the Overlap Cross-Referencer — at least one present
+  // (Manual Check-In also logs absences, and those don't count)
+  const activitiesAttended = useMemo(() => getAttendedActivities(attendees, records), [attendees, records]);
 
   // All time: the whole directory. With a period: colleagues who attended at least one event in it.
   const totalAttendees = period
