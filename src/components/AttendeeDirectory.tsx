@@ -3,7 +3,7 @@ import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { Search, UserPlus, FileBarChart2, X, Check, Mail, Calendar, Settings, Trash2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
-import { sortByName } from "../utils";
+import { formatDisplayDate, pluralize, sortByName } from "../utils";
 import { computeBeehavior } from "../beehavior";
 import HiveStatusBadge from "./HiveStatusBadge";
 
@@ -130,7 +130,7 @@ export default function AttendeeDirectory({
             <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-natural-sage" />
             <input
               type="text"
-              placeholder="Search colleagues by name or email..."
+              placeholder="Search colleagues by name or email…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-natural-cream/20 border border-natural-border rounded-xl pl-11 pr-4 py-2.5 text-sm text-natural-forest placeholder-natural-sage/70 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
@@ -160,7 +160,7 @@ export default function AttendeeDirectory({
           className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-semibold px-5 py-3 rounded-xl text-sm transition duration-150 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <UserPlus className="h-4 w-4" />
-          <span>Register New Colleague</span>
+          <span>Add Colleague</span>
         </button>
       </div>
 
@@ -170,11 +170,12 @@ export default function AttendeeDirectory({
           <div className="flex justify-between items-center border-b border-natural-border pb-4">
             <h3 className="font-serif font-bold text-natural-forest text-lg flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-natural-sage" />
-              Add Colleague to Directory
+              Add Colleague
             </h3>
             <button
               type="button"
               onClick={() => setShowRegForm(false)}
+              aria-label="Cancel"
               className="text-natural-sage hover:text-natural-forest"
             >
               <X className="h-5 w-5" />
@@ -219,7 +220,7 @@ export default function AttendeeDirectory({
                 type="submit"
                 className="px-6 py-2.5 bg-natural-forest hover:bg-[#213028] text-white text-sm font-bold rounded-xl transition shadow-sm"
               >
-                Register Colleague
+                Add Colleague
               </button>
             </div>
           </form>
@@ -230,7 +231,7 @@ export default function AttendeeDirectory({
       <div className="bg-white rounded-[32px] border border-natural-border shadow-sm overflow-hidden">
         {filteredAttendees.length === 0 ? (
           <div className="text-center py-16 space-y-3">
-            <p className="text-natural-sage font-medium">No attendees match your search filters.</p>
+            <p className="text-natural-sage font-medium">{attendees.length === 0 ? "No colleagues yet." : "No colleagues match your search."}</p>
             <button
               type="button"
               onClick={() => {
@@ -282,11 +283,11 @@ export default function AttendeeDirectory({
                       <td className="p-4">
                         <div className="flex items-center space-x-2">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${attendanceBadgeClass}`}>
-                            {stat.total === 0 ? "No Logs" : `${stat.rate}%`}
+                            {stat.total === 0 ? "No attendance yet" : `${stat.rate}%`}
                           </span>
                           {stat.total > 0 && (
                             <span className="text-xs text-natural-sage font-mono font-medium">
-                              ({stat.present}/{stat.total} days)
+                              ({stat.present} of {pluralize(stat.total, "event")})
                             </span>
                           )}
                         </div>
@@ -301,7 +302,7 @@ export default function AttendeeDirectory({
                       <td className="p-4 text-xs font-mono text-natural-sage font-medium">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 text-natural-sage/75" />
-                          {att.joinedDate}
+                          {formatDisplayDate(att.joinedDate)}
                         </span>
                       </td>
 
@@ -318,7 +319,16 @@ export default function AttendeeDirectory({
                           </button>
 
                           {deletingId === att.id && canEdit ? (
-                            <div className="inline-flex items-center gap-1 animate-fade-in">
+                            // US-46: the confirmation names the colleague and says what else is deleted
+                            <div
+                              role="group"
+                              aria-label={`Confirm deleting ${att.name}`}
+                              className="flex flex-col items-end gap-1.5 max-w-[260px] text-left animate-fade-in"
+                            >
+                              <p className="text-xs font-medium text-red-800">
+                                Delete {att.name}? Their attendance records and coaching notes will also be deleted.
+                              </p>
+                              <div className="inline-flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -336,6 +346,7 @@ export default function AttendeeDirectory({
                               >
                                 Cancel
                               </button>
+                              </div>
                             </div>
                           ) : (
                             <button
@@ -343,7 +354,8 @@ export default function AttendeeDirectory({
                               onClick={() => setDeletingId(att.id)}
                               disabled={!canEdit}
                               className="p-2 text-natural-sand/75 hover:text-red-600 hover:bg-red-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-natural-sand/75"
-                              title="Remove Colleague"
+                              title="Delete Colleague"
+                              aria-label={`Delete ${att.name}`}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
