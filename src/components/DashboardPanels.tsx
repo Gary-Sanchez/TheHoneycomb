@@ -41,6 +41,9 @@ const PERCENT_TICKS = [0, 25, 50, 75, 100];
 const formatRate = (rate: number | null) => (rate === null ? NO_DATA : `${rate}%`);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// Every chart sets accessibilityLayer={false}: Recharts 3 otherwise makes its <svg> a nameless
+// tabindex=0 role="application" stop inside our role="img" wrapper, which already describes the data.
+
 const tooltipProps = {
   contentStyle: { backgroundColor: FOREST, borderRadius: "12px", border: "1px solid #E9E5D9", color: "#FDFBF7" },
   itemStyle: { color: "#FAEDCD" },
@@ -195,7 +198,7 @@ export default function DashboardPanels({
 
             <div className="h-[280px]" role="img" aria-label={trendsLabel}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trends} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <LineChart accessibilityLayer={false} data={trends} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
                   {percentAxis}
@@ -255,7 +258,7 @@ export default function DashboardPanels({
           <>
             <div className="h-[260px]" role="img" aria-label={comparisonLabel}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={comparison} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <BarChart accessibilityLayer={false} data={comparison} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
                   <XAxis dataKey="activity" tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
                   {percentAxis}
@@ -315,7 +318,7 @@ export default function DashboardPanels({
               <h4 className="text-sm font-bold text-natural-forest">Colleagues per Hive Status</h4>
               <div className="h-[220px]" role="img" aria-label={engagementLabel}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={engagement.tiers} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                  <BarChart accessibilityLayer={false} data={engagement.tiers} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
                     <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
