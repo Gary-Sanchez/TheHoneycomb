@@ -47,7 +47,8 @@ export default function AttendeeDirectory({
   // US-39: `rate` is the colleague's Overall from the Bee-havior Hub (All time) — attended events in
   // their enrolled activities ÷ all events of those activities (US-31), via computeBeehavior so both
   // views share the math. null (no present at all) renders "—". `total`/`present` still count the
-  // colleague's own records for the "No attendance yet" / "(x of N events)" texts (US-46).
+  // colleague's own records for "No attendance yet"; the "(x of N events)" beside the rate uses the
+  // same Overall fraction as the tooltip, so both denominators match.
   const attendeeStats = useMemo(() => {
     const stats: Record<string, {
       total: number; present: number; rate: number | null; overallPresents: number; overallTotal: number;
@@ -298,9 +299,9 @@ export default function AttendeeDirectory({
                           >
                             {stat.total === 0 ? "No attendance yet" : stat.rate === null ? "—" : `${stat.rate}%`}
                           </span>
-                          {stat.total > 0 && (
+                          {stat.rate !== null && (
                             <span className="text-xs text-natural-sage font-mono font-medium">
-                              ({stat.present} of {pluralize(stat.total, "event")})
+                              ({stat.overallPresents} of {pluralize(stat.overallTotal, "event")})
                             </span>
                           )}
                         </div>
