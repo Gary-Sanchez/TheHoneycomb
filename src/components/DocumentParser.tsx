@@ -1,8 +1,8 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
-import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt } from "../utils";
+import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt, formatDisplayDate, pluralize } from "../utils";
 import { isBlacklistedName } from "../blacklist";
-import { ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
+import { Check, ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
 import { MAX_CSV_BATCH_FILES, checkCsvBatch } from "../uploadLimits";
@@ -21,6 +21,11 @@ interface DocumentParserProps {
   // US-22: the parser answered 401 (admin session lost, e.g. server restart) → drop to read-only
   onSessionExpired?: () => void;
 }
+
+// US-46: what the user sees when the server can't be reached or answers something unreadable —
+// never the raw fetch error, HTTP status or response body
+const CONNECTION_ERROR_MESSAGE = "Couldn't reach the server. Check that The Honeycomb is running and try again.";
+const UNREADABLE_RESPONSE_MESSAGE = "The file couldn't be processed. Check that it's a valid attendance file and try again.";
 
 const SESSION_EXPIRED_MESSAGE = "Your admin session has expired. Sign in again in Settings to import attendance files.";
 
@@ -80,7 +85,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // US-38: file groups whose records table is hidden (a 50-file preview stays light)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
   // Logs added and logs turned from absent to present by the last confirmed import
-  const [importResult, setImportResult] = useState<{ added: number; updated: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ added: number; updated: number; newColleagues: number } | null>(null);
   const [importing, setImporting] = useState(false);
   const [batchDate, setBatchDate] = useState<string>(REFERENCE_DATE);
   // US-18: the parser found no valid session date in the file, so the user must pick one
@@ -113,12 +118,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
   // Loading message sequences to keep the user engaged
   const loadingPhrases = [
-    "Reading file bytes and extracting layout...",
-    "Scanning rows for names, dates and attendance marks...",
-    "Analyzing document semantics and isolating attendance logs...",
-    "Matching names to the colleague directory...",
-    "Normalizing session dates and activities...",
-    "Formatting structured results..."
+    "Reading the file…",
+    "Scanning rows for names, dates and attendance marks…",
+    "Detecting attendance rows…",
+    "Matching names to the colleague directory…",
+    "Normalizing event dates and activities…",
+    "Preparing the preview…"
   ];
 
   const animateLoadingText = (index = 0) => {
@@ -226,11 +231,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     }
 
     if (!response) {
-      throw new Error(
-        lastFetchErr?.message
-          ? `Connection issue: ${lastFetchErr.message}. Please verify the server is running and try uploading again.`
-          : "Unable to establish a connection with the server. Please try again."
-      );
+      console.error("Upload failed to reach the server:", lastFetchErr);
+      throw new Error(CONNECTION_ERROR_MESSAGE);
     }
 
     const contentType = response.headers.get("content-type") || "";
@@ -240,19 +242,15 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     }
 
     if (!response.ok) {
-      let errorMsg = "Failed to parse document";
+      // The server's JSON `error` is already written for the user; anything else stays in the console
+      let errorMsg = UNREADABLE_RESPONSE_MESSAGE;
       if (contentType.includes("application/json")) {
         try {
           const errData = await response.json();
           errorMsg = errData.error || errorMsg;
         } catch (e) {}
       } else {
-        try {
-          const textData = await response.text();
-          if (textData && textData.length < 500) {
-            errorMsg = textData;
-          }
-        } catch (e) {}
+        console.error(`Upload failed with status ${response.status}`);
       }
       throw new Error(errorMsg);
     }
@@ -261,15 +259,16 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       const textSnippet = await response.text();
       const cleanText = textSnippet.substring(0, 150);
       if (cleanText.toLowerCase().includes("<!doctype html") || cleanText.toLowerCase().includes("<html")) {
-        throw new Error("The server was temporarily busy or updating. Please click 'Extract the Buzz' again.");
+        throw new Error("The server was busy starting up. Click Extract the Buzz again.");
       }
-      throw new Error(`Unexpected response from server: ${cleanText}`);
+      console.error("Unexpected response from the server:", cleanText);
+      throw new Error(UNREADABLE_RESPONSE_MESSAGE);
     }
 
     try {
       return await response.json();
     } catch (jsonErr) {
-      throw new Error("Failed to read the server's response structure. The parser response was malformed.");
+      throw new Error(UNREADABLE_RESPONSE_MESSAGE);
     }
   };
 
@@ -334,7 +333,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           const reason = (g: ParsedFileGroup) =>
             g.alreadyImported
               ? `${g.filename} was already imported as "${g.alreadyImported.filename}" on ${formatImportedAt(g.alreadyImported.importedAt)}`
-              : `${g.filename} is already loaded in the ${g.alreadyLoaded!.activity} event on ${g.alreadyLoaded!.date}`;
+              : `${g.filename} is already loaded in the ${g.alreadyLoaded!.activity} event on ${formatDisplayDate(g.alreadyLoaded!.date)}`;
           setErrorMsg(
             blocked.length === 1
               ? blocked[0].alreadyImported
@@ -375,7 +374,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     } catch (err: any) {
       console.error(err);
       if (err instanceof SessionExpiredError) onSessionExpired?.();
-      setErrorMsg(err.message || "An error occurred while uploading and parsing the document.");
+      setErrorMsg(err.message || UNREADABLE_RESPONSE_MESSAGE);
     } finally {
       setLoading(false);
     }
@@ -486,8 +485,21 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
     setErrorMsg("");
     resetPreview();
-    setImportResult({ added: outcome.added, updated: outcome.updated });
+    setImportResult({ added: outcome.added, updated: outcome.updated, newColleagues: newAttendeesToCreate.length });
     setFiles([]);
+  };
+
+  // US-46: Discard asks first when there are rows under review, and clears the selection too
+  const handleDiscard = () => {
+    if (
+      parsedRecords.length > 0 &&
+      !window.confirm(`Discard this preview? ${pluralize(parsedRecords.length, "attendance record")} will not be imported.`)
+    ) {
+      return;
+    }
+    resetPreview();
+    setFiles([]);
+    setErrorMsg("");
   };
 
   const handleDeleteRecord = (indexToDelete: number) => {
@@ -539,7 +551,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                         title={rec.reviewReason}
                       >
                         <AlertTriangle className="h-3 w-3" />
-                        Needs review
+                        Needs Review
                       </span>
                     )}
                   </div>
@@ -575,11 +587,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                   {isNew ? (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold bg-natural-wheat text-natural-forest px-2 py-1 rounded-md border border-natural-border/60">
                       <Sparkles className="h-3 w-3 text-natural-sand" />
-                      New Colleague (Registered)
+                      New Colleague
                     </span>
                   ) : (
-                    <span className="text-xs font-medium text-natural-sage">
-                       Existing Colleague Linked
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-white text-natural-forest px-2 py-1 rounded-md border border-natural-border/60">
+                      <Check className="h-3 w-3 text-natural-sage" />
+                      Existing Colleague
                     </span>
                   )}
                 </td>
@@ -588,7 +601,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                     type="button"
                     onClick={() => handleDeleteRecord(i)}
                     className="p-1.5 text-natural-sand/70 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                    title="Remove item"
+                    title="Remove Row"
+                    aria-label={`Remove ${rec.name}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -648,7 +662,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             {!isBlocked && (
               <label className="flex items-center gap-2 text-xs font-semibold text-natural-forest">
                 <Calendar className="h-4 w-4 text-natural-sage" />
-                Session date
+                Event Date
                 <input
                   type="date"
                   value={groupDate}
@@ -663,7 +677,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
           <div className="flex flex-wrap gap-2 text-xs font-semibold">
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
-              {rows.length} attendees
+              {pluralize(rows.length, "colleague")}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
               <ShieldOff className="h-3 w-3 text-natural-sage" />
@@ -672,7 +686,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             {group.durationFilterApplied ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
                 <Clock className="h-3 w-3 text-natural-sage" />
-                {excludedCount} attendees excluded (less than 10 minutes)
+                {pluralize(excludedCount, "colleague")} excluded (under 10 minutes)
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-700" role="note">
@@ -693,12 +707,12 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             ) : group.alreadyLoaded ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-natural-sand/15 border border-natural-sand/40 text-natural-sand" role="alert">
                 <Copy className="h-3 w-3" />
-                Already loaded in {group.alreadyLoaded.activity} on {group.alreadyLoaded.date} (blocked)
+                Already loaded in {group.alreadyLoaded.activity} on {formatDisplayDate(group.alreadyLoaded.date)} (blocked)
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#CCD5AE]/30 border border-[#CCD5AE]/80 text-natural-forest">
                 <CheckCircle className="h-3 w-3" />
-                Not a duplicate
+                Not a Duplicate
               </span>
             )}
             {group.durationFilterApplied && excludedCount > 0 && (
@@ -707,13 +721,13 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 onClick={() => toggleExclusions(group.id)}
                 className="px-2.5 py-1 rounded-full text-natural-forest underline underline-offset-2 hover:bg-natural-cream"
               >
-                {showExcluded ? "Hide excluded" : "View excluded"}
+                {showExcluded ? "Hide Excluded" : "View Excluded"}
               </button>
             )}
           </div>
 
           {showExcluded && excludedCount > 0 && (
-            <ul className="bg-white border border-natural-border/60 rounded-xl divide-y divide-natural-border/40 text-xs" aria-label="Excluded attendees">
+            <ul className="bg-white border border-natural-border/60 rounded-xl divide-y divide-natural-border/40 text-xs" aria-label="Excluded colleagues">
               {group.excludedByDuration.map(ex => (
                 <li key={ex.name} className="flex justify-between gap-4 px-3 py-2">
                   <span className="font-semibold text-[#1A1A1A]">{ex.name}</span>
@@ -725,7 +739,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
           {sameDateFiles.length > 0 && (
             <p className="text-xs text-natural-sage font-medium">
-              Same date as {sameDateFiles.map(g => g.filename).join(", ")}: their attendees will be merged into one event.
+              Same date as {sameDateFiles.map(g => g.filename).join(", ")}: their colleagues will be merged into one event.
             </p>
           )}
         </div>
@@ -747,17 +761,17 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       <div className="border-b border-natural-border pb-6">
         <h2 className="text-2xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-natural-sage" />
-          Smart Document Parser
+          Smart Doc Parser
         </h2>
         <p className="text-sm text-natural-sage mt-1 font-medium">
-          Upload class logs, Word docs, spreadsheets or text lists and we'll compile them into unified database records!
+          Upload attendance files (spreadsheets, Word documents or text lists) to import their attendance records.
         </p>
       </div>
 
       {/* Activity-specific Import Log tabs */}
       <div className="space-y-3">
         <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
-          Select Activity Import Log
+          Select Activity
         </label>
         <div className="bg-natural-wheat/10 border border-natural-border p-2 rounded-2xl grid grid-cols-2 md:grid-cols-4 gap-2">
           {ACTIVITIES.map((act) => {
@@ -784,13 +798,13 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 }`}
               >
                 <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-natural-sage"}`} />
-                <span>{act} Log</span>
+                <span>{act}</span>
               </button>
             );
           })}
         </div>
         <p className="text-xs text-natural-sage/95 italic font-medium">
-          * Currently displaying the <strong>{selectedImportLogActivity}</strong> Import Log. Any uploaded files will record attendance directly under this activity.
+          Uploaded files are imported into <strong>{selectedImportLogActivity}</strong>.
         </p>
       </div>
 
@@ -802,10 +816,11 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-6 py-4 rounded-xl flex items-center gap-4 animate-bounce-subtle">
           <CheckCircle className="h-8 w-8 text-natural-sage shrink-0" />
           <div>
-            <h4 className="font-serif font-bold text-natural-forest text-base">Import Successful!</h4>
+            <h4 className="font-serif font-bold text-natural-forest text-base">Import Complete</h4>
             <p className="text-sm text-natural-forest/80 mt-0.5 font-medium">
-              Successfully registered {importResult.added} new attendance logs and registered any new colleagues.
-              {importResult.updated > 0 && ` Marked ${importResult.updated} existing logs as present.`}
+              Imported {pluralize(importResult.added, "new attendance record")}.
+              {importResult.newColleagues > 0 && ` Added ${pluralize(importResult.newColleagues, "new colleague")}.`}
+              {importResult.updated > 0 && ` Marked ${pluralize(importResult.updated, "existing attendance record")} as present.`}
             </p>
           </div>
         </div>
@@ -816,9 +831,9 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         <div className="bg-amber-50 border border-amber-300 text-amber-800 px-6 py-4 rounded-xl flex items-center gap-4">
           <AlertTriangle className="h-8 w-8 text-amber-600 shrink-0" />
           <div>
-            <h4 className="font-serif font-bold text-base">No new attendance logs</h4>
+            <h4 className="font-serif font-bold text-base">No New Attendance Records</h4>
             <p className="text-sm mt-0.5 font-medium">
-              No new attendance logs were registered: every colleague in this import was already recorded in that event.
+              Nothing was imported: every colleague in this import was already recorded in that event.
             </p>
           </div>
         </div>
@@ -868,14 +883,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <div className="space-y-1">
                   <p className="font-serif font-bold text-[#1A1A1A] text-base">{files[0].name}</p>
                   <p className="text-xs text-natural-sage font-semibold">
-                    {(files[0].size / 1024).toFixed(1)} KB • Ready to compile
+                    {(files[0].size / 1024).toFixed(1)} KB • Ready to import
                   </p>
                 </div>
               ) : files.length > 1 ? (
                 <div className="space-y-1">
                   <p className="font-serif font-bold text-[#1A1A1A] text-base">{files.length} .csv files selected</p>
                   <p className="text-xs text-natural-sage font-semibold max-w-md mx-auto break-words">
-                    {files.map(f => f.name).join(", ")} • Ready to compile
+                    {files.map(f => f.name).join(", ")} • Ready to import
                   </p>
                 </div>
               ) : (
@@ -884,7 +899,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                     Drag and drop your attendance file here
                   </p>
                   <p className="text-sm text-natural-sage max-w-sm mx-auto font-medium">
-                    Supports Excel spreadsheets, Word text logs, and plaintext CSVs. Select up to {MAX_CSV_BATCH_FILES} .csv files at once.
+                    Supports Excel spreadsheets, Word documents, and plain-text CSVs. Select up to {MAX_CSV_BATCH_FILES} .csv files at once.
                   </p>
                   <span className="inline-block mt-4 text-xs font-bold text-natural-forest bg-natural-wheat border border-natural-border/40 px-3.5 py-1.5 rounded-lg hover:bg-natural-wheat/80 transition shadow-sm">
                     Browse Files
@@ -929,13 +944,13 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <li className="flex items-start gap-2">
                   <FileText className="h-4 w-4 text-natural-forest shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-[#1A1A1A]">Word/Text Logs:</strong> Formatted lines like "John Doe - Speakeasy - June 10 - Present" or standard CSV rosters.
+                    <strong className="text-[#1A1A1A]">Word/Text Files:</strong> Formatted lines like "John Doe - Speakeasy - June 10 - Present" or standard CSV rosters.
                   </div>
                 </li>
                 <li className="flex items-start gap-2">
                   <Clock className="h-4 w-4 text-natural-sage shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-[#1A1A1A]">CSV meeting reports:</strong> Attendees with less than 10 minutes in the "Duration" / "In-Meeting Duration" column are left out.
+                    <strong className="text-[#1A1A1A]">CSV meeting reports:</strong> Colleagues with less than 10 minutes in the "Duration" / "In-Meeting Duration" column are left out.
                   </div>
                 </li>
               </ul>
@@ -959,7 +974,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         <div className="border border-natural-border rounded-[24px] p-12 text-center bg-natural-cream/20 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
           <Loader2 className="h-10 w-10 text-natural-sage animate-spin" />
           <div className="space-y-1.5">
-            <h4 className="font-serif font-bold text-natural-forest text-lg">Compiling File Data...</h4>
+            <h4 className="font-serif font-bold text-natural-forest text-lg">Reading File…</h4>
             <p className="text-sm text-natural-sage font-medium max-w-md mx-auto h-12 flex items-center justify-center">
               {loadingMessage}
             </p>
@@ -975,15 +990,15 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               <h3 className="font-serif font-bold text-[#1A1A1A] text-lg">Review Extracted Records</h3>
               <p className="text-xs text-natural-sage font-medium">
                 {isMultiFile
-                  ? `Found ${parsedRecords.length} records across ${fileCount} files. New colleagues will be registered in the directory.`
-                  : `Found ${parsedRecords.length} records. New colleagues will be registered in the directory.`}
+                  ? `Found ${pluralize(parsedRecords.length, "attendance record")} across ${pluralize(fileCount, "file")}. New colleagues will be added to the directory.`
+                  : `Found ${pluralize(parsedRecords.length, "attendance record")}. New colleagues will be added to the directory.`}
               </p>
             </div>
 
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={resetPreview}
+                onClick={handleDiscard}
                 className="px-4 py-2 border border-natural-border text-natural-forest/70 hover:bg-natural-cream text-sm font-semibold rounded-xl transition"
               >
                 Discard
@@ -993,7 +1008,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 type="button"
                 onClick={handleImportApproved}
                 disabled={!canEdit || hasMissingDates || importing || parsedRecords.length === 0}
-                title={hasMissingDates ? "Select a session date in Batch Edit Session Date first" : undefined}
+                title={hasMissingDates ? "Select an event date in Batch Edit Event Date first." : undefined}
                 className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-5 py-2 rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
@@ -1012,21 +1027,21 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             <div className="space-y-1">
               <h4 className="text-xs font-bold uppercase tracking-wider text-natural-forest flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-natural-sage" />
-                Batch Edit Session Date
+                Batch Edit Event Date
               </h4>
               <p className="text-xs text-natural-sage font-medium">
                 {isMultiFile && groupsWithoutDate.length > 0
-                  ? "Set the date for the files that had no detectable session date. Each file keeps its own date otherwise."
-                  : "Change the date for all listed logs simultaneously."}
+                  ? "Set the date for the files that had no detectable event date. Each file keeps its own date otherwise."
+                  : "Change the date for all listed attendance records at once."}
               </p>
               {hasMissingDates && (
                 <p className="text-xs text-natural-sand font-bold flex items-center gap-1.5" role="alert">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   {isMultiFile && groupsWithoutDate.length > 0
-                    ? `No valid session date was found in: ${fileGroups.filter(g => !g.dateDetected).map(g => g.filename).join(", ")}. Select the session date and click "Apply to Files Without Date" before importing.`
+                    ? `No valid event date was found in: ${fileGroups.filter(g => !g.dateDetected).map(g => g.filename).join(", ")}. Select the event date and click "Apply to Files Without Date" before importing.`
                     : dateRequired
-                    ? "No valid session date was found in this file. Select the session date and click \"Apply to All Logs\" before importing."
-                    : "Some logs have no date. Select the session date and click \"Apply to All Logs\" before importing."}
+                    ? "No valid event date was found in this file. Select the event date and click \"Apply to All Records\" before importing."
+                    : "Some attendance records have no date. Select the event date and click \"Apply to All Records\" before importing."}
                 </p>
               )}
             </div>
@@ -1043,7 +1058,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 disabled={!batchDate}
                 className="disabled:opacity-50 disabled:cursor-not-allowed bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm font-serif"
               >
-                {isMultiFile && groupsWithoutDate.length > 0 ? "Apply to Files Without Date" : "Apply to All Logs"}
+                {isMultiFile && groupsWithoutDate.length > 0 ? "Apply to Files Without Date" : "Apply to All Records"}
               </button>
             </div>
           </div>

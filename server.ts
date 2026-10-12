@@ -285,7 +285,10 @@ app.post("/api/records/import", requireAdmin, validateBody(importBodySchema), as
       });
     }
     console.error("Error importing parsed data:", err);
-    res.status(500).json({ error: "Import failed: nothing from this batch was saved." });
+    // US-46: what happened and what to do; the preview stays on screen, so retrying is one click
+    res.status(500).json({
+      error: "Import failed: nothing from this batch was saved. Click Confirm & Import Caserits to try again; if it keeps failing, restart The Honeycomb.",
+    });
   }
 });
 
@@ -343,7 +346,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
   try {
     const file = req.file;
     if (!file) {
-      return res.status(400).json({ error: "No file uploaded." });
+      return res.status(400).json({ error: "No file was received. Select an attendance file and click Extract the Buzz again." });
     }
 
     const filename = file.originalname;
@@ -362,7 +365,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
     if (extension === ".csv") {
       const { isEmpty, fingerprint, declaredActivities, ...parsed } = parseCsvAttendance(file.buffer, requestedActivity);
       if (isEmpty) {
-        return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
+        return res.status(400).json({ error: "The file is empty or couldn't be read. Check that it's a valid attendance file and try again." });
       }
       // US-26: a .csv imported before is blocked here already (no records come back);
       // US-33: so is one whose event already holds all its colleagues
@@ -385,7 +388,7 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
     const fileTextContent = await extractTextFromFile(file.buffer, extension);
 
     if (!fileTextContent.trim()) {
-      return res.status(400).json({ error: "The uploaded file is empty or could not be read." });
+      return res.status(400).json({ error: "The file is empty or couldn't be read. Check that it's a valid attendance file and try again." });
     }
 
     const records = parseAttendance(fileTextContent, requestedActivity);
@@ -398,7 +401,8 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
   } catch (err: any) {
     console.error("Error parsing attendance file:", err);
     return res.status(500).json({
-      error: "An error occurred while parsing the file. " + (err.message || ""),
+      // US-46: the raw exception stays in the server log; the user gets what happened and what to do
+      error: "The file couldn't be read. Check that it's a valid attendance file and try again.",
     });
   }
 });
@@ -427,7 +431,12 @@ app.post(
   (req, res, next) => {
     upload.array("files", MAX_CSV_BATCH_FILES)(req, res, (err: unknown): any => {
       if (err instanceof multer.MulterError) {
-        const error = err.code === "LIMIT_UNEXPECTED_FILE" ? TOO_MANY_FILES_ERROR : `Upload rejected: ${err.message}`;
+        const error =
+          err.code === "LIMIT_UNEXPECTED_FILE"
+            ? TOO_MANY_FILES_ERROR
+            : err.code === "LIMIT_FILE_SIZE"
+              ? "A file is larger than 10 MB, so the whole batch was rejected. Remove that file and try again."
+              : "The upload could not be read, so the whole batch was rejected. Try again.";
         return res.status(400).json({ error });
       }
       next(err);
@@ -437,7 +446,7 @@ app.post(
     try {
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       if (files.length === 0) {
-        return res.status(400).json({ error: "No file uploaded." });
+        return res.status(400).json({ error: "No files were received. Select the .csv files and click Extract the Buzz again." });
       }
       // Same check as the UI: file count, then the 50 MB total of the bytes actually received
       const limitError = checkCsvBatch(files);
@@ -447,7 +456,7 @@ app.post(
       const notCsv = files.filter(f => path.extname(f.originalname).toLowerCase() !== ".csv");
       if (notCsv.length > 0) {
         return res.status(400).json({
-          error: `Only .csv files can be imported together. Not a .csv: ${notCsv.map(f => f.originalname).join(", ")}.`,
+          error: `Only .csv files can be imported together. Not a .csv: ${notCsv.map(f => f.originalname).join(", ")}. Upload other formats one at a time.`,
         });
       }
 
@@ -457,7 +466,7 @@ app.post(
       const empty = parsed.filter(p => p.isEmpty);
       if (empty.length > 0) {
         return res.status(400).json({
-          error: `The whole batch was rejected because these files are empty or could not be read: ${empty.map(p => p.filename).join(", ")}.`,
+          error: `The whole batch was rejected because these files are empty or couldn't be read: ${empty.map(p => p.filename).join(", ")}. Remove or replace them and try again.`,
         });
       }
 
@@ -505,7 +514,9 @@ app.post(
       });
     } catch (err: any) {
       console.error("Error parsing attendance batch:", err);
-      return res.status(500).json({ error: "An error occurred while parsing the files. " + (err.message || "") });
+      return res.status(500).json({
+        error: "The files couldn't be read, so the whole batch was rejected. Check that they're valid attendance files and try again.",
+      });
     }
   }
 );
@@ -598,9 +609,12 @@ export async function startServer() {
   // Global Express error handler to ensure we always return JSON instead of HTML on error
   app.use((err: any, req: any, res: any, next: any) => {
     console.error("Global Express error caught:", err);
-    res.status(err.status || err.statusCode || 500).json({
-      error: err.message || "An unexpected error occurred on the server."
-    });
+    // US-46: never echo raw exception text to the user
+    const error =
+      err?.code === "LIMIT_FILE_SIZE"
+        ? "The file is larger than 10 MB. Upload a smaller file."
+        : "Something went wrong on the server. Try again; if it keeps happening, restart The Honeycomb.";
+    res.status(err.status || err.statusCode || 500).json({ error });
   });
 
   // Localhost-only by default; exposing the API to the LAN is an explicit opt-in (US-11).
