@@ -17,6 +17,14 @@ import {
   validateBody,
 } from "./validation";
 import { alreadyLoadedMessage, duplicateImportMessage } from "./src/utils";
+import {
+  MAX_CSV_BATCH_BYTES,
+  MAX_CSV_BATCH_FILES,
+  MAX_FILE_BYTES,
+  batchTooLargeMessage,
+  checkCsvBatch,
+  tooManyFilesMessage,
+} from "./src/uploadLimits";
 
 dotenv.config();
 
@@ -156,7 +164,7 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: MAX_FILE_BYTES, // 10MB limit
   },
 });
 
@@ -399,17 +407,27 @@ app.post("/api/parse-attendance-file", requireAdmin, upload.single("file"), asyn
   }
 });
 
-// US-27: parse 1–20 .csv files of ONE activity in a single request. Like the single-file route it
+// US-27: parse .csv files of ONE activity in a single request. Like the single-file route it
 // doesn't persist anything. The batch is rejected whole (400, nothing parsed into the preview) when
 // it has too many files, a non-.csv file, an unreadable file, or a file that declares a different
 // activity. Identical files are not an error: later copies come back as duplicates, with no records.
 // Like the single-file route, it requires an admin session before multer reads any file (US-22).
-const MAX_CSV_BATCH_FILES = 20;
-const TOO_MANY_FILES_ERROR = `Too many files: the maximum is ${MAX_CSV_BATCH_FILES} .csv files per import. The whole batch was rejected.`;
+// US-38: up to MAX_CSV_BATCH_FILES (50) files and MAX_CSV_BATCH_BYTES (50 MB) for the whole batch.
+const TOO_MANY_FILES_ERROR = tooManyFilesMessage();
+// Multipart boundaries and headers on top of the file bytes; only used for the early Content-Length check
+const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
 
 app.post(
   "/api/parse-attendance-batch",
   requireAdmin,
+  // US-38: an oversized batch is turned away from its Content-Length, before any file is read into memory
+  (req, res, next): any => {
+    const declared = Number(req.headers["content-length"]);
+    if (Number.isFinite(declared) && declared > MAX_CSV_BATCH_BYTES + MULTIPART_OVERHEAD_BYTES) {
+      return res.status(413).json({ error: batchTooLargeMessage() });
+    }
+    next();
+  },
   (req, res, next) => {
     upload.array("files", MAX_CSV_BATCH_FILES)(req, res, (err: unknown): any => {
       if (err instanceof multer.MulterError) {
@@ -430,8 +448,10 @@ app.post(
       if (files.length === 0) {
         return res.status(400).json({ error: "No files were received. Select the .csv files and click Extract the Buzz again." });
       }
-      if (files.length > MAX_CSV_BATCH_FILES) {
-        return res.status(400).json({ error: TOO_MANY_FILES_ERROR });
+      // Same check as the UI: file count, then the 50 MB total of the bytes actually received
+      const limitError = checkCsvBatch(files);
+      if (limitError) {
+        return res.status(400).json({ error: files.length > MAX_CSV_BATCH_FILES ? TOO_MANY_FILES_ERROR : batchTooLargeMessage() });
       }
       const notCsv = files.filter(f => path.extname(f.originalname).toLowerCase() !== ".csv");
       if (notCsv.length > 0) {
