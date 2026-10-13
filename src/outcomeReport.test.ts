@@ -200,6 +200,10 @@ describe("Outcome Report helpers (US-40)", () => {
     expect(parseTopN("-1")).toBeNull();
     expect(parseTopN("2.5")).toBeNull();
     expect(parseTopN("abc")).toBeNull();
+    // QA NIC-41: typos a number input would have turned into "" (→ 0) must stay invalid
+    expect(parseTopN("5e")).toBeNull();
+    expect(parseTopN("e")).toBeNull();
+    expect(parseTopN("-")).toBeNull();
   });
 
   it("needs a ranking above 0 or a tier to have a block", () => {

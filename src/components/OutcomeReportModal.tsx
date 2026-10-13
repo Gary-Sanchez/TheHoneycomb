@@ -128,15 +128,15 @@ export default function OutcomeReportModal({
   const nInput = (id: string, label: string, value: string, onChange: (v: string) => void) => {
     const invalid = parseTopN(value) === null;
     return (
-      <div className="flex items-center justify-between gap-3">
+      <div key={id} className="flex items-center justify-between gap-3">
         <label htmlFor={id} className="text-sm font-semibold text-[#1A1A1A]">{label}</label>
+        {/* Text, not type="number": a number input reports "" for a bad entry like "5e", which
+            parseTopN would read as 0 (left out) instead of invalid. */}
         <input
           id={id}
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={0}
-          max={MAX_TOP_N}
-          step={1}
+          pattern="[0-9]*"
           placeholder="0"
           value={value}
           onChange={e => onChange(e.target.value)}
