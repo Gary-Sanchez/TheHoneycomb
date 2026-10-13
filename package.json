@@ -75,5 +75,13 @@
     "electron-winstaller@5.4.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true
+  },
+  "overrides": {
+    "mammoth": {
+      "argparse": "^2.0.1"
+    },
+    "@electron/get@3": {
+      "global-agent": "^4.1.3"
+    }
   }
 }
