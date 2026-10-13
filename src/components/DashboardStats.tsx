@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import {
   computeBeehavior,
@@ -14,7 +14,8 @@ import {
 import { averageOverall, formatAverageBase } from "../dashboardMetrics";
 import DashboardPanels from "./DashboardPanels";
 import { pluralize } from "../utils";
-import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle } from "lucide-react";
+import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle, FileDown } from "lucide-react";
+import OutcomeReportModal from "./OutcomeReportModal";
 
 interface DashboardStatsProps {
   attendees: Attendee[];
@@ -36,6 +37,9 @@ export default function DashboardStats({
 }: DashboardStatsProps) {
   // State for search query in Bee-havior table
   const [beeSearchQuery, setBeeSearchQuery] = useState("");
+  // US-40: Outcome Report dialog; focus returns to its trigger on close
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportButtonRef = useRef<HTMLButtonElement>(null);
 
   // US-35: the range actually applied (null → All time). An incomplete or inverted custom range isn't applied.
   const period = useMemo(() => resolvePeriod(periodFilter), [periodFilter]);
@@ -172,6 +176,18 @@ export default function DashboardStats({
           <p id="period-showing" className="text-sm font-semibold text-natural-forest ml-auto">
             Showing: {period ? formatPeriodLabel(period) : "All time"}
           </p>
+
+          <button
+            ref={reportButtonRef}
+            type="button"
+            id="generate-outcome-report"
+            onClick={() => setReportOpen(true)}
+            aria-haspopup="dialog"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-natural-forest"
+          >
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            Generate Outcome Report
+          </button>
         </div>
 
         {invalidRange && (
@@ -180,6 +196,16 @@ export default function DashboardStats({
           </p>
         )}
       </section>
+
+      {reportOpen && (
+        <OutcomeReportModal
+          attendees={attendees}
+          records={allRecords}
+          initialPeriod={periodFilter}
+          onClose={() => setReportOpen(false)}
+          returnFocusRef={reportButtonRef}
+        />
+      )}
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
