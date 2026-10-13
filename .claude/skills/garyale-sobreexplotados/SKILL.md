@@ -1,6 +1,6 @@
 ---
 name: garyale-sobreexplotados
-description: Ejecuta VARIOS tickets US-XX de The Honeycomb en paralelo aplicando el flujo de Honeycomb-executor a cada uno, pero con un git worktree y una rama `gs/us-XX-...` propios por ticket (creados desde `origin/main` recién traído), subagentes de desarrollo trabajando en paralelo en cada worktree, y un Pull Request separado por ticket — nunca varios tickets en la misma rama o PR. Detecta solapamientos/dependencias entre tickets antes de paralelizar y mantiene los gates humanos de commit, push, PR y Linear, decididos ticket por ticket. Usar cuando el usuario invoque /garyale-sobreexplotados o pida ejecutar, implementar o resolver más de un ticket a la vez ("hacé la US-38, US-42 y US-46", "arrancá con los tickets 39 a 41", "llevá adelante estas tres historias en paralelo") — incluso si no menciona la skill por nombre. Para un solo ticket usar Honeycomb-executor.
+description: Ejecuta VARIOS tickets US-XX de The Honeycomb en paralelo aplicando el flujo de Honeycomb-executor a cada uno, pero con un git worktree y una rama `gs/us-XX-...` propios por ticket (creados desde `origin/main` recién traído), subagentes de desarrollo trabajando en paralelo en cada worktree, y un Pull Request separado por ticket — nunca varios tickets en la misma rama o PR. Antes de crear nada corre un análisis previo de conflictos (entre los tickets, con main y con los PRs abiertos del equipo) y ordena el trabajo en tandas para evitarlos, y mantiene los gates humanos de commit, push, PR y Linear, decididos ticket por ticket. Usar cuando el usuario invoque /garyale-sobreexplotados o pida ejecutar, implementar o resolver más de un ticket a la vez ("hacé la US-38, US-42 y US-46", "arrancá con los tickets 39 a 41", "llevá adelante estas tres historias en paralelo") — incluso si no menciona la skill por nombre. Para un solo ticket usar Honeycomb-executor.
 ---
 
 # garyale-sobreexplotados — varios tickets, un worktree y un PR por ticket
@@ -15,7 +15,7 @@ cambia al trabajar N tickets a la vez:
 |---|---|
 | `git checkout main` + `pull`, rama en el checkout principal | `git fetch` y **un worktree por ticket** en `.claude/worktrees/us-{NN}`, cada uno con su rama desde `origin/main`; el checkout principal no se toca |
 | Desarrollo casi siempre en el hilo principal | **Un subagente de desarrollo por ticket**, en paralelo, cada uno encerrado en su worktree |
-| Un plan | Un plan por ticket + **mapa de solapamientos** entre tickets |
+| Un plan | **Análisis previo de conflictos** (entre tickets, con `main` y con PRs abiertos del equipo) + un plan por ticket, en el orden que minimiza conflictos |
 | Un commit / push / PR | **Un commit, un push y un PR por ticket**, con gates decididos ticket por ticket |
 
 Regla dura: **1 ticket = 1 rama = 1 worktree = 1 PR.** Aunque dos tickets sean chicos o toquen el
@@ -32,7 +32,7 @@ seguir con [[Honeycomb-executor]] en vez de esta skill.
 
 **Tope de paralelismo:** hasta 4 tickets de desarrollo simultáneos (cada worktree lleva su propio
 `node_modules` y cada subagente consume recursos). Con más, procesarlos en tandas de 4 en el orden
-que dio el usuario, salvo que el mapa de dependencias diga otra cosa.
+que salga del análisis previo de conflictos (Fase B).
 
 ## Fase A — Traer `origin` sin tocar el checkout principal
 
@@ -61,20 +61,24 @@ que dio el usuario, salvo que el mapa de dependencias diga otra cosa.
    espejo `App.tsx` ↔ `db.ts`, `types.ts` ↔ `validation.ts`, y lo que el Out of Scope prohíbe tocar).
    Indicarles que investiguen sobre `origin/main` (`git show origin/main:<archivo>`) si el checkout
    principal está en otra rama.
-3. **Mapa de solapamientos.** Cruzar los archivos de cada ticket y clasificar cada par:
-   - **Independientes** — no comparten archivos → desarrollo en paralelo sin más.
-   - **Solapan sin depender** — tocan el mismo archivo pero en zonas distintas (ej. dos componentes
-     en `App.tsx`) → se puede paralelizar, pero el segundo PR que se mergee va a necesitar resolver
-     conflictos; anotarlo para el reporte y para la descripción del PR.
-   - **Dependientes** — uno necesita el código del otro (un tipo nuevo, un endpoint, un estado de
-     Linear `Blocked by`) → no paralelizar ese par. Preguntar al usuario: (a) hacer primero el base,
-     y el dependiente después de que el PR base se mergee; o (b) **PR apilado**: la rama dependiente
-     nace de la rama base y su PR apunta con `--base` a la rama base (hay que re-apuntarlo a `main`
-     cuando el base se mergee). Por defecto recomendar (a).
-4. **Plan.** Armar un plan por ticket (Fase 2 de [[Honeycomb-executor]]) más el mapa de
-   solapamientos, el orden/tandas de ejecución y qué se delega. Si al menos un ticket es no trivial,
-   presentarlo todo junto con `EnterPlanMode` — una sola alineación para todos, no una por ticket.
-   El usuario puede sacar tickets de la tanda en este punto.
+3. **Análisis previo de conflictos** — obligatorio, antes de crear worktrees. Seguir
+   [`references/analisis-conflictos.md`](references/analisis-conflictos.md) completo: huella de cada
+   ticket (estimada con el research del paso 2, o real con `git merge-tree` si el ticket ya tiene
+   rama), puntos calientes del repo, cruce **contra los PRs abiertos del equipo** y contra las
+   relaciones de Linear, clasificación de cada par (🟢 independientes / 🟡 solapan / 🔴 chocan /
+   ⛓️ dependen) y orden en tandas. Ese orden manda sobre el orden en que el usuario listó los tickets.
+   - 🔴 entre tickets del lote: no van en la misma tanda; el segundo arranca cuando el PR del primero
+     se mergea (o sobre su rama, ver ⛓️).
+   - ⛓️ dependientes: preguntar al usuario entre (a) hacer primero el base, y el dependiente después
+     de que el PR base se mergee; o (b) **PR apilado**: la rama dependiente nace de la rama base y su
+     PR apunta con `--base` a la rama base (hay que re-apuntarlo a `main` cuando el base se mergee).
+     Por defecto recomendar (a).
+   - 🔴 con un PR ajeno: avisar quién lo tiene y preguntar si se espera ese merge o se arranca igual.
+4. **Plan.** Armar un plan por ticket (Fase 2 de [[Honeycomb-executor]]) más el reporte del análisis
+   (tabla de pares, tandas y orden de merge recomendado) y qué se delega. Si al menos un ticket es
+   no trivial o el análisis encontró algún 🔴/⛓️, presentarlo todo junto con `EnterPlanMode` — una
+   sola alineación para todos, no una por ticket. El usuario puede sacar tickets o cambiar el orden
+   en este punto.
 
 ## Fase C — Linear, worktrees y ramas (una vez aprobado el plan)
 
@@ -126,6 +130,14 @@ intentó, no necesariamente lo que hizo. Si algo falta, se puede continuar ese m
 `SendMessage` en vez de arrancar uno nuevo. Si un ticket depende de otro (opción a), recién se lanza
 cuando el base esté terminado y mergeado.
 
+**Huella real vs. estimada.** Con el diff de cada worktree en mano (`git -C <worktree> diff
+--name-only`), comparar contra la huella estimada de la Fase B: si un ticket terminó tocando
+archivos que otro ticket del lote (o un PR abierto del equipo) también toca y el análisis no lo
+había previsto, avisarlo y reclasificar ese par antes de seguir. **Antes de lanzar cada tanda
+siguiente**, `git fetch origin --prune` y repetir el paso 2 del análisis
+([`references/analisis-conflictos.md`](references/analisis-conflictos.md)): lo que se mergeó mientras
+tanto puede cambiar el orden de lo que falta.
+
 ## Fase E — Testing contra cada ticket (secuencial para la app)
 
 - **Estático (en paralelo, ya hecho en la Fase D):** `npm run lint` y `npm test` por worktree.
@@ -143,7 +155,8 @@ cuando el base esté terminado y mergeado.
 ## Fase F — Reporte consolidado
 
 Una tabla con una fila por ticket: rama, worktree, AC cubiertos, resultado de QA (`QA-XX` ✅/❌),
-solapamientos/conflictos esperables con los otros PRs, y estado (listo / bloqueado / en pausa). Debajo,
+solapamientos/conflictos esperables con los otros PRs, y estado (listo / bloqueado / en pausa), más el
+**orden de merge recomendado** que salió del análisis (actualizado con la huella real). Debajo,
 por ticket, los **"Pasos para testear la solución"** (Fase 5 de [[Honeycomb-executor]]), sacados de
 lo que se ejecutó de verdad. Una línea final con qué se delegó a subagentes y por qué.
 
@@ -160,20 +173,26 @@ siguiente.
    el estilo del repo y **un solo** `US-{NN}`, clasificación patch/minor/major, sección
    `## Cómo testear`, y la línea de co-autoría que indique la sesión. El hook de pre-commit corre
    `tsc` sobre el worktree; si falla, arreglar — no usar `--no-verify` sin pedirlo.
-2. **Push** (por ticket elegido): `git -C <worktree> push -u origin gs/us-{NN}-...`.
-3. **PR** (por ticket elegido), uno por rama:
+2. **Chequeo de conflictos antes del push** (sin gate, es de solo lectura): ya con commits, `git fetch
+   origin --prune` y `git merge-tree --write-tree --name-only --no-messages origin/main gs/us-{NN}-...`
+   por ticket, más cada par del lote. Si una rama choca con `main` (exit 1), traerle `main`
+   (`git -C <worktree> merge origin/main`), resolver, re-correr lint/tests y mostrar al usuario cómo
+   quedaron los conflictos **antes** de pedir el push — así el PR nace mergeable. Los choques entre
+   ramas del lote no se resuelven acá: quedan documentados en el PR y en el orden de merge.
+3. **Push** (por ticket elegido): `git -C <worktree> push -u origin gs/us-{NN}-...`.
+4. **PR** (por ticket elegido), uno por rama:
    ```bash
    gh pr create --repo Gary-Sanchez/TheHoneycomb --base main --head gs/us-{NN}-{slug} \
      --title "US-{NN}: <título del ticket>" --body-file <archivo en el scratchpad>
    ```
    Cuerpo: resumen, AC cubiertos, test plan con los "Pasos para testear", y una sección
-   **"Relación con otros PRs"** si el mapa de la Fase B marcó solapamientos ("toca `App.tsx` igual que
-   #X; el que se mergee segundo resuelve conflictos") o dependencias ("apilado sobre #X, re-apuntar a
-   `main` cuando se mergee"). Para PRs apilados usar `--base gs/us-{MM}-...`. Si `gh` no está
+   **"Relación con otros PRs"** si el análisis marcó 🟡/🔴/⛓️ ("toca `App.tsx` igual que #X; mergear
+   después de #X y actualizar con `main` antes"; "apilado sobre #X, re-apuntar a `main` cuando se
+   mergee"), con el lugar de este PR en el orden de merge recomendado. Para PRs apilados usar `--base gs/us-{MM}-...`. Si `gh` no está
    autenticado, dar el link `https://github.com/Gary-Sanchez/TheHoneycomb/pull/new/<rama>` de cada uno.
    Después de crear los PRs, vincularlos en la app con las tools `ccd_pr` (`get_status` / `bind_pr`)
    según lo que permita la sesión.
-4. **Linear**, por ticket elegido y con gates separados: link del PR en el issue (`save_issue` con
+5. **Linear**, por ticket elegido y con gates separados: link del PR en el issue (`save_issue` con
    `links`, va junto con el sí al PR), comentario con los "Pasos para testear" (`save_comment`), y paso
    a `QA Ready`.
 
@@ -184,7 +203,8 @@ hacer por cuenta propia) quitar los de tickets cuyo PR ya se mergeó:
 `git worktree remove ".claude/worktrees/us-{NN}"` (falla si hay cambios sin commitear — en ese caso
 avisar, no forzar). La rama local se puede borrar con `git branch -d` (nunca `-D`) una vez mergeada.
 Mientras el PR esté abierto, dejar el worktree: sirve para atender comentarios de review o de
-[[super-tefinha-QA]].
+[[super-tefinha-QA]]. Para el QA de todo el lote, [[super-tefinha-QA-en-lote]] reusa el mismo análisis
+de conflictos y prueba los PRs en el orden de merge recomendado.
 
 ## Bloqueos
 
