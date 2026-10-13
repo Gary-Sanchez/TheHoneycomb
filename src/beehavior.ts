@@ -237,3 +237,30 @@ export function computeBeehavior(
       };
     });
 }
+
+export interface MonthlyRate {
+  month: string; // `YYYY-MM`
+  label: string; // "Jan", or "Jan 2026" when the months span more than one year
+  rate: number;
+}
+
+// US-41: the colleague's month-by-month Overall for the Progress Report chart. Every month with
+// records in the DB is a candidate (no fixed months), rated with computeBeehavior restricted to
+// that month — so a month where an enrolled colleague missed every event shows 0% (absences leave
+// no rows), and a month with no event in any of their activities is left out (no rate). Sorted
+// chronologically.
+export function getMonthlyRates(attendee: Attendee, records: AttendanceRecord[]): MonthlyRate[] {
+  const months = [...new Set(records.map(r => r.date.slice(0, 7)))].sort();
+  const rated = months.flatMap(month => {
+    // `-31` works for every month: ISO dates compare as strings
+    const [row] = computeBeehavior([attendee], records, { start: `${month}-01`, end: `${month}-31` });
+    return row.overallRate === null ? [] : [{ month, rate: row.overallRate }];
+  });
+  const multiYear = new Set(rated.map(r => r.month.slice(0, 4))).size > 1;
+
+  return rated.map(({ month, rate }) => {
+    const [y, m] = month.split("-");
+    const name = MONTHS[Number(m) - 1];
+    return { month, label: multiYear ? `${name} ${y}` : name, rate };
+  });
+}
