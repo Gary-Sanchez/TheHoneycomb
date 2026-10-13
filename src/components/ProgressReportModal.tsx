@@ -63,8 +63,7 @@ export default function ProgressReportModal({
 
   // 5. Generate progress status text
   const progressStatus = useMemo(() => {
-    if (rate === null) return { title: "Unlogged", color: "text-natural-sage bg-natural-cream/40", desc: "No attendance recorded yet." };
-    if (totalLogs === 0) return { title: "No attendance yet", color: "text-natural-sage bg-natural-cream/40", desc: "" };
+    if (rate === null) return { title: "No attendance yet", color: "text-natural-sage bg-natural-cream/40", desc: "" };
     if (rate >= 90) return { title: "Excellent Performance", color: "text-natural-forest bg-[#CCD5AE]/30", desc: "Demonstrating consistent engagement and participation." };
     if (rate >= 75) return { title: "Good Standing", color: "text-natural-sand bg-natural-wheat/40", desc: "Steady participation. Keeps pace with activities nicely." };
     return { title: "Needs Support", color: "text-natural-sand bg-[#E9E5D9]/50", desc: "Recommend direct outreach or follow-up email to re-engage." };
@@ -115,8 +114,6 @@ export default function ProgressReportModal({
                   <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider">Attendance Rate</h4>
                   <div className="flex items-baseline space-x-2 mt-4">
                     <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{rate === null ? "—" : `${rate}%`}</span>
-                    {rate !== null && <span className="text-xs text-natural-sage font-bold">Present Rate</span>}
-                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{totalLogs === 0 ? "—" : `${rate}%`}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs text-natural-sage font-semibold border-t border-natural-border/60 pt-3 mt-4">
                     <span>Present: <strong className="text-natural-forest">{presentLogs}</strong></span>
@@ -192,13 +189,6 @@ export default function ProgressReportModal({
                       }`}
                     >
                       {bd.rate === null ? "—" : `${bd.rate}%`}
-                    <h5 className="font-serif font-bold text-[#1A1A1A] text-sm">{bd.activity}</h5>
-                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                      bd.total === 0 ? "bg-natural-cream text-natural-sage" :
-                      bd.rate >= 90 ? "bg-[#CCD5AE]/40 text-natural-forest" :
-                      bd.rate >= 75 ? "bg-natural-wheat text-natural-sand" : "bg-[#E9E5D9] text-natural-sand"
-                    }`}>
-                      {bd.total === 0 ? "No attendance yet" : `${bd.rate}%`}
                     </span>
                   </div>
 
