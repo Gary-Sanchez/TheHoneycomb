@@ -151,3 +151,16 @@ Verificado después de los cambios: `npm ci` limpio, `npm run lint`, `npm run bu
 `parseAttendance` (mismos 3 colegas, actividad y fecha), `initializeProxy()` de `@electron/get`
 con `global-agent` 4 (arranca sin errores), `npm run electron:build` + arranque del ejecutable
 empaquetado (servidor responde, sin `Cannot find module`) y `npm run test:e2e` (7/7).
+
+### 5.4 Por qué volvió a romperse, y el job `audit` de CI
+
+Ningún merge cambió las versiones afectadas: son idénticas en el lockfile de `ded28df` (cierre de
+US-13) y de `90fb3ca`. `npm audit` solo usa advisories **revisados por GitHub**, y estos cuatro se
+revisaron después del cierre de US-13 (2026-09-30): `http-cache-semantics` el 2026-10-02, y
+`proxy-addr`, `source-map-js` y `sprintf-js` el 2026-10-05.
+
+`npm audit` = 0 es un estado que vence con el tiempo, no una propiedad del código. Por eso
+`.github/workflows/ci.yml` tiene un job `audit` (`npm audit`, falla con cualquier vulnerabilidad)
+que corre en cada PR y push a `main`, y además a diario sobre `main` (`schedule`, 11:00 UTC; en esa
+corrida se saltea `lint-and-build`). Si el job programado falla sin cambios en el código, es un
+advisory nuevo: seguir este documento.
