@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import {
   computeBeehavior,
@@ -11,22 +11,11 @@ import {
   resolvePeriod,
   PeriodFilter,
 } from "../beehavior";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  Cell,
-} from "recharts";
 import { averageOverall, formatAverageBase } from "../dashboardMetrics";
+import DashboardPanels from "./DashboardPanels";
 import { pluralize } from "../utils";
-import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search } from "lucide-react";
+import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, FileDown } from "lucide-react";
+import OutcomeReportModal from "./OutcomeReportModal";
 
 interface DashboardStatsProps {
   attendees: Attendee[];
@@ -48,6 +37,9 @@ export default function DashboardStats({
 }: DashboardStatsProps) {
   // State for search query in Bee-havior table
   const [beeSearchQuery, setBeeSearchQuery] = useState("");
+  // US-40: Outcome Report dialog; focus returns to its trigger on close
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportButtonRef = useRef<HTMLButtonElement>(null);
 
   // US-35: the range actually applied (null → All time). An incomplete or inverted custom range isn't applied.
   const period = useMemo(() => resolvePeriod(periodFilter), [periodFilter]);
@@ -75,26 +67,7 @@ export default function DashboardStats({
     ? Math.round((multiActivityCount / totalAttendees) * 100)
     : 0;
 
-  // 2. Monthly Trend Data (April, May, June 2026)
-  const monthlyTrendData = useMemo(() => {
-    const months = ["04", "05", "06"];
-    const monthNames = { "04": "April", "05": "May", "06": "June" };
-
-    return months.map(m => {
-      const monthLogs = records.filter(r => r.date.split("-")[1] === m);
-      const total = monthLogs.length;
-      const presents = monthLogs.filter(r => r.status === "present").length;
-      const rate = total ? Math.round((presents / total) * 100) : 0;
-
-      return {
-        month: monthNames[m as keyof typeof monthNames],
-        "Attendance Rate (%)": rate,
-        "Total Logs": total,
-      };
-    });
-  }, [records]);
-
-  // 3. Activity Comparison Data
+  // 2. Activity Comparison Data
   const activityData = useMemo(() => {
     return ACTIVITIES.map(act => {
       const activeAttendees = attendees.filter(att =>
@@ -203,6 +176,18 @@ export default function DashboardStats({
           <p id="period-showing" className="text-sm font-semibold text-natural-forest ml-auto">
             Showing: {period ? formatPeriodLabel(period) : "All time"}
           </p>
+
+          <button
+            ref={reportButtonRef}
+            type="button"
+            id="generate-outcome-report"
+            onClick={() => setReportOpen(true)}
+            aria-haspopup="dialog"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-natural-forest"
+          >
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            Generate Outcome Report
+          </button>
         </div>
 
         {invalidRange && (
@@ -211,6 +196,16 @@ export default function DashboardStats({
           </p>
         )}
       </section>
+
+      {reportOpen && (
+        <OutcomeReportModal
+          attendees={attendees}
+          records={allRecords}
+          initialPeriod={periodFilter}
+          onClose={() => setReportOpen(false)}
+          returnFocusRef={reportButtonRef}
+        />
+      )}
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -544,100 +539,15 @@ export default function DashboardStats({
         )}
       </div>
 
-      {/* Charts Grid - Moved to the bottom of the dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Trend Area Chart */}
-        <div className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-serif font-bold text-[#1A1A1A]">Attendance Trends</h3>
-              <p className="text-xs text-natural-sage font-medium">Percentage of presence logged each month</p>
-            </div>
-            <span className="text-xs font-semibold bg-natural-wheat/50 text-natural-forest border border-natural-border/40 px-3 py-1.5 rounded-full">
-              Q2 Year 2026
-            </span>
-          </div>
-          {periodHasNoEvents ? (
-            emptyPeriod("trend-empty", "h-[300px] flex items-center justify-center")
-          ) : (
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8A9A5B" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#8A9A5B" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12, fontWeight: "bold" }} />
-                <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#2D3E35",
-                    borderRadius: "16px",
-                    border: "1px solid #E9E5D9",
-                    color: "#FDFBF7",
-                  }}
-                  itemStyle={{ color: "#FAEDCD" }}
-                  labelStyle={{ fontWeight: "bold", fontFamily: "Playfair Display" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="Attendance Rate (%)"
-                  stroke="#2D3E35"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRate)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          )}
-        </div>
-
-        {/* Activity Bar Chart */}
-        <div className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-serif font-bold text-[#1A1A1A]">Cross-Activity Comparisons</h3>
-              <p className="text-xs text-natural-sage font-medium">Average Attendance rates per Activity</p>
-            </div>
-            <span className="text-xs font-semibold bg-[#CCD5AE]/30 text-natural-forest border border-[#CCD5AE]/40 px-3 py-1.5 rounded-full">
-              4 Core Activities
-            </span>
-          </div>
-          {periodHasNoEvents ? (
-            emptyPeriod("comparison-empty", "h-[300px] flex items-center justify-center")
-          ) : (
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                <XAxis dataKey="shortName" tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 11, fontWeight: "bold" }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#2D3E35",
-                    borderRadius: "16px",
-                    border: "1px solid #E9E5D9",
-                    color: "#FDFBF7",
-                  }}
-                  itemStyle={{ color: "#FAEDCD" }}
-                  labelStyle={{ fontWeight: "bold", fontFamily: "Playfair Display" }}
-                />
-                <Legend iconType="circle" />
-                <Bar dataKey="Attendance Rate (%)" fill="#2D3E35" radius={[6, 6, 0, 0]}>
-                  {activityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          )}
-        </div>
-      </div>
+      {/* US-36: Attendance Trends, Cross-Activity Comparisons and Engagement as collapsible panels */}
+      <DashboardPanels
+        attendees={attendees}
+        allRecords={allRecords}
+        period={period}
+        rows={beehaviorData}
+        periodHasNoEvents={periodHasNoEvents}
+        emptyMessage={EMPTY_PERIOD_MESSAGE}
+      />
     </div>
   );
 }
