@@ -569,7 +569,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <td className="p-4">
                   <input
                     type="date"
-                    aria-label={`Session date for ${rec.name}`}
+                    aria-label={`Event date for ${rec.name}`}
                     value={rec.date}
                     onChange={(e) => handleUpdateDate(i, e.target.value)}
                     className="bg-white border border-natural-border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-mono"
@@ -1060,7 +1060,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             <div className="flex items-center gap-3">
               <input
                 type="date"
-                aria-label="Session date for all files"
+                aria-label="Event date for all files"
                 value={batchDate}
                 onChange={(e) => setBatchDate(e.target.value)}
                 className="bg-white border border-natural-border rounded-xl px-3 py-2 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage"

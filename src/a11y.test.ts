@@ -22,6 +22,14 @@ describe("US-47: accessible names and live regions", () => {
   it("the tab nav is labelled Main", () => {
     expect(source("App.tsx")).toContain('<nav aria-label="Main"');
   });
+
+  it("Overlap insights keep their emoji out of the announced text", () => {
+    const hub = source("components", "CrossReferenceHub.tsx");
+    const texts = [...hub.matchAll(/text: [`"]([^`"]*)/g)].map(m => m[1]);
+    expect(texts.length).toBeGreaterThan(0);
+    for (const text of texts) expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
+    expect(hub).toContain('<span aria-hidden="true">{insight.icon}</span>');
+  });
 });
 
 describe("US-47: animations and reduced motion", () => {

@@ -63,7 +63,8 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
   // Automatic semantic insights
   const semanticInsights = useMemo(() => {
-    const insights: string[] = [];
+    // US-47: the emoji is kept apart from the text so it can be hidden from screen readers
+    const insights: { icon: string; text: string }[] = [];
 
     // Let's check overlap percentages
     ACTIVITIES.forEach((act1, i) => {
@@ -79,21 +80,26 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
         const rate = Math.round((shared / totalAct1) * 100);
         if (rate >= 30 && shared > 0) {
-          insights.push(
-            `💡 High overlap: ${rate}% of colleagues in ${act1} also attend ${act2} (${pluralize(shared, "shared colleague")}).`
-          );
+          insights.push({
+            icon: "💡",
+            text: `High overlap: ${rate}% of colleagues in ${act1} also attend ${act2} (${pluralize(shared, "shared colleague")}).`,
+          });
         }
       });
     });
 
     if (stats.super > 0) {
-      insights.push(
-        `🏆 Super Active: ${pluralize(stats.super, "colleague")} attended 3 or more activities.`
-      );
+      insights.push({
+        icon: "🏆",
+        text: `Super Active: ${pluralize(stats.super, "colleague")} attended 3 or more activities.`,
+      });
     }
 
     if (insights.length === 0) {
-      insights.push("✏️ No strong overlap between activities yet. It will show up as more attendance records are added.");
+      insights.push({
+        icon: "✏️",
+        text: "No strong overlap between activities yet. It will show up as more attendance records are added.",
+      });
     }
 
     return insights;
@@ -229,7 +235,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
               {semanticInsights.map((insight, idx) => (
                 <div key={idx} className="bg-white border border-natural-border/60 p-4 rounded-xl text-xs text-natural-forest leading-relaxed shadow-sm">
-                  {insight}
+                  <span aria-hidden="true">{insight.icon}</span> {insight.text}
                 </div>
               ))}
             </div>
