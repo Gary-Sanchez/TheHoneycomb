@@ -1,4 +1,5 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
+import { findSameEventFileIds } from "../sameEvent";
 import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ActivitySource, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
 import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt } from "../utils";
 import { isBlacklistedName } from "../blacklist";
@@ -621,11 +622,10 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       .map((rec, index) => ({ rec, index }))
       .filter(({ rec }) => rec.fileId === group.id);
     const groupDate = rows[0]?.rec.date ?? "";
-    const sameDateFiles = groupDate
-      ? fileGroups.filter(
-          g => g.id !== group.id && !isBlockedGroup(g) && parsedRecords.some(r => r.fileId === g.id && r.date === groupDate)
-        )
-      : [];
+    const sameEventIds = new Set(
+      findSameEventFileIds(parsedRecords, group.id, fileGroups.filter(g => !isBlockedGroup(g)).map(g => g.id))
+    );
+    const sameDateFiles = fileGroups.filter(g => sameEventIds.has(g.id));
     const excludedCount = group.excludedByDuration.length;
     const showExcluded = expandedExclusions.has(group.id);
     const isBlocked = isBlockedGroup(group);
