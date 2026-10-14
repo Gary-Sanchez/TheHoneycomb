@@ -1056,19 +1056,34 @@ export function formatDuration(seconds: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// US-27: activity a file declares for itself (Activity column / label, or the meeting title)
+// US-37: activity of a file, detected from its name (and, for .csv, its meeting title)
 // ---------------------------------------------------------------------------
 
-const CSV_ACTIVITY_LABELS = ["activity", "actividad"];
 const CSV_TITLE_LABELS = ["meeting title", "title", "meeting name", "titulo de la reunion", "titulo", "nombre de la reunion"];
 const ACTIVITY_NAMES = ["Speakeasy", "Reading Club", "Music Room", "Writing Hood"];
 
-// A meeting title only declares an activity when it names one of the 4 activities verbatim
+export type ActivitySource = "file name" | "meeting title";
+
+// Text only names an activity when it contains one of the 4 activities verbatim
 // (case/accent-insensitive): the loose keyword heuristics ("email", "book"...) would otherwise
-// reject a valid batch over an incidental word in the title.
-function activityNamedInTitle(title: string): string | null {
-  const norm = normalizeForMatch(title);
-  return ACTIVITY_NAMES.find(a => norm.includes(a.toLowerCase())) ?? null;
+// assign a file to the wrong activity over an incidental word in its name or title.
+function activitiesNamedIn(text: string): string[] {
+  const norm = normalizeForMatch(text);
+  return ACTIVITY_NAMES.filter(a => norm.includes(a.toLowerCase()));
+}
+
+// File name first; only a name that names no activity at all falls back to the meeting title
+// (.csv only: pass `titleActivities` empty for the other formats). A name naming several is
+// ambiguous, not "none", so it never falls back.
+export function resolveFileActivity(
+  filename: string,
+  titleActivities: string[] = []
+): { activity: string; source: ActivitySource } | null {
+  const inName = activitiesNamedIn(filename);
+  if (inName.length === 1) return { activity: inName[0], source: "file name" };
+  if (inName.length > 1) return null;
+  if (titleActivities.length === 1) return { activity: titleActivities[0], source: "meeting title" };
+  return null;
 }
 
 export interface CsvParseResult {
@@ -1080,28 +1095,33 @@ export interface CsvParseResult {
   excludedByDuration: DurationExclusion[];
   // US-19 blacklist hits (distinct people), reported per file in the batch preview (US-27)
   excludedByBlacklist: number;
-  // US-27: every activity the file itself names, so a batch can be checked for a single activity
-  declaredActivities: string[];
+  // US-37: every activity named by the file's "Meeting title" rows (see resolveFileActivity)
+  titleActivities: string[];
   // US-27: content hash (line endings/outer whitespace normalized) to spot identical files in a batch
   fingerprint: string;
 }
 
-export function parseCsvAttendance(buffer: Buffer, requestedActivity: string = ""): CsvParseResult {
+interface CsvParseOptions {
+  // Activity for rows with no Activity column value when the caller has none to offer
+  // (default "Speakeasy"; the import routes pass "" so an undetected file isn't silently Speakeasy)
+  defaultActivity?: string;
+}
+
+// `fallbackActivity` is the file's detected activity: an Activity column value (US-37) still wins
+// for its own row.
+export function parseCsvAttendance(
+  buffer: Buffer,
+  fallbackActivity: string = "",
+  options: CsvParseOptions = {}
+): CsvParseResult {
   const text = decodeCsvBuffer(buffer);
   const rows = parseCsvRows(text, detectCsvDelimiter(text));
-  const activity = requestedActivity || DEFAULT_ACTIVITY;
-  const declared = new Set<string>();
+  const activity = fallbackActivity || (options.defaultActivity ?? DEFAULT_ACTIVITY);
+  const titleActivities = new Set<string>();
 
   for (const row of rows) {
-    if (row.length < 2) continue;
-    const label = normalizeLabel(row[0]);
-    const value = row.slice(1).find(Boolean) || "";
-    const found = CSV_ACTIVITY_LABELS.includes(label)
-      ? detectActivityFromText(value)
-      : CSV_TITLE_LABELS.includes(label)
-      ? activityNamedInTitle(value)
-      : null;
-    if (found) declared.add(found);
+    if (row.length < 2 || !CSV_TITLE_LABELS.includes(normalizeLabel(row[0]))) continue;
+    for (const name of activitiesNamedIn(row.slice(1).find(Boolean) || "")) titleActivities.add(name);
   }
 
   // 1. Session date from metadata: a row whose first cell is a date label ("Start time", "Date", ...).
@@ -1158,10 +1178,6 @@ export function parseCsvAttendance(buffer: Buffer, requestedActivity: string = "
     const name = cleanCsvName(row[nameCol] || "");
     if (!name) continue;
     if (!contentDate && dateCol !== -1) contentDate = parseDeterministicDate(row[dateCol] || "");
-    if (activityCol !== -1) {
-      const declaredActivity = detectActivityFromText(row[activityCol]);
-      if (declaredActivity) declared.add(declaredActivity);
-    }
     if (durationCol !== -1) {
       const key = toTitleCase(name).toLowerCase();
       const raw = row[durationCol] || "";
@@ -1174,8 +1190,8 @@ export function parseCsvAttendance(buffer: Buffer, requestedActivity: string = "
         durations.set(key, bySection);
       }
     }
-    // An Activity column is honored unless the user picked an activity for the upload
-    const rowActivity = requestedActivity ? null : activityCol !== -1 ? detectActivityFromText(row[activityCol]) : null;
+    // US-37: an Activity column value wins over the file's detected activity for its own row
+    const rowActivity = activityCol !== -1 ? detectActivityFromText(row[activityCol]) : null;
     records.push({
       name: toTitleCase(name),
       activity: rowActivity || activity,
@@ -1249,7 +1265,7 @@ export function parseCsvAttendance(buffer: Buffer, requestedActivity: string = "
     durationFilterApplied,
     excludedByDuration,
     excludedByBlacklist: blacklisted.size,
-    declaredActivities: [...declared],
+    titleActivities: [...titleActivities],
     fingerprint: crypto.createHash("sha256").update(text.replace(/\r\n?/g, "\n").trim()).digest("hex"),
   };
 }

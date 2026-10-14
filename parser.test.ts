@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import * as xlsx from "xlsx";
-import { extractTextFromFile, htmlToText, parseAttendance, parseCsvAttendance, parseDurationSeconds } from "./parser";
+import {
+  extractTextFromFile,
+  htmlToText,
+  parseAttendance,
+  parseCsvAttendance,
+  parseDurationSeconds,
+  resolveFileActivity,
+} from "./parser";
 import { INGESTION_BLACKLIST } from "./src/blacklist";
 
 const byName = (records: ReturnType<typeof parseAttendance>) =>
@@ -257,9 +264,20 @@ describe("parseCsvAttendance (US-18 .csv path)", () => {
     expect(rec["Carlos Gomez"]).toMatchObject({ date: "2026-06-10", activity: "Reading Club", status: "absent" });
   });
 
-  it("lets the activity chosen for the upload win over the Activity column", () => {
-    const csv = "Date,Name,Activity\n2026-06-10,Elena Rostova,Reading Club\n";
-    expect(parseCsvAttendance(Buffer.from(csv, "utf-8"), "Music Room").records[0].activity).toBe("Music Room");
+  it("US-37: an Activity column value wins over the file's detected activity, which only fills the other rows", () => {
+    const csv = "Date,Name,Activity\n2026-06-10,Elena Rostova,Reading Club\n2026-06-10,Carlos Gomez,\n";
+    const rec = csvByName(parseCsvAttendance(Buffer.from(csv, "utf-8"), "Music Room").records);
+    expect(rec["Elena Rostova"].activity).toBe("Reading Club");
+    expect(rec["Carlos Gomez"].activity).toBe("Music Room");
+  });
+
+  it("US-37: leaves rows without an activity empty when the caller has none to offer", () => {
+    const csv = "Date,Name,Activity\n2026-06-10,Elena Rostova,Reading Club\n2026-06-10,Carlos Gomez,\n";
+    const rec = csvByName(parseCsvAttendance(Buffer.from(csv, "utf-8"), "", { defaultActivity: "" }).records);
+    expect(rec["Elena Rostova"].activity).toBe("Reading Club");
+    expect(rec["Carlos Gomez"].activity).toBe("");
+    const roster = parseCsvAttendance(Buffer.from("Elena Rostova\n"), "", { defaultActivity: "" });
+    expect(roster.records[0].activity).toBe("");
   });
 
   it("splits ';' CSVs and keeps accents from latin1 files", () => {
@@ -369,18 +387,25 @@ describe("parseCsvAttendance — 10-minute duration filter (US-25)", () => {
 });
 
 describe("parseCsvAttendance — batch metadata (US-27)", () => {
-  it("reports the activity the file declares in its title, label or Activity column", () => {
+  it("reports the activities named by the meeting title, in English or Spanish", () => {
     const title = parseCsvAttendance(Buffer.from("Meeting title,Writing Hood session\nName\nAna Lopez\n"), "Speakeasy");
-    expect(title.declaredActivities).toEqual(["Writing Hood"]);
-    const label = parseCsvAttendance(Buffer.from("Actividad,Music Room\nName\nAna Lopez\n"), "Speakeasy");
-    expect(label.declaredActivities).toEqual(["Music Room"]);
-    const column = parseCsvAttendance(Buffer.from("Name,Activity\nAna Lopez,Reading Club\n"), "Speakeasy");
-    expect(column.declaredActivities).toEqual(["Reading Club"]);
+    expect(title.titleActivities).toEqual(["Writing Hood"]);
+    const spanish = parseCsvAttendance(Buffer.from("Título de la reunión,Música: MUSIC ROOM\nName\nAna Lopez\n"), "Speakeasy");
+    expect(spanish.titleActivities).toEqual(["Music Room"]);
+    const two = parseCsvAttendance(Buffer.from("Meeting title,Speakeasy + Reading Club\nName\nAna Lopez\n"), "Speakeasy");
+    expect(two.titleActivities).toEqual(["Speakeasy", "Reading Club"]);
   });
 
   it("ignores loose keywords in a meeting title (only the 4 activity names count)", () => {
     const r = parseCsvAttendance(Buffer.from("Meeting title,Weekly email catch-up\nName\nAna Lopez\n"), "Speakeasy");
-    expect(r.declaredActivities).toEqual([]);
+    expect(r.titleActivities).toEqual([]);
+  });
+
+  it("does not read an Activity label or column as a meeting title", () => {
+    const label = parseCsvAttendance(Buffer.from("Actividad,Music Room\nName\nAna Lopez\n"), "Speakeasy");
+    expect(label.titleActivities).toEqual([]);
+    const column = parseCsvAttendance(Buffer.from("Name,Activity\nAna Lopez,Reading Club\n"), "Speakeasy");
+    expect(column.titleActivities).toEqual([]);
   });
 
   it("gives identical content the same fingerprint regardless of line endings", () => {
@@ -389,6 +414,43 @@ describe("parseCsvAttendance — batch metadata (US-27)", () => {
     const c = parseCsvAttendance(Buffer.from("Name\nBeto Paz\n"));
     expect(a.fingerprint).toBe(b.fingerprint);
     expect(a.fingerprint).not.toBe(c.fingerprint);
+  });
+});
+
+describe("resolveFileActivity (US-37)", () => {
+  it("QA-02: the file name wins over the meeting title", () => {
+    expect(resolveFileActivity("Music Room - Attendance report 6-24-26.csv", ["Reading Club"])).toEqual({
+      activity: "Music Room",
+      source: "file name",
+    });
+  });
+
+  it("QA-03: a name with no activity falls back to the meeting title", () => {
+    expect(resolveFileActivity("attendance-6-24.csv", ["Reading Club"])).toEqual({
+      activity: "Reading Club",
+      source: "meeting title",
+    });
+  });
+
+  it("QA-04/QA-06: names no activity anywhere -> not detected (other formats never read the title)", () => {
+    expect(resolveFileActivity("Weekly sync.csv", [])).toBeNull();
+    expect(resolveFileActivity("roster.xlsx")).toBeNull();
+    expect(resolveFileActivity("Speakeasy 2026-06-24.docx")).toEqual({ activity: "Speakeasy", source: "file name" });
+  });
+
+  it("QA-07: a name naming two activities is ambiguous and never falls back to the title", () => {
+    expect(resolveFileActivity("Speakeasy + Music Room.csv", ["Reading Club"])).toBeNull();
+  });
+
+  it("a title naming two activities (or none) is not detected", () => {
+    expect(resolveFileActivity("attendance.csv", ["Speakeasy", "Music Room"])).toBeNull();
+    expect(resolveFileActivity("attendance.csv", [])).toBeNull();
+  });
+
+  it("matches without caring about case or accents, and ignores loose words like email or book", () => {
+    expect(resolveFileActivity("READING CLUB.csv")?.activity).toBe("Reading Club");
+    expect(resolveFileActivity("speakeasy – sesión.txt")?.activity).toBe("Speakeasy");
+    expect(resolveFileActivity("email book reading list.csv")).toBeNull();
   });
 });
 

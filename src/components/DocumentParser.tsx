@@ -1,8 +1,9 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
-import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
+import { findSameEventFileIds } from "../sameEvent";
+import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ActivitySource, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
 import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt, formatDisplayDate, pluralize } from "../utils";
 import { isBlacklistedName } from "../blacklist";
-import { Check, ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, MessageSquare, BookOpen, Music, PenTool, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
+import { Check, ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
 import { MAX_CSV_BATCH_FILES, checkCsvBatch } from "../uploadLimits";
@@ -72,7 +73,6 @@ function cleanClientRecords(rawRecords: any[]): any[] {
 }
 
 export default function DocumentParser({ attendees, onImportData, canEdit, onSignIn, onSessionExpired }: DocumentParserProps) {
-  const [selectedImportLogActivity, setSelectedImportLogActivity] = useState<string>("Speakeasy");
   const [dragActive, setDragActive] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,6 +94,13 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   const isMultiFile = fileGroups.length > 1;
   const groupsWithoutDate = fileGroups.filter(g => !g.dateDetected).map(g => g.id);
   const hasPreview = parsedRecords.length > 0 || fileGroups.length > 0;
+  // US-37: the activity picked for a file applies to every record of it and wins over whatever the
+  // parser detected (name, meeting title or Activity column)
+  const handleSelectGroupActivity = (fileId: number, activity: string) => {
+    if (!activity) return;
+    setFileGroups(prev => prev.map(g => (g.id === fileId ? { ...g, activity, activitySource: "selected manually" } : g)));
+    setParsedRecords(prev => prev.map(rec => (rec.fileId === fileId ? { ...rec, activity } : rec)));
+  };
 
   const handleUpdateDate = (index: number, newDate: string) => {
     setParsedRecords(prev => prev.map((rec, idx) => idx === index ? { ...rec, date: newDate } : rec));
@@ -145,6 +152,10 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // Left out of the import: identical to another file of the batch, imported before (US-26), or
   // its event already holds all its colleagues (US-33)
   const isBlockedGroup = (g: ParsedFileGroup) => Boolean(g.duplicateOf || g.alreadyImported || g.alreadyLoaded);
+
+  // US-37: a file with no activity (not detected, not picked yet) can't be imported
+  const hasMissingActivity =
+    parsedRecords.some(rec => !rec.activity) || fileGroups.some(g => !isBlockedGroup(g) && !g.activity);
 
   const handleDrag = (e: DragEvent) => {
     e.preventDefault();
@@ -277,7 +288,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     const matched = attendees.find(att => att.name.toLowerCase() === rec.name.toLowerCase());
     return {
       ...rec,
-      activity: selectedImportLogActivity, // Force activity to match selected activity log
       matchedAttendeeId: matched?.id,
       fileId,
     };
@@ -291,7 +301,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     resetPreview();
     animateLoadingText(0);
 
-    // US-27/US-38: .csv uploads (1–50 files) go through the batch parser; other formats stay single-file
+    // US-27/US-38: .csv uploads (1–50 files) go through the batch parser; other formats stay single-file.
+    // US-37: no activity is sent: the server detects it per file (name, then meeting title for .csv)
     const isCsvBatch = files.every(f => extensionOf(f) === ".csv");
     const formData = new FormData();
     if (isCsvBatch) {
@@ -299,7 +310,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     } else {
       formData.append("file", files[0]);
     }
-    formData.append("activity", selectedImportLogActivity);
 
     try {
       let processed: ParsedRecord[] = [];
@@ -312,6 +322,9 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
           groups.push({
             id,
             filename: f.filename,
+            csv: true,
+            activity: f.activity ?? "",
+            activitySource: f.activitySource ? (f.activitySource as ActivitySource) : null,
             dateDetected: f.dateDetected !== false,
             durationFilterApplied: Boolean(f.durationFilterApplied),
             excludedByDuration: f.excludedByDuration || [],
@@ -347,7 +360,23 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         }
       } else {
         const data = await postForm("/api/parse-attendance-file", formData);
-        processed = cleanClientRecords(data.records).map(rec => toPreviewRecord(rec));
+        // US-37: the single file is a group too, so it gets the same activity badge and selector
+        groups.push({
+          id: 0,
+          filename: data.filename ?? files[0].name,
+          csv: false,
+          activity: data.activity ?? "",
+          activitySource: data.activitySource ? (data.activitySource as ActivitySource) : null,
+          dateDetected: true,
+          durationFilterApplied: false,
+          excludedByDuration: [],
+          excludedByBlacklist: 0,
+          duplicateOf: null,
+          alreadyImported: null,
+          alreadyLoaded: null,
+          fingerprint: "",
+        });
+        processed = cleanClientRecords(data.records).map(rec => toPreviewRecord(rec, 0));
         missingDate = data.dateDetected === false || processed.some(rec => !rec.date);
       }
 
@@ -383,7 +412,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
   // Import the approved records into the master list
   const handleImportApproved = async () => {
-    if (!canEdit || hasMissingDates || importing) return;
+    if (!canEdit || hasMissingDates || hasMissingActivity || importing) return;
     const newAttendeesToCreate: Omit<Attendee, "id">[] = [];
     const newRecordsToSave: Omit<AttendanceRecord, "id">[] = [];
 
@@ -624,11 +653,10 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       .map((rec, index) => ({ rec, index }))
       .filter(({ rec }) => rec.fileId === group.id);
     const groupDate = rows[0]?.rec.date ?? "";
-    const sameDateFiles = groupDate
-      ? fileGroups.filter(
-          g => g.id !== group.id && !isBlockedGroup(g) && parsedRecords.some(r => r.fileId === g.id && r.date === groupDate)
-        )
-      : [];
+    const sameEventIds = new Set(
+      findSameEventFileIds(parsedRecords, group.id, fileGroups.filter(g => !isBlockedGroup(g)).map(g => g.id))
+    );
+    const sameDateFiles = fileGroups.filter(g => sameEventIds.has(g.id));
     const excludedCount = group.excludedByDuration.length;
     const showExcluded = expandedExclusions.has(group.id);
     const isBlocked = isBlockedGroup(group);
@@ -678,15 +706,52 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2 text-xs font-semibold">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            {!isBlocked &&
+              (group.activity ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#CCD5AE]/30 border border-[#CCD5AE]/80 text-natural-forest" data-testid="file-activity">
+                  {group.activity}
+                  {group.activitySource && (
+                    <span className="font-medium text-natural-sage">
+                      · {group.activitySource === "selected manually" ? group.activitySource : `from ${group.activitySource}`}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-700" role="alert">
+                  <AlertTriangle className="h-3 w-3" />
+                  Activity Not Detected
+                </span>
+              ))}
+            {!isBlocked && (
+              <label className="inline-flex items-center gap-1.5 text-natural-forest">
+                <select
+                  aria-label={`Activity for ${group.filename}`}
+                  value={group.activity}
+                  onChange={(e) => handleSelectGroupActivity(group.id, e.target.value)}
+                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 ${
+                    group.activity ? "border-natural-border" : "border-amber-400"
+                  }`}
+                >
+                  {!group.activity && <option value="">Select activity…</option>}
+                  {ACTIVITIES.map(act => (
+                    <option key={act} value={act}>
+                      {act}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
               {pluralize(rows.length, "colleague")}
             </span>
+            {group.csv && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
               <ShieldOff className="h-3 w-3 text-natural-sage" />
               {group.excludedByBlacklist} excluded by blacklist
             </span>
-            {group.durationFilterApplied ? (
+            )}
+            {!group.csv ? null : group.durationFilterApplied ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
                 <Clock className="h-3 w-3 text-natural-sage" />
                 {pluralize(excludedCount, "colleague")} excluded (under 10 minutes)
@@ -697,7 +762,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 Duration filter not applied: this file has no duration column
               </span>
             )}
-            {group.duplicateOf ? (
+            {!group.csv ? null : group.duplicateOf ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-natural-sand/15 border border-natural-sand/40 text-natural-sand">
                 <Copy className="h-3 w-3" />
                 Duplicate of {group.duplicateOf} (excluded)
@@ -768,46 +833,6 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         </h2>
         <p className="text-sm text-natural-sage mt-1 font-medium">
           Upload attendance files (spreadsheets, Word documents or text lists) to import their attendance records.
-        </p>
-      </div>
-
-      {/* Activity-specific Import Log tabs */}
-      <div className="space-y-3">
-        <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
-          Select Activity
-        </label>
-        <div className="bg-natural-wheat/10 border border-natural-border p-2 rounded-2xl grid grid-cols-2 md:grid-cols-4 gap-2">
-          {ACTIVITIES.map((act) => {
-            let Icon = MessageSquare;
-            if (act === "Reading Club") Icon = BookOpen;
-            else if (act === "Music Room") Icon = Music;
-            else if (act === "Writing Hood") Icon = PenTool;
-
-            const isActive = selectedImportLogActivity === act;
-            return (
-              <button
-                key={act}
-                type="button"
-                onClick={() => {
-                  setSelectedImportLogActivity(act);
-                  resetPreview();
-                  setFiles([]);
-                  setErrorMsg("");
-                }}
-                className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs font-bold transition duration-150 ${
-                  isActive
-                    ? "bg-natural-forest text-white shadow-md shadow-natural-forest/10 scale-[1.01]"
-                    : "bg-white hover:bg-natural-cream text-natural-forest border border-natural-border/40"
-                }`}
-              >
-                <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-natural-sage"}`} />
-                <span>{act}</span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-xs text-natural-sage/95 italic font-medium">
-          Uploaded files are imported into <strong>{selectedImportLogActivity}</strong>.
         </p>
       </div>
 
@@ -1019,8 +1044,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               <button
                 type="button"
                 onClick={handleImportApproved}
-                disabled={!canEdit || hasMissingDates || importing || parsedRecords.length === 0}
-                title={hasMissingDates ? "Select an event date in Batch Edit Event Date first." : undefined}
+                disabled={!canEdit || hasMissingDates || hasMissingActivity || importing || parsedRecords.length === 0}
+                title={
+                  hasMissingDates
+                    ? "Select an event date in Batch Edit Event Date first."
+                    : hasMissingActivity
+                    ? "Select an activity for every file marked Activity Not Detected first"
+                    : undefined
+                }
                 className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-5 py-2 rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
