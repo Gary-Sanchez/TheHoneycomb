@@ -5,6 +5,7 @@ import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
 import { formatDisplayDate, pluralize, sortByName } from "../utils";
 import { computeBeehavior } from "../beehavior";
+import HiveStatusBadge from "./HiveStatusBadge";
 
 interface AttendeeDirectoryProps {
   attendees: Attendee[];
@@ -104,12 +105,8 @@ export default function AttendeeDirectory({
     });
   };
 
-  const getAttendanceBadgeClass = (rate: number | null, total: number) => {
-    if (total === 0 || rate === null) return "bg-natural-cream text-natural-sage border border-natural-border/40";
-    if (rate >= 90) return "bg-[#CCD5AE]/40 text-natural-forest font-bold border border-[#CCD5AE]/80";
-    if (rate >= 75) return "bg-natural-wheat text-natural-forest font-bold border border-natural-border/60";
-    return "bg-natural-sand/15 text-natural-sand font-bold border border-natural-sand/35";
-  };
+  // US-42: the percentage no longer carries its own color scale — the Hive Status badge does
+  const attendanceBadgeClass = "bg-natural-cream text-natural-forest border border-natural-border/60";
 
   return (
     <div className="space-y-8 animate-fade-in" id="attendee-directory-tab">
@@ -247,6 +244,7 @@ export default function AttendeeDirectory({
                 <tr className="bg-natural-cream/40 border-b border-natural-border text-natural-sage text-xs font-bold uppercase">
                   <th className="p-4 pl-6">Caserits</th>
                   <th className="p-4">Attendance Rate</th>
+                  <th className="p-4">Hive Status</th>
                   <th className="p-4">Date Joined</th>
                   <th className="p-4 pr-6 text-right">Actions</th>
                 </tr>
@@ -279,7 +277,7 @@ export default function AttendeeDirectory({
                       <td className="p-4">
                         <div className="flex items-center space-x-2">
                           <span
-                            className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${getAttendanceBadgeClass(stat.rate, stat.total)}`}
+                            className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${attendanceBadgeClass}`}
                             title={stat.rate === null ? undefined : `Attended ${stat.overallPresents} of ${stat.overallTotal} events`}
                           >
                             {stat.total === 0 ? "No attendance yet" : stat.rate === null ? "—" : `${stat.rate}%`}
@@ -290,6 +288,11 @@ export default function AttendeeDirectory({
                             </span>
                           )}
                         </div>
+                      </td>
+
+                      {/* US-42: same Hive Status as the Bee-havior Hub (All time) */}
+                      <td className="p-4">
+                        <HiveStatusBadge rate={stat.rate} />
                       </td>
 
                       {/* Joined Date */}

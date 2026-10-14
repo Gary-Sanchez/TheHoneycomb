@@ -11,6 +11,7 @@ import {
   resolvePeriod,
   PeriodFilter,
 } from "../beehavior";
+import HiveStatusBadge from "./HiveStatusBadge";
 import { averageOverall, formatAverageBase } from "../dashboardMetrics";
 import DashboardPanels from "./DashboardPanels";
 import { pluralize } from "../utils";
@@ -393,7 +394,7 @@ export default function DashboardStats({
                   </td>
                 </tr>
               ) : (
-                filteredBeehaviorData.map(({ attendee, activityStats, overallRate, overallTotal, overallPresents, tier, isMulti, participatedCount }) => {
+                filteredBeehaviorData.map(({ attendee, activityStats, overallRate, overallTotal, overallPresents, isMulti, participatedCount }) => {
                   return (
                     <tr key={attendee.id} className="hover:bg-natural-cream/15 transition duration-150">
                       {/* Name Card */}
@@ -446,13 +447,8 @@ export default function DashboardStats({
 
                       {/* Hive Status (Tiers) */}
                       <td className="p-4 text-center">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm"
-                             style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
-                             title={tier.meaning}
-                        >
-                          {tier.icon && <span aria-hidden="true">{tier.icon}</span>}
-                          <span>{tier.label}</span>
-                        </div>
+                        {/* US-42: the shared badge (textColor for contrast); no Overall → No data (US-44) */}
+                        <HiveStatusBadge rate={overallRate} />
                       </td>
 
                       {/* Multi-Activity Column */}
