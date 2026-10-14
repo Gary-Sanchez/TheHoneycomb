@@ -34,6 +34,10 @@ visible, pantallas que se rompen en móvil y una app que todavía se presenta co
 
 ### 1.2. Objetivos Principales
 
+0. **Snapshot de la app 4.0 (prerrequisito).** Antes de empezar cualquier ticket de esta versión,
+   se congela el estado actual de la app: código, instalador, capturas de cada pantalla y métricas
+   de la auditoría. Es el punto al que se puede volver si algo sale mal y la referencia contra la
+   que se compara cada cambio del 4.1 (§2.0).
 1. **Sistema de diseño (improvement).** Tokens semánticos en `@theme` (`src/index.css`) que
    cumplan contraste AA, y un lint de estilos que prohíba hex arbitrarios, tamaños de texto sueltos,
    radios sueltos y colores crudos de Tailwind.
@@ -94,6 +98,38 @@ visible, pantallas que se rompen en móvil y una app que todavía se presenta co
 ---
 
 ## 2. Requisitos Funcionales y Especificación de Módulos
+
+### 2.0. Snapshot de la app 4.0 (antes de cualquier ticket)
+
+El 4.1 toca casi todos los archivos de la interfaz. Antes de mergear el primer ticket de la
+versión, se crea un snapshot de la app tal como quedó al cerrar el 4.0, con cuatro partes:
+
+- **Código:**
+  - `package.json` pasa de `"version": "0.0.0"` a `"version": "4.0.0"`;
+  - el commit de `main` que cierra el 4.0 (con ese cambio) lleva el tag anotado `v4.0.0`;
+  - el tag no se mueve ni se borra; si hace falta corregir el 4.0, se usa `v4.0.1`.
+- **Instalador:** se publica un GitHub Release `v4.0.0` con el instalador de Windows generado por
+  `npm run electron:build` desde el tag. Cualquier persona del equipo puede reinstalar la app 4.0
+  sin compilarla.
+- **Capturas:**
+  - cada una de las 6 pestañas, más el **Progress Report** y el **Outcome Report** abiertos, a 1440,
+    768 y 375 px (24 capturas);
+  - con datos demo en una base temporal (`HONEYCOMB_DB_PATH`, otro `PORT`, sembrada con
+    `POST /api/reset`), nunca con datos reales;
+  - se adjuntan al Release `v4.0.0` como un `.zip`, para no sumar binarios al repositorio.
+- **Métricas de línea base:** `docs/SNAPSHOT-4.0.md` registra, medidas sobre el tag:
+  - los conteos que va a vigilar el lint de §2.3 (hex arbitrarios, `text-[Npx]`, `rounded-[…]`,
+    `animate-*` sin definir, colores crudos `amber`/`red`/`gray`);
+  - por pestaña y ancho: nodos de texto con información por debajo de 12 px, controles sin nombre
+    accesible, y si hay scroll horizontal de página (`scrollWidth` vs `innerWidth`);
+  - los pares de contraste del Apéndice A de la auditoría;
+  - el resultado de `npm run lint`, `npm test` y `npm run test:e2e` (deben pasar; si algo falla, se
+    registra y se resuelve antes de seguir).
+- **Datos de quien usa la app:** las notas del Release `v4.0.0` piden copiar
+  `honeycomb-data.json` y `honeycomb-config.json` antes de instalar una versión 4.1. El 4.1 no
+  cambia el formato de los datos, pero la copia permite volver al 4.0 sin pérdidas. Nadie del
+  equipo modifica esos archivos como parte del snapshot.
+- Ningún ticket de §3 se mergea antes de que el snapshot esté publicado (D-12).
 
 ### 2.1. Tokens de diseño
 
@@ -164,7 +200,7 @@ visible, pantallas que se rompen en móvil y una app que todavía se presenta co
   - radios sueltos (`rounded-[…]`);
   - clases `animate-*` sin keyframes definidos;
   - colores crudos de Tailwind fuera de la paleta (`amber-*`, `red-*`, `gray-*`).
-- **Línea base (D-6):** el lint arranca con el conteo actual de cada regla y **solo permite que
+- **Línea base (D-6):** el lint arranca con el conteo de cada regla registrado en el snapshot (§2.0) y **solo permite que
   baje**: un PR que agrega una violación nueva falla; un PR que migra una pantalla actualiza la
   línea base a la baja. Al cerrar la versión, la línea base es **0** y el chequeo pasa a ser
   absoluto.
@@ -344,9 +380,10 @@ tiene pestañas de actividad (US-37).
 
 | Ola | Ticket (provisorio) | Alcance | Archivos principales | Arranca cuando |
 |---|---|---|---|---|
-| **0** | **A** · Branding y empaquetado | §2.9 (menos el logo del header) | `electron/main.js`, `package.json` (`build`, `name`), `build/` (íconos) | Ya |
-| **0** | **B** · Lint de estilos con línea base | §2.3 (lint) | `scripts/` (nuevo), `package.json` (`scripts`), `lint-staged.config.js` | Ya |
-| **1** | **C** · Tokens, foco global y chequeo de contraste | §2.1, §2.3 (foco y contraste) | `src/index.css`, `docs/DESIGN-TOKENS.md`, test nuevo | Ya |
+| **Previo** | **S** · Snapshot de la app 4.0 | §2.0 | `package.json` (`version`), `docs/SNAPSHOT-4.0.md`, tag `v4.0.0`, Release `v4.0.0` | Ya |
+| **0** | **A** · Branding y empaquetado | §2.9 (menos el logo del header) | `electron/main.js`, `package.json` (`build`, `name`), `build/` (íconos) | Snapshot publicado |
+| **0** | **B** · Lint de estilos con línea base | §2.3 (lint) | `scripts/` (nuevo), `package.json` (`scripts`), `lint-staged.config.js` | Snapshot publicado |
+| **1** | **C** · Tokens, foco global y chequeo de contraste | §2.1, §2.3 (foco y contraste) | `src/index.css`, `docs/DESIGN-TOKENS.md`, test nuevo | Snapshot publicado |
 | **1** | **D** · Fuentes propias | §2.2 (fuentes) | `src/index.css` (línea del `@import`), `index.html`, `vite.config.ts`, `package.json` | Merge de C (comparten `index.css`) |
 | **2** | **E** · Primitivas I | `Button`, `IconButton`, `Field` y controles, `Card`, `Badge` | `src/components/ui/` (archivos nuevos) | Merge de C |
 | **2** | **F** · Primitivas II | `Dialog`, `ConfirmDialog`, `Toast`, `Tabs`, `SegmentedControl`, `DataTable`, `EmptyState`, `PageHeader`, `Stat`, `ChartFrame` | `src/components/ui/` (archivos nuevos, distintos de E) | Merge de C |
@@ -361,7 +398,7 @@ tiene pestañas de actividad (US-37).
 | **3** | **O** · Import Forage Logs | §2.5, §2.6 (BUG-11 en la vista previa), barra de acciones sticky con resumen, confirmación de `Discard` | `DocumentParser.tsx` | Merge de E, F y G |
 | **4** | **P** · Gobernanza y cierre | §2.11, línea base del lint a 0, retirar alias de tokens viejos | `e2e/`, `docs/DESIGN-SYSTEM.md`, `CLAUDE.md`, `src/index.css` | Merge de H a O |
 
-- **Paralelismo:** A, B y C pueden arrancar hoy. E, F y G corren en paralelo. H a O corren en
+- **Orden:** S va primero y solo. Con el snapshot publicado, A, B y C arrancan en paralelo. E, F y G corren en paralelo. H a O corren en
   paralelo (cada una toca su propio componente).
 - **Puntos de cruce conocidos:**
   - `package.json` lo tocan A, B y D en claves distintas (`build`/`name`, `scripts`,
@@ -370,7 +407,9 @@ tiene pestañas de actividad (US-37).
     al rebasar, tomando el menor valor de cada regla.
   - H es el único ticket que toca `App.tsx`; la región de toasts y la pantalla de error de carga
     viven ahí.
-- **Numeración:** las letras se convierten en `US-49` en adelante al crear los tickets en Linear
+- **Comparación:** cada ticket de las olas 3 y 4 entrega capturas antes/después contra las del
+  snapshot, a los mismos anchos.
+- **Numeración:** S se crea primero; las letras se convierten en `US-49` en adelante al crear los tickets en Linear
   (`NIC-50` en adelante), con la skill **Tefinha-crea-tickets**.
 
 ---
@@ -413,6 +452,10 @@ tiene pestañas de actividad (US-37).
 | **TC-109** | Gobernanza (§2.11) | Se corre `npm run test:e2e`. | Pasan los tests de teclado, diálogo, responsive y `<title>`. |
 | **TC-110** | Restricciones (§2.12) | Se corren `npm run lint`, `npm test` y `npm run test:e2e` al cerrar cada ticket. | Pasan; ningún texto citado en e2e o en el `.docx` cambió. |
 | **TC-111** | Cierre (§3) | Se corre el lint de estilos al cerrar la versión. | La línea base es 0 en todas las reglas. |
+| **TC-112** | Snapshot (§2.0) | Se corre `git show v4.0.0:package.json` y se revisa el historial de `main`. | El tag existe, es anotado, dice `"version": "4.0.0"` y es anterior al primer commit de un ticket del 4.1. |
+| **TC-113** | Snapshot (§2.0) | En una máquina sin el repo, se descarga e instala el instalador del Release `v4.0.0`. | La app abre como la 4.0 (pestañas, textos y fuentes de ese momento). |
+| **TC-114** | Snapshot (§2.0) | Se abre el `.zip` de capturas del Release `v4.0.0`. | Tiene 24 capturas (6 pestañas + Progress Report + Outcome Report × 1440/768/375), con datos demo y sin nombres reales. |
+| **TC-115** | Snapshot (§2.0) | Se compara `docs/SNAPSHOT-4.0.md` con la línea base inicial del lint (B). | Los conteos de cada regla coinciden. |
 
 ---
 
@@ -461,3 +504,8 @@ tiene pestañas de actividad (US-37).
   de migrar una primitiva a la vez en todas las pantallas.
 - **D-11 (4.1 y no 5.0):** igual que D-17 del PRD 4.0: nada de esta versión obliga a quien usa la
   app a adaptarse.
+- **D-12 (snapshot antes de empezar):** el 4.1 cambia casi toda la interfaz en muchos PRs. Sin
+  un punto fijo no hay forma simple de volver a una app que funcionaba ni de mostrar qué mejoró.
+  El tag da el código, el Release da la app instalable sin compilar, las capturas y métricas dan
+  la comparación. Las capturas van al Release y no al repo para no inflar el historial de git
+  con binarios.
