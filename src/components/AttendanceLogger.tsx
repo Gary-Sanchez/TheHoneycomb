@@ -70,7 +70,8 @@ export default function AttendanceLogger({
     confetti({
       particleCount: 50,
       spread: 40,
-      origin: { y: 0.8 }
+      origin: { y: 0.8 },
+      disableForReducedMotion: true
     });
 
     const sessionNote = alreadyInSession
@@ -145,7 +146,8 @@ export default function AttendanceLogger({
     confetti({
       particleCount: 80,
       spread: 60,
-      origin: { y: 0.8 }
+      origin: { y: 0.8 },
+      disableForReducedMotion: true
     });
 
     setSuccessMsg(`Added ${newAtt.name} to the directory.`);
@@ -168,7 +170,8 @@ export default function AttendanceLogger({
     confetti({
       particleCount: 120,
       spread: 70,
-      origin: { y: 0.8 }
+      origin: { y: 0.8 },
+      disableForReducedMotion: true
     });
 
     setSuccessMsg(`Attendance saved for ${selectedActivity} on ${formatDisplayDate(selectedDate)}.`);
@@ -225,8 +228,8 @@ export default function AttendanceLogger({
 
       {/* Success/Notification messages */}
       {successMsg && (
-        <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-4 py-3 rounded-xl text-sm flex items-center space-x-2 animate-bounce-subtle">
-          <Sparkles className="h-4 w-4 text-natural-sage shrink-0" />
+        <div role="status" className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-4 py-3 rounded-xl text-sm flex items-center space-x-2 animate-bounce-subtle">
+          <Sparkles className="h-4 w-4 text-natural-sage shrink-0" aria-hidden="true" />
           <span className="font-medium">{successMsg}</span>
         </div>
       )}
@@ -234,11 +237,12 @@ export default function AttendanceLogger({
       {/* Configuration Inputs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-natural-cream/60 p-6 rounded-[24px] border border-natural-border">
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80 flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-natural-sage" />
+          <label htmlFor="checkin-date" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80 flex items-center gap-1">
+            <Calendar className="h-3.5 w-3.5 text-natural-sage" aria-hidden="true" />
             Event Date
           </label>
           <input
+            id="checkin-date"
             type="date"
             value={selectedDate}
             onChange={(e) => {
@@ -250,8 +254,9 @@ export default function AttendanceLogger({
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Activity</label>
+          <label htmlFor="checkin-activity" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Activity</label>
           <select
+            id="checkin-activity"
             value={selectedActivity}
             onChange={(e) => {
               setSelectedActivity(e.target.value as ActivityType);
@@ -303,6 +308,7 @@ export default function AttendanceLogger({
         <div className="flex gap-3">
           <input
             type="text"
+            aria-label="Colleague name"
             placeholder="Enter the colleague's full name…"
             value={inlineName}
             onChange={(e) => setInlineName(e.target.value)}
@@ -338,8 +344,9 @@ export default function AttendanceLogger({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-natural-forest/70">Full Name</label>
+              <label htmlFor="quick-add-name" className="text-xs font-bold text-natural-forest/70">Full Name</label>
               <input
+                id="quick-add-name"
                 type="text"
                 required
                 placeholder="e.g. Jean Dupont"
@@ -350,8 +357,9 @@ export default function AttendanceLogger({
             </div>
             
             <div className="space-y-1">
-              <label className="text-xs font-bold text-natural-forest/70">Email Address (Optional)</label>
+              <label htmlFor="quick-add-email" className="text-xs font-bold text-natural-forest/70">Email Address (Optional)</label>
               <input
+                id="quick-add-email"
                 type="email"
                 placeholder="e.g. jean@example.com"
                 value={quickEmail}

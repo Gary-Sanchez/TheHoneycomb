@@ -9,7 +9,7 @@ import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
-import { GraduationCap, LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
 
 type ServerState = { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> };
 
@@ -66,6 +66,11 @@ export default function App() {
     Promise.all([loadData(), refreshAuth()]).finally(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A newly opened tab starts at the top instead of keeping the previous tab's scroll position
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
 
   // Apply the server's canonical state after a mutation round-trips
   function applyServerState(data: ServerState) {
@@ -347,8 +352,8 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-natural-cream flex flex-col items-center justify-center gap-3 font-sans text-natural-forest">
-        <Loader2 className="h-8 w-8 animate-spin text-natural-sage" />
+      <div role="status" className="min-h-screen bg-natural-cream flex flex-col items-center justify-center gap-3 font-sans text-natural-forest">
+        <Loader2 className="h-8 w-8 animate-spin text-natural-sage" aria-hidden="true" />
         <p className="text-sm font-semibold text-natural-sage">Loading The Honeycomb…</p>
       </div>
     );
@@ -362,7 +367,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           
           <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 bg-natural-forest rounded-xl flex items-center justify-center text-natural-wheat shadow-md font-serif font-bold italic text-lg">
+            <div className="h-10 w-10 bg-natural-forest rounded-xl flex items-center justify-center text-natural-wheat shadow-md font-serif font-bold italic text-lg" aria-hidden="true">
               H
             </div>
             <div>
@@ -397,7 +402,7 @@ export default function App() {
       </header>
 
       {/* Navigation Sub-Header */}
-      <nav className="bg-[#FAEDCD]/20 border-b border-natural-border sticky top-[73px] sm:top-[73px] z-20 backdrop-blur-md" id="nav-tabs">
+      <nav aria-label="Main" className="bg-[#FAEDCD]/20 border-b border-natural-border sticky top-[73px] sm:top-[73px] z-20 backdrop-blur-md" id="nav-tabs">
         <div className="max-w-7xl mx-auto px-6 flex space-x-1 sm:space-x-4 overflow-x-auto">
           
           {/* Tab 1: Dashboard */}

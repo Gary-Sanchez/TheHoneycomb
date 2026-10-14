@@ -365,7 +365,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         confetti({
           particleCount: 50,
           spread: 40,
-          origin: { y: 0.6 }
+          origin: { y: 0.6 },
+          disableForReducedMotion: true
         });
       } else if (groups.length === 0 || groups.every(g => g.excludedByDuration.length === 0)) {
         setFileGroups([]);
@@ -479,7 +480,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       confetti({
         particleCount: 150,
         spread: 80,
-        origin: { y: 0.8 }
+        origin: { y: 0.8 },
+        disableForReducedMotion: true
       });
     }
 
@@ -567,6 +569,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <td className="p-4">
                   <input
                     type="date"
+                    aria-label={`Event date for ${rec.name}`}
                     value={rec.date}
                     onChange={(e) => handleUpdateDate(i, e.target.value)}
                     className="bg-white border border-natural-border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-mono"
@@ -661,7 +664,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             </h4>
             {!isBlocked && (
               <label className="flex items-center gap-2 text-xs font-semibold text-natural-forest">
-                <Calendar className="h-4 w-4 text-natural-sage" />
+                <Calendar className="h-4 w-4 text-natural-sage" aria-hidden="true" />
                 Event Date
                 <input
                   type="date"
@@ -857,6 +860,15 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               onDragLeave={handleDrag}
               onDrop={handleDrop}
               onClick={handleUploadClick}
+              role="button"
+              tabIndex={canEdit ? 0 : -1}
+              aria-label="Choose attendance files to import"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleUploadClick();
+                }
+              }}
               aria-disabled={!canEdit}
               className={`border-2 border-dashed rounded-[24px] p-10 text-center transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] ${
                 !canEdit
@@ -971,8 +983,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {/* Loading Animation Card */}
       {loading && (
-        <div className="border border-natural-border rounded-[24px] p-12 text-center bg-natural-cream/20 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
-          <Loader2 className="h-10 w-10 text-natural-sage animate-spin" />
+        <div role="status" className="border border-natural-border rounded-[24px] p-12 text-center bg-natural-cream/20 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+          <Loader2 className="h-10 w-10 text-natural-sage animate-spin" aria-hidden="true" />
           <div className="space-y-1.5">
             <h4 className="font-serif font-bold text-natural-forest text-lg">Reading File…</h4>
             <p className="text-sm text-natural-sage font-medium max-w-md mx-auto h-12 flex items-center justify-center">
@@ -1048,6 +1060,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             <div className="flex items-center gap-3">
               <input
                 type="date"
+                aria-label="Event date for all files"
                 value={batchDate}
                 onChange={(e) => setBatchDate(e.target.value)}
                 className="bg-white border border-natural-border rounded-xl px-3 py-2 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage"

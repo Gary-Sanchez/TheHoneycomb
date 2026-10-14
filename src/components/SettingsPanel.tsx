@@ -96,11 +96,12 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
             </p>
           )}
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
+            <label htmlFor="admin-password" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
               {isSetup ? "New Admin Password" : "Admin Password"}
             </label>
             <div className="relative">
               <input
+                id="admin-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -119,10 +120,11 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
           </div>
           {isSetup && (
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
+              <label htmlFor="admin-password-confirm" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
                 Confirm Password
               </label>
               <input
+                id="admin-password-confirm"
                 type={showPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
