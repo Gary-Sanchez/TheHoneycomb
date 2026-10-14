@@ -269,7 +269,7 @@ Aplica a **Dashboard**, **Manual Check-In**, **Caserits & Progress**, **Overlap 
   - La paleta nueva de actividades cumple 3:1 contra blanco (hoy Writing Hood/moss tiene 1.53:1) y
     se distingue con deuteranopia; el ícono acompaña siempre al color, que nunca es la única
     señal.
-- **Hive Status:** los badges usan `TierBadge` en todas las pestañas, con el `textColor` del tier y
+- **Hive Status:** los badges usan `TierBadge` (evolución de `HiveStatusBadge` de US-42) en todas las pestañas, con el `textColor` del tier y
   un ícono Lucide en lugar del emoji (D-3). Las etiquetas (`Busy Bee`, `Forager`, `Hatcher`,
   `Dormant`, `No data`) no cambian.
 - **Fechas y porcentajes:** un formateador único:
@@ -330,17 +330,15 @@ Aplica a **Dashboard**, **Manual Check-In**, **Caserits & Progress**, **Overlap 
 
 ## 3. Plan de entrega sin conflictos
 
-El orden busca que **ningún ticket del 4.1 toque archivos de un PR abierto** y que dos tickets de
-la misma ola no compartan archivos, para poder trabajarlos en paralelo (worktree y rama
+El orden busca que dos tickets de la misma ola no compartan archivos, para poder trabajarlos en paralelo (worktree y rama
 `gs/us-XX-…` por ticket).
 
-### 3.1. Estado del 4.0 al 2026-10-13
+### 3.1. Estado del 4.0 al 2026-10-14
 
-| PR | Ticket | Archivos de pantalla que toca | Bloquea en el 4.1 |
-|---|---|---|---|
-| #46 | US-47 (Fase 0, Merge Ready) | `index.html`, `index.css`, `App.tsx` y los 7 componentes | Todo lo que toque `index.css`, `index.html` o componentes |
-| #48 | US-42 (Hive Status única) | `beehavior.ts`, `AttendeeDirectory`, `DashboardStats`, `ProgressReportModal`, `HiveStatusBadge` (nuevo) | Módulo de dominio, Dashboard, Caserits & Progress, Progress Report |
-| #39 | US-37 (In Progress) | `parser.ts`, `server.ts`, `types.ts`, `DocumentParser` | Importador |
+Los últimos PRs del 4.0 se mergearon el 2026-10-14: #46 (US-47, Fase 0), #48 (US-42, Hive Status
+única) y #39 (US-37, detección de actividad). **El 4.1 no tiene bloqueos externos**: todas las olas
+parten de `main`. `HiveStatusBadge` (US-42) es la base de `TierBadge` (§2.4) y el importador ya no
+tiene pestañas de actividad (US-37).
 
 ### 3.2. Olas
 
@@ -348,11 +346,11 @@ la misma ola no compartan archivos, para poder trabajarlos en paralelo (worktree
 |---|---|---|---|---|
 | **0** | **A** · Branding y empaquetado | §2.9 (menos el logo del header) | `electron/main.js`, `package.json` (`build`, `name`), `build/` (íconos) | Ya |
 | **0** | **B** · Lint de estilos con línea base | §2.3 (lint) | `scripts/` (nuevo), `package.json` (`scripts`), `lint-staged.config.js` | Ya |
-| **1** | **C** · Tokens, foco global y chequeo de contraste | §2.1, §2.3 (foco y contraste) | `src/index.css`, `docs/DESIGN-TOKENS.md`, test nuevo | Merge de #46 |
+| **1** | **C** · Tokens, foco global y chequeo de contraste | §2.1, §2.3 (foco y contraste) | `src/index.css`, `docs/DESIGN-TOKENS.md`, test nuevo | Ya |
 | **1** | **D** · Fuentes propias | §2.2 (fuentes) | `src/index.css` (línea del `@import`), `index.html`, `vite.config.ts`, `package.json` | Merge de C (comparten `index.css`) |
 | **2** | **E** · Primitivas I | `Button`, `IconButton`, `Field` y controles, `Card`, `Badge` | `src/components/ui/` (archivos nuevos) | Merge de C |
 | **2** | **F** · Primitivas II | `Dialog`, `ConfirmDialog`, `Toast`, `Tabs`, `SegmentedControl`, `DataTable`, `EmptyState`, `PageHeader`, `Stat`, `ChartFrame` | `src/components/ui/` (archivos nuevos, distintos de E) | Merge de C |
-| **2** | **G** · Módulo de dominio visual | §2.8: color e ícono por actividad, `TierBadge`, formateador de fechas y porcentajes, `chartTheme` | `src/activityTheme.ts`, `src/format.ts` (nuevos), `src/beehavior.ts` | Merge de C y de #48 |
+| **2** | **G** · Módulo de dominio visual | §2.8: color e ícono por actividad, `TierBadge`, formateador de fechas y porcentajes, `chartTheme` | `src/activityTheme.ts`, `src/format.ts` (nuevos), `src/beehavior.ts` | Merge de C |
 | **3** | **H** · Shell | §2.5 (pestañas, estructura, skip-link, título), §2.6 (BUG-10), §2.7 (BUG-08, BUG-09, región de toasts), logo del header | `src/App.tsx`, `ReadOnlyNotice` | Merge de E, F y G |
 | **3** | **I** · Manual Check-In | §2.5, §2.6 (BUG-12) | `AttendanceLogger.tsx` | Merge de E, F y G |
 | **3** | **J** · Dashboard | §2.5, §2.6 (BUG-11 en el Hub, KPI 1→2→4), §2.8 (paneles) | `DashboardStats.tsx`, `DashboardPanels.tsx` | Merge de E, F y G |
@@ -360,11 +358,11 @@ la misma ola no compartan archivos, para poder trabajarlos en paralelo (worktree
 | **3** | **L** · Overlap Cross-Referencer | §2.5, §2.6, §2.8 | `CrossReferenceHub.tsx` | Merge de E, F y G |
 | **3** | **M** · Progress Report y Outcome Report | §2.5 (`Dialog`), §2.8 (gráficos) | `ProgressReportModal.tsx`, `OutcomeReportModal.tsx` | Merge de E, F y G |
 | **3** | **N** · Admin Access | §2.5 (error legible, `Field`, `Alert`) | `SettingsPanel.tsx` | Merge de E y F |
-| **3** | **O** · Import Forage Logs | §2.5, §2.6 (BUG-11 en la vista previa), barra de acciones sticky con resumen, confirmación de `Discard` | `DocumentParser.tsx` | Merge de E, F, G **y de #39 (US-37)** |
+| **3** | **O** · Import Forage Logs | §2.5, §2.6 (BUG-11 en la vista previa), barra de acciones sticky con resumen, confirmación de `Discard` | `DocumentParser.tsx` | Merge de E, F y G |
 | **4** | **P** · Gobernanza y cierre | §2.11, línea base del lint a 0, retirar alias de tokens viejos | `e2e/`, `docs/DESIGN-SYSTEM.md`, `CLAUDE.md`, `src/index.css` | Merge de H a O |
 
-- **Paralelismo:** A y B pueden arrancar hoy. E, F y G corren en paralelo. H a N corren en
-  paralelo (cada una toca su propio componente); O espera a US-37.
+- **Paralelismo:** A, B y C pueden arrancar hoy. E, F y G corren en paralelo. H a O corren en
+  paralelo (cada una toca su propio componente).
 - **Puntos de cruce conocidos:**
   - `package.json` lo tocan A, B y D en claves distintas (`build`/`name`, `scripts`,
     `dependencies`): conflicto trivial, se resuelve al rebasar.
@@ -459,8 +457,7 @@ la misma ola no compartan archivos, para poder trabajarlos en paralelo (worktree
 - **D-9 (formato de fecha):** `Jun 24, 2026` al mostrar e ISO al guardar. Hoy conviven tres
   formatos; el del header ya era el más legible. Los inputs de fecha nativos no cambian (dependen
   del sistema operativo).
-- **D-10 (olas):** el 4.1 se entrega en el orden de §3 para no pisar los PRs abiertos del 4.0
-  (#39, #46, #48) ni pisarse entre tickets. Una pantalla se migra en un solo PR, completa, en lugar
+- **D-10 (olas):** el 4.1 se entrega en el orden de §3 para que los tickets no se pisen entre sí. Una pantalla se migra en un solo PR, completa, en lugar
   de migrar una primitiva a la vez en todas las pantallas.
 - **D-11 (4.1 y no 5.0):** igual que D-17 del PRD 4.0: nada de esta versión obliga a quien usa la
   app a adaptarse.
