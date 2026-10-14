@@ -1,6 +1,6 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
-import { Search, UserPlus, FileBarChart2, X, Check, Mail, Calendar, Settings, Trash2 } from "lucide-react";
+import { Search, UserPlus, FileBarChart2, X, Mail, Calendar, Trash2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
 import { formatDisplayDate, pluralize, sortByName } from "../utils";
@@ -39,10 +39,6 @@ export default function AttendeeDirectory({
 
   // Deletion confirmation state
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // Enrollment Editor Popover State
-  // Keep track of which attendee is currently having their enrollments edited
-  const [editingEnrollmentId, setEditingEnrollmentId] = useState<string | null>(null);
 
   // Compute individual attendance rates
   // US-39: `rate` is the colleague's Overall from the Bee-havior Hub (All time) — attended events in
@@ -104,24 +100,9 @@ export default function AttendeeDirectory({
     confetti({
       particleCount: 100,
       spread: 60,
-      origin: { y: 0.8 }
+      origin: { y: 0.8 },
+      disableForReducedMotion: true
     });
-  };
-
-  const handleToggleEnrollmentForm = (act: string) => {
-    setNewEnrolled(prev =>
-      prev.includes(act) ? prev.filter(a => a !== act) : [...prev, act]
-    );
-  };
-
-  const handleToggleAttendeeEnrollment = (attendee: Attendee, activity: string) => {
-    if (!canEdit) return;
-    const isEnrolled = attendee.enrolledActivities.includes(activity);
-    const nextActivities = isEnrolled
-      ? attendee.enrolledActivities.filter(a => a !== activity)
-      : [...attendee.enrolledActivities, activity];
-    
-    onUpdateEnrollment(attendee.id, nextActivities);
   };
 
   // US-42: the percentage no longer carries its own color scale — the Hive Status badge does
@@ -136,8 +117,9 @@ export default function AttendeeDirectory({
         <div className="flex flex-1 flex-col sm:flex-row gap-3 max-w-2xl">
           {/* Search bar */}
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-natural-sage" />
+            <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-natural-sage" aria-hidden="true" />
             <input
+              aria-label="Search colleagues"
               type="text"
               placeholder="Search colleagues by name or email…"
               value={searchQuery}
@@ -148,6 +130,7 @@ export default function AttendeeDirectory({
 
           {/* Activity Filter Dropdown */}
           <select
+            aria-label="Filter by activity"
             value={selectedActivityFilter}
             onChange={(e) => setSelectedActivityFilter(e.target.value)}
             className="bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-2.5 text-sm text-natural-forest font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
@@ -155,7 +138,7 @@ export default function AttendeeDirectory({
             <option value="All">All Activities</option>
             {ACTIVITIES.map(act => (
               <option key={act} value={act}>
-                {act.replace("English ", "")}
+                {act}
               </option>
             ))}
           </select>
@@ -194,8 +177,9 @@ export default function AttendeeDirectory({
           <form onSubmit={handleRegister} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Full Name</label>
+                <label htmlFor="add-colleague-name" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Full Name</label>
                 <input
+                  id="add-colleague-name"
                   type="text"
                   required
                   placeholder="e.g. Elena Rostova"
@@ -206,8 +190,9 @@ export default function AttendeeDirectory({
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Email Address (Optional)</label>
+                <label htmlFor="add-colleague-email" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Email Address (Optional)</label>
                 <input
+                  id="add-colleague-email"
                   type="email"
                   placeholder="e.g. elena@example.com"
                   value={newEmail}

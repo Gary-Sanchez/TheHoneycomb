@@ -10,6 +10,8 @@ describe("US-46: copy left over after the first QA pass", () => {
     const logger = source("components", "AttendanceLogger.tsx");
     expect(logger).toContain("Log Event Attendance");
     expect(logger).not.toMatch(/Log Session Attendance|Session Date/);
+    // US-47: accessible names follow the same glossary as the visible labels
+    expect(source("components", "DocumentParser.tsx")).not.toMatch(/Session [Dd]ate/);
     const dashboard = source("components", "DashboardStats.tsx");
     expect(dashboard).not.toContain("all clubs");
     expect(dashboard).not.toMatch(/weekly sessions/i);

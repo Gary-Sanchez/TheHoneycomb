@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord } from "../types";
 import { computeBeehavior, getMonthlyRates } from "../beehavior";
-import { X, Calendar, CheckCircle, XCircle, Award, AwardIcon, MessageSquare, Plus, Save, BookOpen } from "lucide-react";
+import { X, Calendar, CheckCircle, XCircle, MessageSquare, Save, BookOpen } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import HiveStatusBadge from "./HiveStatusBadge";
 import { formatDisplayDate } from "../utils";
@@ -87,7 +87,7 @@ export default function ProgressReportModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Close progress report"
             className="p-2 text-natural-sage hover:text-natural-forest hover:bg-natural-cream rounded-xl transition"
           >
             <X className="h-5 w-5" />
@@ -214,6 +214,7 @@ export default function ProgressReportModal({
               </h4>
               <div className="space-y-3">
                 <textarea
+                  aria-label="Coaching notes"
                   value={teacherNotes}
                   onChange={(e) => {
                     setTeacherNotes(e.target.value);
@@ -263,7 +264,7 @@ export default function ProgressReportModal({
                   {attLogs.map(log => (
                     <div key={log.id} className="flex justify-between items-center p-3 bg-white text-xs hover:bg-natural-cream/30">
                       <div>
-                        <p className="font-bold text-[#1A1A1A]">{log.activity.replace("English ", "")}</p>
+                        <p className="font-bold text-[#1A1A1A]">{log.activity}</p>
                         <p className="text-[10px] text-natural-sage font-mono mt-0.5">{formatDisplayDate(log.date)}</p>
                       </div>
 
@@ -274,12 +275,12 @@ export default function ProgressReportModal({
                       }`}>
                         {log.status === "present" ? (
                           <>
-                            <CheckCircle className="h-3 w-3" />
+                            <CheckCircle className="h-3 w-3" aria-hidden="true" />
                             <span>Present</span>
                           </>
                         ) : (
                           <>
-                            <XCircle className="h-3 w-3" />
+                            <XCircle className="h-3 w-3" aria-hidden="true" />
                             <span>Absent</span>
                           </>
                         )}

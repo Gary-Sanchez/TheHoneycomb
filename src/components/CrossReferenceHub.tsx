@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { pluralize } from "../utils";
 import { getAttendedActivities } from "../beehavior";
-import { Check, Users, ShieldAlert, Award, FileSpreadsheet, ArrowRightLeft, Sparkles } from "lucide-react";
+import { Check, Users, Award, ArrowRightLeft, Sparkles } from "lucide-react";
 
 interface CrossReferenceHubProps {
   attendees: Attendee[];
@@ -63,7 +63,8 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
   // Automatic semantic insights
   const semanticInsights = useMemo(() => {
-    const insights: string[] = [];
+    // US-47: the emoji is kept apart from the text so it can be hidden from screen readers
+    const insights: { icon: string; text: string }[] = [];
 
     // Let's check overlap percentages
     ACTIVITIES.forEach((act1, i) => {
@@ -79,21 +80,26 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
         const rate = Math.round((shared / totalAct1) * 100);
         if (rate >= 30 && shared > 0) {
-          insights.push(
-            `💡 High overlap: ${rate}% of colleagues in ${act1} also attend ${act2} (${pluralize(shared, "shared colleague")}).`
-          );
+          insights.push({
+            icon: "💡",
+            text: `High overlap: ${rate}% of colleagues in ${act1} also attend ${act2} (${pluralize(shared, "shared colleague")}).`,
+          });
         }
       });
     });
 
     if (stats.super > 0) {
-      insights.push(
-        `🏆 Super Active: ${pluralize(stats.super, "colleague")} attended 3 or more activities.`
-      );
+      insights.push({
+        icon: "🏆",
+        text: `Super Active: ${pluralize(stats.super, "colleague")} attended 3 or more activities.`,
+      });
     }
 
     if (insights.length === 0) {
-      insights.push("✏️ No strong overlap between activities yet. It will show up as more attendance records are added.");
+      insights.push({
+        icon: "✏️",
+        text: "No strong overlap between activities yet. It will show up as more attendance records are added.",
+      });
     }
 
     return insights;
@@ -159,8 +165,9 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">First Activity</label>
+                <label htmlFor="compare-activity-1" className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">First Activity</label>
                 <select
+                  id="compare-activity-1"
                   value={compareAct1}
                   onChange={(e) => setCompareAct1(e.target.value)}
                   className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-natural-sage/50"
@@ -174,8 +181,9 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">Second Activity</label>
+                <label htmlFor="compare-activity-2" className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">Second Activity</label>
                 <select
+                  id="compare-activity-2"
                   value={compareAct2}
                   onChange={(e) => setCompareAct2(e.target.value)}
                   className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-natural-sage/50"
@@ -227,7 +235,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
               {semanticInsights.map((insight, idx) => (
                 <div key={idx} className="bg-white border border-natural-border/60 p-4 rounded-xl text-xs text-natural-forest leading-relaxed shadow-sm">
-                  {insight}
+                  <span aria-hidden="true">{insight.icon}</span> {insight.text}
                 </div>
               ))}
             </div>
@@ -296,7 +304,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                   <th className="p-4 pl-6">Colleague Name</th>
                   {ACTIVITIES.map(act => (
                     <th key={act} className="p-4 text-center max-w-[150px] truncate">
-                      {act.replace("English ", "")}
+                      {act}
                     </th>
                   ))}
                   <th className="p-4 text-center">Total Activities</th>
@@ -332,10 +340,14 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                             <div className="flex justify-center">
                               {isParticipating ? (
                                 <div className="h-6 w-6 rounded-full bg-natural-cream border border-natural-border text-natural-sage flex items-center justify-center font-bold">
-                                  <Check className="h-4 w-4 stroke-[3.5]" />
+                                  <Check className="h-4 w-4 stroke-[3.5]" aria-hidden="true" />
+                                  <span className="sr-only">Attended</span>
                                 </div>
                               ) : (
-                                <span className="text-natural-wheat font-black">—</span>
+                                <>
+                                  <span className="text-natural-wheat font-black" aria-hidden="true">—</span>
+                                  <span className="sr-only">Not attended</span>
+                                </>
                               )}
                             </div>
                           </td>
