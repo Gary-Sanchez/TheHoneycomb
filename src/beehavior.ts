@@ -28,8 +28,8 @@ export interface BeehaviorRow {
   overallRate: number | null;
   overallPresents: number;
   overallTotal: number;
-  // null only with an active period and no event to rate the colleague on → the table shows "—"
-  tier: HiveTier | null;
+  // No events to rate the colleague on (all time or in the active period) → NO_DATA_TIER (US-44)
+  tier: HiveTier;
   isMulti: boolean;
   participatedCount: number;
 }
@@ -77,12 +77,42 @@ export function getHiveTier(rate: number): HiveTier {
   };
 }
 
+// US-44: no events to rate the colleague on (not enrolled anywhere, or their activities had no
+// events) is not the same as attending none of them — grey, no tier color, no icon.
+export const NO_DATA_TIER: HiveTier = {
+  label: "No data",
+  color: "#6B7280",
+  bgLight: "#F3F4F6",
+  textColor: "#6B7280",
+  icon: "",
+  meaning: "No events to rate this colleague on yet.",
+};
+
+// Hive Status for an Overall rate; null (no Overall) → No data, never Dormant. Every view showing
+// the Hive Status must go through this, not getHiveTier(rate ?? 0).
+export const getHiveStatus = (rate: number | null): HiveTier => (rate === null ? NO_DATA_TIER : getHiveTier(rate));
+
+// Colleagues with an Overall. No data ones stay out of tier rankings/reports (Outcome Report, US-40)
+// and averages (Avg. Attendance Rate KPI, US-45).
+export const hasHiveData = (row: BeehaviorRow): boolean => row.overallRate !== null;
+
 // An event is each unique activity + date with at least one record in the DB, whatever its source
 // and status. Shared by the Bee-havior Hub (US-24) and the Activities Matrix Profile cards (US-29).
 export function getEventDates(records: AttendanceRecord[]): Record<string, Set<string>> {
   const eventDates: Record<string, Set<string>> = {};
   for (const r of records) (eventDates[r.activity] ??= new Set()).add(r.date);
   return eventDates;
+}
+
+// US-43: the activities each colleague participates in — at least one `present` in them (an
+// `absent`-only activity doesn't count), in ACTIVITIES order. The one definition of "participating"
+// shared by the Overlap Cross-Referencer and the Dashboard; pass period-filtered records for a period.
+export function getAttendedActivities(attendees: Attendee[], records: AttendanceRecord[]): Record<string, string[]> {
+  const attended = new Set<string>();
+  for (const r of records) if (r.status === "present") attended.add(`${r.attendeeId}|${r.activity}`);
+  return Object.fromEntries(
+    attendees.map(att => [att.id, ACTIVITIES.filter(activity => attended.has(`${att.id}|${activity}`))])
+  );
 }
 
 export interface ActivityEventStats {
@@ -201,11 +231,36 @@ export function computeBeehavior(
         overallRate,
         overallPresents,
         overallTotal,
-        // With a period, no events in it → no rate → no tier ("—"), not a misleading Dormant.
-        // All time keeps the US-24 behavior: a colleague without any rate is Dormant.
-        tier: overallRate === null && period ? null : getHiveTier(overallRate ?? 0),
+        tier: getHiveStatus(overallRate),
         isMulti: participatedCount > 1,
         participatedCount,
       };
     });
+}
+
+export interface MonthlyRate {
+  month: string; // `YYYY-MM`
+  label: string; // "Jan", or "Jan 2026" when the months span more than one year
+  rate: number;
+}
+
+// US-41: the colleague's month-by-month Overall for the Progress Report chart. Every month with
+// records in the DB is a candidate (no fixed months), rated with computeBeehavior restricted to
+// that month — so a month where an enrolled colleague missed every event shows 0% (absences leave
+// no rows), and a month with no event in any of their activities is left out (no rate). Sorted
+// chronologically.
+export function getMonthlyRates(attendee: Attendee, records: AttendanceRecord[]): MonthlyRate[] {
+  const months = [...new Set(records.map(r => r.date.slice(0, 7)))].sort();
+  const rated = months.flatMap(month => {
+    // `-31` works for every month: ISO dates compare as strings
+    const [row] = computeBeehavior([attendee], records, { start: `${month}-01`, end: `${month}-31` });
+    return row.overallRate === null ? [] : [{ month, rate: row.overallRate }];
+  });
+  const multiYear = new Set(rated.map(r => r.month.slice(0, 4))).size > 1;
+
+  return rated.map(({ month, rate }) => {
+    const [y, m] = month.split("-");
+    const name = MONTHS[Number(m) - 1];
+    return { month, label: multiYear ? `${name} ${y}` : name, rate };
+  });
 }

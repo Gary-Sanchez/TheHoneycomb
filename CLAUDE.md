@@ -39,6 +39,9 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   `dependencies` — a duplicate in `devDependencies` breaks the packaged app at startup.
 - npm ≥ 11 blocks dependency install scripts unless listed in `package.json` → `allowScripts`.
   After a bump, run `npm install-scripts ls` and approve the new versions (esbuild needs it).
+- `package.json` → `overrides` (US-48) keeps `sprintf-js` (no patched version) out of the tree:
+  `mammoth` → `argparse` ^2 and `@electron/get@3` → `global-agent` ^4. Never "fix" it with
+  `npm audit fix --force` — that downgrades `mammoth` and `electron-builder`.
 
 ## Architecture
 

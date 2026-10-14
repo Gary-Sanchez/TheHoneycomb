@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import {
   computeBeehavior,
   getActivityEventStats,
+  getAttendedActivities,
   formatAvgAttendees,
   filterRecordsByPeriod,
   formatPeriodLabel,
@@ -10,20 +11,11 @@ import {
   resolvePeriod,
   PeriodFilter,
 } from "../beehavior";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  Cell,
-} from "recharts";
-import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, Info, HelpCircle } from "lucide-react";
+import { averageOverall, formatAverageBase } from "../dashboardMetrics";
+import DashboardPanels from "./DashboardPanels";
+import { pluralize } from "../utils";
+import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, FileDown } from "lucide-react";
+import OutcomeReportModal from "./OutcomeReportModal";
 
 interface DashboardStatsProps {
   attendees: Attendee[];
@@ -45,6 +37,9 @@ export default function DashboardStats({
 }: DashboardStatsProps) {
   // State for search query in Bee-havior table
   const [beeSearchQuery, setBeeSearchQuery] = useState("");
+  // US-40: Outcome Report dialog; focus returns to its trigger on close
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportButtonRef = useRef<HTMLButtonElement>(null);
 
   // US-35: the range actually applied (null → All time). An incomplete or inverted custom range isn't applied.
   const period = useMemo(() => resolvePeriod(periodFilter), [periodFilter]);
@@ -57,19 +52,9 @@ export default function DashboardStats({
   const periodHasNoEvents = period !== null && records.length === 0;
 
   // 1. Core KPIs
-  // Only activities the colleague actually attended count (Manual Check-In also logs absences)
-  const activitiesAttended = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    attendees.forEach(a => {
-      map[a.id] = [];
-    });
-    records.forEach(r => {
-      if (r.status === "present" && map[r.attendeeId] && !map[r.attendeeId].includes(r.activity)) {
-        map[r.attendeeId].push(r.activity);
-      }
-    });
-    return map;
-  }, [attendees, records]);
+  // US-43: same definition of "participating" as the Overlap Cross-Referencer — at least one present
+  // (Manual Check-In also logs absences, and those don't count)
+  const activitiesAttended = useMemo(() => getAttendedActivities(attendees, records), [attendees, records]);
 
   // All time: the whole directory. With a period: colleagues who attended at least one event in it.
   const totalAttendees = period
@@ -82,32 +67,7 @@ export default function DashboardStats({
     ? Math.round((multiActivityCount / totalAttendees) * 100)
     : 0;
 
-  const overallAttendanceRate = useMemo(() => {
-    if (records.length === 0) return 0;
-    const presents = records.filter(r => r.status === "present").length;
-    return Math.round((presents / records.length) * 100);
-  }, [records]);
-
-  // 2. Monthly Trend Data (April, May, June 2026)
-  const monthlyTrendData = useMemo(() => {
-    const months = ["04", "05", "06"];
-    const monthNames = { "04": "April", "05": "May", "06": "June" };
-
-    return months.map(m => {
-      const monthLogs = records.filter(r => r.date.split("-")[1] === m);
-      const total = monthLogs.length;
-      const presents = monthLogs.filter(r => r.status === "present").length;
-      const rate = total ? Math.round((presents / total) * 100) : 0;
-
-      return {
-        month: monthNames[m as keyof typeof monthNames],
-        "Attendance Rate (%)": rate,
-        "Total Logs": total,
-      };
-    });
-  }, [records]);
-
-  // 3. Activity Comparison Data
+  // 2. Activity Comparison Data
   const activityData = useMemo(() => {
     return ACTIVITIES.map(act => {
       const activeAttendees = attendees.filter(att =>
@@ -126,7 +86,7 @@ export default function DashboardStats({
         name: act,
         events,
         avgPresent,
-        shortName: act.replace("English ", ""),
+        shortName: act,
         "Active Attendees": activeAttendees,
         "Attendance Rate (%)": attendanceRate,
       };
@@ -136,6 +96,9 @@ export default function DashboardStats({
   // Caserits Bee-havior table (US-24): rates are computed over recorded events, not the colleague's own logs.
   // US-35: it gets every record so enrollment ignores the period; the period only trims the events counted.
   const beehaviorData = useMemo(() => computeBeehavior(attendees, allRecords, period), [attendees, allRecords, period]);
+
+  // US-45: Avg. Attendance Rate = average of the Hub's Overall column; No data colleagues are left out
+  const avgAttendance = useMemo(() => averageOverall(beehaviorData), [beehaviorData]);
 
   // Filtered list of Bee-haviors based on search
   const filteredBeehaviorData = useMemo(() => {
@@ -213,6 +176,18 @@ export default function DashboardStats({
           <p id="period-showing" className="text-sm font-semibold text-natural-forest ml-auto">
             Showing: {period ? formatPeriodLabel(period) : "All time"}
           </p>
+
+          <button
+            ref={reportButtonRef}
+            type="button"
+            id="generate-outcome-report"
+            onClick={() => setReportOpen(true)}
+            aria-haspopup="dialog"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-natural-forest"
+          >
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            Generate Outcome Report
+          </button>
         </div>
 
         {invalidRange && (
@@ -221,6 +196,16 @@ export default function DashboardStats({
           </p>
         )}
       </section>
+
+      {reportOpen && (
+        <OutcomeReportModal
+          attendees={attendees}
+          records={allRecords}
+          initialPeriod={periodFilter}
+          onClose={() => setReportOpen(false)}
+          returnFocusRef={reportButtonRef}
+        />
+      )}
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -233,14 +218,14 @@ export default function DashboardStats({
             <Users className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Total Unique Attendees</p>
+            <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Total Caserits</p>
             {periodHasNoEvents ? (
               emptyPeriod("kpi-total-attendees-empty")
             ) : (
               <>
                 <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{totalAttendees}</h3>
                 <span className="text-xs text-natural-forest/60 font-medium flex items-center mt-1">
-                  {period ? "Attended in this period" : "Active across all clubs"}
+                  {period ? "Attended in this period" : "Active across all activities"}
                 </span>
               </>
             )}
@@ -256,18 +241,16 @@ export default function DashboardStats({
             <CheckCircle2 className="h-6 w-6 text-natural-forest" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance</p>
+            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance Rate</p>
+            <h3 id="kpi-attendance-rate-value" className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
+              {avgAttendance.rate === null ? "—" : `${avgAttendance.rate}%`}
+            </h3>
             {periodHasNoEvents ? (
-              emptyPeriod("kpi-attendance-rate-empty")
+              emptyPeriod("kpi-attendance-rate-empty", "mt-1")
             ) : (
-              <>
-                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-                  {overallAttendanceRate}%
-                </h3>
-                <span className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
-                  Based on {records.length} records
-                </span>
-              </>
+              <span id="kpi-attendance-rate-base" className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
+                {avgAttendance.rate === null ? "No colleagues with an Overall yet" : formatAverageBase(avgAttendance.colleagues)}
+              </span>
             )}
           </div>
         </div>
@@ -281,7 +264,7 @@ export default function DashboardStats({
             <Award className="h-6 w-6 text-natural-sand" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Inter-Activity Hub</p>
+            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Multi-Activity Caserits</p>
             {periodHasNoEvents ? (
               emptyPeriod("kpi-multi-enrollment-empty")
             ) : (
@@ -290,7 +273,7 @@ export default function DashboardStats({
                   {multiActivityPercentage}%
                 </h3>
                 <span className="text-xs text-natural-sand font-semibold flex items-center mt-1">
-                  {multiActivityCount} colleagues active in 2+ activities
+                  {pluralize(multiActivityCount, "colleague")} in 2+ activities
                 </span>
               </>
             )}
@@ -301,7 +284,16 @@ export default function DashboardStats({
         <div
           id="kpi-quick-parse"
           className="bg-natural-forest text-natural-cream rounded-[32px] p-6 border border-natural-forest/25 shadow-lg flex flex-col justify-between hover:shadow-xl hover:bg-[#213028] transition-all duration-300 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          aria-label="Open Import Forage Logs"
           onClick={() => onNavigate("parser")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onNavigate("parser");
+            }
+          }}
         >
           <div className="flex justify-between items-start">
             <div className="p-2.5 bg-white/10 text-natural-wheat rounded-xl">
@@ -310,7 +302,7 @@ export default function DashboardStats({
             <ArrowUpRight className="h-5 w-5 text-natural-sand" />
           </div>
           <div className="mt-4">
-            <p className="text-[10px] uppercase tracking-widest text-[#CCD5AE] font-bold">Import Logs & Files</p>
+            <p className="text-[10px] uppercase tracking-widest text-[#CCD5AE] font-bold">Import Forage Logs</p>
             <h4 className="text-lg font-serif font-bold mt-1 text-white leading-tight">Smart Doc Parser</h4>
             <p className="text-xs text-natural-wheat/70 mt-1">Upload Excel, .docx, or .txt</p>
           </div>
@@ -322,19 +314,20 @@ export default function DashboardStats({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h3 className="text-xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
-              <span className="text-2xl">🍯</span> Caserits Bee-havior Hub
+              <span className="text-2xl" aria-hidden="true">🍯</span> Caserits Bee-havior Hub
             </h3>
             <p className="text-xs text-natural-sage font-medium mt-1">
-              Overview of all active Caserits (participants), sorted alphabetically, mapping individual attendance rates across our four distinct activities and assigning custom engagement tiers.
+              Every colleague, sorted alphabetically, with their attendance rate in each of the four activities and their Hive Status.
             </p>
           </div>
           
           {/* Quick Search */}
           <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-natural-sage" />
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-natural-sage" aria-hidden="true" />
             <input
+              aria-label="Search Caserits"
               type="text"
-              placeholder="Search Caserits by name..."
+              placeholder="Search colleagues by name…"
               value={beeSearchQuery}
               onChange={(e) => setBeeSearchQuery(e.target.value)}
               className="w-full bg-natural-cream/30 border border-natural-border rounded-2xl pl-10 pr-4 py-2 text-xs text-[#1A1A1A] placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-medium"
@@ -349,30 +342,30 @@ export default function DashboardStats({
         {/* Engagement Tier Toggles / Interactive Legend */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-natural-cream/20 rounded-3xl border border-natural-border/40">
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/60 border border-natural-border/30">
-            <span className="text-2xl pt-1">💤</span>
+            <span className="text-2xl pt-1" aria-hidden="true">💤</span>
             <div>
-              <h5 className="text-xs font-bold text-[#2F4F4F]">Dormant (0% - 25%)</h5>
+              <h5 className="text-xs font-bold text-[#2F4F4F]">Dormant (0–25%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Hibernating. Rare sightings. Still getting to know the honeycomb.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FEFBEA]/60 border border-[#F0E68C]/40">
-            <span className="text-2xl pt-1">🥚</span>
+            <span className="text-2xl pt-1" aria-hidden="true">🥚</span>
             <div>
-              <h5 className="text-xs font-bold text-[#6B5800]">Hatcher (26% - 50%)</h5>
+              <h5 className="text-xs font-bold text-[#6B5800]">Hatcher (26–50%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Getting cozy. Halfway to becoming a regular flyer.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFF7E6]/60 border border-[#FFA500]/30">
-            <span className="text-2xl pt-1">🌸</span>
+            <span className="text-2xl pt-1" aria-hidden="true">🌸</span>
             <div>
-              <h5 className="text-xs font-bold text-[#804C00]">Forager (51% - 75%)</h5>
+              <h5 className="text-xs font-bold text-[#804C00]">Forager (51–75%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Honey maker. Solid presence, regularly contributing to the buzz.</p>
             </div>
           </div>
           <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFFDF0]/60 border border-[#FFD700]/30">
-            <span className="text-2xl pt-1">🐝</span>
+            <span className="text-2xl pt-1" aria-hidden="true">🐝</span>
             <div>
-              <h5 className="text-xs font-bold text-[#7A5E00]">Busy Bee (76% - 100%)</h5>
+              <h5 className="text-xs font-bold text-[#7A5E00]">Busy Bee (76–100%)</h5>
               <p className="text-[10px] text-natural-sage leading-normal font-medium">Queen's favorite. Elite attendance and top-tier dedication.</p>
             </div>
           </div>
@@ -389,14 +382,14 @@ export default function DashboardStats({
                 ))}
                 <th className="p-4 text-center">Overall</th>
                 <th className="p-4 text-center">Hive Status</th>
-                <th className="p-4 pr-6 text-center">Multi-Activity?</th>
+                <th className="p-4 pr-6 text-center">Multi-Activity</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-natural-border/50 text-xs text-natural-forest font-medium">
               {filteredBeehaviorData.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-natural-sage italic font-medium bg-natural-cream/15">
-                    No Caserits found matching your search query.
+                    {beehaviorData.length === 0 ? "No colleagues yet." : "No colleagues match your search."}
                   </td>
                 </tr>
               ) : (
@@ -453,24 +446,20 @@ export default function DashboardStats({
 
                       {/* Hive Status (Tiers) */}
                       <td className="p-4 text-center">
-                        {tier ? (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm"
-                               style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
-                               title={tier.meaning}
-                          >
-                            <span>{tier.icon}</span>
-                            <span>{tier.label}</span>
-                          </div>
-                        ) : (
-                          <span className="text-natural-sage/50 text-[11px]">—</span>
-                        )}
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm"
+                             style={{ backgroundColor: tier.bgLight, color: tier.color, border: `1px solid ${tier.color}30` }}
+                             title={tier.meaning}
+                        >
+                          {tier.icon && <span aria-hidden="true">{tier.icon}</span>}
+                          <span>{tier.label}</span>
+                        </div>
                       </td>
 
                       {/* Multi-Activity Column */}
                       <td className="p-4 pr-6 text-center">
                         {isMulti ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#FAEDCD] text-[#855B32] border border-[#D4A373]/30 animate-pulse-subtle">
-                            🍯 Yes ({participatedCount} Clubs)
+                            <span aria-hidden="true">🍯</span> Yes ({participatedCount} Activities)
                           </span>
                         ) : (
                           <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
@@ -515,7 +504,7 @@ export default function DashboardStats({
                     <span className="text-xs text-natural-sage font-semibold">Voluntary participation</span>
                   </div>
                   <h4 className="font-serif font-bold text-[#1A1A1A] text-base mt-3 leading-snug line-clamp-1">{act.name}</h4>
-                  <p className="text-xs text-[#8A9A5B] mt-1">{isWeekly ? "Weekly sessions" : "Biweekly sessions"}</p>
+                  <p className="text-xs text-[#8A9A5B] mt-1">{isWeekly ? "Weekly events" : "Biweekly events"}</p>
                 </div>
 
                 <div className="mt-5 space-y-2">
@@ -524,8 +513,8 @@ export default function DashboardStats({
                     <span className="font-bold text-[#1A1A1A]">{act.events}</span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-natural-forest/70">Avg. attendees:</span>
-                    <span className="font-bold text-[#1A1A1A]" title="Present attendees per registered event">
+                    <span className="text-natural-forest/70">Avg. colleagues per event:</span>
+                    <span className="font-bold text-[#1A1A1A]" title="Present colleagues per event">
                       {formatAvgAttendees(act.avgPresent)}
                     </span>
                   </div>
@@ -550,100 +539,15 @@ export default function DashboardStats({
         )}
       </div>
 
-      {/* Charts Grid - Moved to the bottom of the dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Trend Area Chart */}
-        <div className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-serif font-bold text-[#1A1A1A]">Attendance Trends</h3>
-              <p className="text-xs text-natural-sage font-medium">Percentage of presence logged each month</p>
-            </div>
-            <span className="text-xs font-semibold bg-natural-wheat/50 text-natural-forest border border-natural-border/40 px-3 py-1.5 rounded-full">
-              Q2 Year 2026
-            </span>
-          </div>
-          {periodHasNoEvents ? (
-            emptyPeriod("trend-empty", "h-[300px] flex items-center justify-center")
-          ) : (
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8A9A5B" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#8A9A5B" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12, fontWeight: "bold" }} />
-                <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#2D3E35",
-                    borderRadius: "16px",
-                    border: "1px solid #E9E5D9",
-                    color: "#FDFBF7",
-                  }}
-                  itemStyle={{ color: "#FAEDCD" }}
-                  labelStyle={{ fontWeight: "bold", fontFamily: "Playfair Display" }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="Attendance Rate (%)"
-                  stroke="#2D3E35"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorRate)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          )}
-        </div>
-
-        {/* Activity Bar Chart */}
-        <div className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-serif font-bold text-[#1A1A1A]">Cross-Activity Comparisons</h3>
-              <p className="text-xs text-natural-sage font-medium">Average Attendance rates per Activity</p>
-            </div>
-            <span className="text-xs font-semibold bg-[#CCD5AE]/30 text-natural-forest border border-[#CCD5AE]/40 px-3 py-1.5 rounded-full">
-              4 Core Activities
-            </span>
-          </div>
-          {periodHasNoEvents ? (
-            emptyPeriod("comparison-empty", "h-[300px] flex items-center justify-center")
-          ) : (
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={activityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                <XAxis dataKey="shortName" tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 11, fontWeight: "bold" }} />
-                <YAxis tickLine={false} axisLine={false} tick={{ fill: "#8A9A5B", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#2D3E35",
-                    borderRadius: "16px",
-                    border: "1px solid #E9E5D9",
-                    color: "#FDFBF7",
-                  }}
-                  itemStyle={{ color: "#FAEDCD" }}
-                  labelStyle={{ fontWeight: "bold", fontFamily: "Playfair Display" }}
-                />
-                <Legend iconType="circle" />
-                <Bar dataKey="Attendance Rate (%)" fill="#2D3E35" radius={[6, 6, 0, 0]}>
-                  {activityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          )}
-        </div>
-      </div>
+      {/* US-36: Attendance Trends, Cross-Activity Comparisons and Engagement as collapsible panels */}
+      <DashboardPanels
+        attendees={attendees}
+        allRecords={allRecords}
+        period={period}
+        rows={beehaviorData}
+        periodHasNoEvents={periodHasNoEvents}
+        emptyMessage={EMPTY_PERIOD_MESSAGE}
+      />
     </div>
   );
 }

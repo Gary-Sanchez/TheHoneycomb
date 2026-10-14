@@ -96,3 +96,71 @@ found 0 vulnerabilities
 Verificado después de los cambios: `npm ci` limpio, `npm run lint`, `npm run build`, `npm run dev`
 (API + frontend, subida real de `.xlsx` y `.xls`), `npm run test:e2e` (smoke de Electron 44), y
 `npm run electron:build` + arranque del ejecutable empaquetado (`/api/health` → ok, ventana abierta).
+
+## 5. Regresión de 2026-10 (US-48)
+
+Relevado el 2026-10-12 sobre `main` @ `a506764` (Node 26.8.1 / npm 11.19.0): `npm audit` volvió a
+reportar **13 vulnerabilidades — 1 crítica, 2 altas, 10 moderadas**. No las introdujo ningún
+cambio del repo: son advisories publicados después del cierre de US-13 (se detectaron al trabajar
+US-36).
+
+### 5.1 `npm audit fix` (sin `--force`) — 3 resueltas
+
+| Paquete | Severidad | Advisory | Llega vía | Versión antes → después |
+|---|---|---|---|---|
+| `proxy-addr` | crítica | [GHSA-jqcg-44mw-7w3h](https://github.com/advisories/GHSA-jqcg-44mw-7w3h) | `express` (runtime) | 2.0.7 → 2.0.8 |
+| `http-cache-semantics` | alta | [GHSA-ch52-4w7c-c8xp](https://github.com/advisories/GHSA-ch52-4w7c-c8xp) | `electron-builder` → `@electron/get` → `got` | 4.2.0 → 4.3.0 |
+| `source-map-js` | alta | [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q) | `postcss`, `@tailwindcss/vite` (build) | 1.2.1 → 1.2.2 |
+
+El mismo `npm audit fix` subió, dentro de los rangos ya declarados en `package.json`:
+`electron-builder` 26.15.3 → 26.17.0 (con `app-builder-lib`, `dmg-builder`,
+`electron-builder-squirrel-windows` 26.17.0 y `builder-util`, `electron-publish` 26.16.0),
+`mammoth` 1.12.0 → 1.13.0, `@electron/rebuild` 4.2.0 → 4.2.1 y `node-abi` 4.35.0 → 4.37.0.
+`@noble/hashes` pasa de 2.4.0 a 1.8.0 en la raíz porque `app-builder-lib` 26.17 pide la línea 1.x
+(decisión de upstream, no una degradación nuestra). La salida HTML de `mammoth` 1.13.0 sobre un
+`.docx` de asistencia es idéntica a la de 1.12.0.
+
+### 5.2 `sprintf-js` (moderada, todas las versiones) — resuelta con `overrides`
+
+[GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c) no tiene versión
+corregida. Lo que propone `npm audit fix --force` son **degradaciones** y se descartaron:
+`mammoth` → 0.3.29 (rompe el import de `.docx`) y `electron-builder` → 26.5.0. En vez de eso se
+sacó `sprintf-js` del árbol reemplazando a quienes lo traían, con dos `overrides` en `package.json`:
+
+| Override | Camino que corta | Por qué es seguro |
+|---|---|---|
+| `"mammoth": { "argparse": "^2.0.1" }` | `mammoth` → `argparse` 1.0.10 → `sprintf-js` | `argparse` lo usa **solo** la CLI de mammoth (`bin/mammoth`); la librería que importa `parser.ts` no lo carga. `argparse` 2 no depende de `sprintf-js` y mantiene alias deprecados de la API 1.x (`addArgument`…): la CLI sigue convirtiendo, con `DeprecationWarning`. |
+| `"@electron/get@3": { "global-agent": "^4.1.3" }` | `app-builder-lib` → `@electron/get` 3.1.0 → `global-agent` 3 → `roarr` 2 → `sprintf-js` | `global-agent` es dependencia **opcional** de `@electron/get`, usada solo en `initializeProxy()` (descarga de Electron detrás de un proxy al empaquetar), dentro de un `try/catch`. `global-agent` 4 ya no usa `roarr` y mantiene `bootstrap()`, la única API que llama `@electron/get`. El `@electron/get` 5.x de la raíz no depende de `global-agent`, así que el override no lo afecta. |
+
+**Al subir `mammoth` o `electron-builder`**: revisar si sus nuevas versiones ya traen
+`argparse` ≥ 2 / `@electron/get` sin `global-agent` 3, y en ese caso borrar el override
+correspondiente (`npm ls argparse global-agent`).
+
+### 5.3 Estado final
+
+```
+$ npm ci && npm audit
+found 0 vulnerabilities
+```
+
+**0 críticas, 0 altas, 0 moderadas.** Ningún riesgo aceptado. `npm ls sprintf-js roarr` → vacío.
+Sin install scripts nuevos (`npm install-scripts ls` → nada pendiente).
+
+Verificado después de los cambios: `npm ci` limpio, `npm run lint`, `npm run build`, Vitest
+(136/136), un `.docx` y un `.xlsx` de asistencia pasados por `extractTextFromFile` →
+`parseAttendance` (mismos 3 colegas, actividad y fecha), `initializeProxy()` de `@electron/get`
+con `global-agent` 4 (arranca sin errores), `npm run electron:build` + arranque del ejecutable
+empaquetado (servidor responde, sin `Cannot find module`) y `npm run test:e2e` (7/7).
+
+### 5.4 Por qué volvió a romperse, y el job `audit` de CI
+
+Ningún merge cambió las versiones afectadas: son idénticas en el lockfile de `ded28df` (cierre de
+US-13) y de `90fb3ca`. `npm audit` solo usa advisories **revisados por GitHub**, y estos cuatro se
+revisaron después del cierre de US-13 (2026-09-30): `http-cache-semantics` el 2026-10-02, y
+`proxy-addr`, `source-map-js` y `sprintf-js` el 2026-10-05.
+
+`npm audit` = 0 es un estado que vence con el tiempo, no una propiedad del código. Por eso
+`.github/workflows/ci.yml` tiene un job `audit` (`npm audit`, falla con cualquier vulnerabilidad)
+que corre en cada PR y push a `main`, y además a diario sobre `main` (`schedule`, 11:00 UTC; en esa
+corrida se saltea `lint-and-build`). Si el job programado falla sin cambios en el código, es un
+advisory nuevo: seguir este documento.

@@ -1,9 +1,10 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
-import { Search, UserPlus, FileBarChart2, X, Check, Mail, Calendar, Settings, Trash2 } from "lucide-react";
+import { Search, UserPlus, FileBarChart2, X, Mail, Calendar, Trash2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
-import { sortByName } from "../utils";
+import { formatDisplayDate, pluralize, sortByName } from "../utils";
+import { computeBeehavior } from "../beehavior";
 
 interface AttendeeDirectoryProps {
   attendees: Attendee[];
@@ -38,20 +39,31 @@ export default function AttendeeDirectory({
   // Deletion confirmation state
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Enrollment Editor Popover State
-  // Keep track of which attendee is currently having their enrollments edited
-  const [editingEnrollmentId, setEditingEnrollmentId] = useState<string | null>(null);
-
   // Compute individual attendance rates
+  // US-39: `rate` is the colleague's Overall from the Bee-havior Hub (All time) — attended events in
+  // their enrolled activities ÷ all events of those activities (US-31), via computeBeehavior so both
+  // views share the math. null (no present at all) renders "—". `total`/`present` still count the
+  // colleague's own records for "No attendance yet"; the "(x of N events)" beside the rate uses the
+  // same Overall fraction as the tooltip, so both denominators match.
   const attendeeStats = useMemo(() => {
-    const stats: Record<string, { total: number; present: number; rate: number }> = {};
-    
+    const stats: Record<string, {
+      total: number; present: number; rate: number | null; overallPresents: number; overallTotal: number;
+    }> = {};
+
+    const overallById = new Map(computeBeehavior(attendees, records, null).map(row => [row.attendee.id, row]));
+
     attendees.forEach(att => {
       const attLogs = records.filter(r => r.attendeeId === att.id);
       const total = attLogs.length;
       const present = attLogs.filter(r => r.status === "present").length;
-      const rate = total ? Math.round((present / total) * 100) : 0;
-      stats[att.id] = { total, present, rate };
+      const row = overallById.get(att.id);
+      stats[att.id] = {
+        total,
+        present,
+        rate: row?.overallRate ?? null,
+        overallPresents: row?.overallPresents ?? 0,
+        overallTotal: row?.overallTotal ?? 0,
+      };
     });
 
     return stats;
@@ -87,28 +99,13 @@ export default function AttendeeDirectory({
     confetti({
       particleCount: 100,
       spread: 60,
-      origin: { y: 0.8 }
+      origin: { y: 0.8 },
+      disableForReducedMotion: true
     });
   };
 
-  const handleToggleEnrollmentForm = (act: string) => {
-    setNewEnrolled(prev =>
-      prev.includes(act) ? prev.filter(a => a !== act) : [...prev, act]
-    );
-  };
-
-  const handleToggleAttendeeEnrollment = (attendee: Attendee, activity: string) => {
-    if (!canEdit) return;
-    const isEnrolled = attendee.enrolledActivities.includes(activity);
-    const nextActivities = isEnrolled
-      ? attendee.enrolledActivities.filter(a => a !== activity)
-      : [...attendee.enrolledActivities, activity];
-    
-    onUpdateEnrollment(attendee.id, nextActivities);
-  };
-
-  const getAttendanceBadgeClass = (rate: number, total: number) => {
-    if (total === 0) return "bg-natural-cream text-natural-sage border border-natural-border/40";
+  const getAttendanceBadgeClass = (rate: number | null, total: number) => {
+    if (total === 0 || rate === null) return "bg-natural-cream text-natural-sage border border-natural-border/40";
     if (rate >= 90) return "bg-[#CCD5AE]/40 text-natural-forest font-bold border border-[#CCD5AE]/80";
     if (rate >= 75) return "bg-natural-wheat text-natural-forest font-bold border border-natural-border/60";
     return "bg-natural-sand/15 text-natural-sand font-bold border border-natural-sand/35";
@@ -123,10 +120,11 @@ export default function AttendeeDirectory({
         <div className="flex flex-1 flex-col sm:flex-row gap-3 max-w-2xl">
           {/* Search bar */}
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-natural-sage" />
+            <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-natural-sage" aria-hidden="true" />
             <input
+              aria-label="Search colleagues"
               type="text"
-              placeholder="Search colleagues by name or email..."
+              placeholder="Search colleagues by name or email…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-natural-cream/20 border border-natural-border rounded-xl pl-11 pr-4 py-2.5 text-sm text-natural-forest placeholder-natural-sage/70 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
@@ -135,6 +133,7 @@ export default function AttendeeDirectory({
 
           {/* Activity Filter Dropdown */}
           <select
+            aria-label="Filter by activity"
             value={selectedActivityFilter}
             onChange={(e) => setSelectedActivityFilter(e.target.value)}
             className="bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-2.5 text-sm text-natural-forest font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
@@ -142,7 +141,7 @@ export default function AttendeeDirectory({
             <option value="All">All Activities</option>
             {ACTIVITIES.map(act => (
               <option key={act} value={act}>
-                {act.replace("English ", "")}
+                {act}
               </option>
             ))}
           </select>
@@ -156,7 +155,7 @@ export default function AttendeeDirectory({
           className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-semibold px-5 py-3 rounded-xl text-sm transition duration-150 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <UserPlus className="h-4 w-4" />
-          <span>Register New Colleague</span>
+          <span>Add Colleague</span>
         </button>
       </div>
 
@@ -166,11 +165,12 @@ export default function AttendeeDirectory({
           <div className="flex justify-between items-center border-b border-natural-border pb-4">
             <h3 className="font-serif font-bold text-natural-forest text-lg flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-natural-sage" />
-              Add Colleague to Directory
+              Add Colleague
             </h3>
             <button
               type="button"
               onClick={() => setShowRegForm(false)}
+              aria-label="Cancel"
               className="text-natural-sage hover:text-natural-forest"
             >
               <X className="h-5 w-5" />
@@ -180,8 +180,9 @@ export default function AttendeeDirectory({
           <form onSubmit={handleRegister} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Full Name</label>
+                <label htmlFor="add-colleague-name" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Full Name</label>
                 <input
+                  id="add-colleague-name"
                   type="text"
                   required
                   placeholder="e.g. Elena Rostova"
@@ -192,8 +193,9 @@ export default function AttendeeDirectory({
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Email Address (Optional)</label>
+                <label htmlFor="add-colleague-email" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Email Address (Optional)</label>
                 <input
+                  id="add-colleague-email"
                   type="email"
                   placeholder="e.g. elena@example.com"
                   value={newEmail}
@@ -215,7 +217,7 @@ export default function AttendeeDirectory({
                 type="submit"
                 className="px-6 py-2.5 bg-natural-forest hover:bg-[#213028] text-white text-sm font-bold rounded-xl transition shadow-sm"
               >
-                Register Colleague
+                Add Colleague
               </button>
             </div>
           </form>
@@ -226,7 +228,7 @@ export default function AttendeeDirectory({
       <div className="bg-white rounded-[32px] border border-natural-border shadow-sm overflow-hidden">
         {filteredAttendees.length === 0 ? (
           <div className="text-center py-16 space-y-3">
-            <p className="text-natural-sage font-medium">No attendees match your search filters.</p>
+            <p className="text-natural-sage font-medium">{attendees.length === 0 ? "No colleagues yet." : "No colleagues match your search."}</p>
             <button
               type="button"
               onClick={() => {
@@ -251,7 +253,7 @@ export default function AttendeeDirectory({
               </thead>
               <tbody className="divide-y divide-natural-border/60 text-sm text-natural-forest">
                 {filteredAttendees.map(att => {
-                  const stat = attendeeStats[att.id] || { total: 0, present: 0, rate: 0 };
+                  const stat = attendeeStats[att.id] || { total: 0, present: 0, rate: null, overallPresents: 0, overallTotal: 0 };
 
                   return (
                     <tr key={att.id} className="hover:bg-natural-cream/10 transition">
@@ -276,12 +278,15 @@ export default function AttendeeDirectory({
                       {/* Attendance Stats badge */}
                       <td className="p-4">
                         <div className="flex items-center space-x-2">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${getAttendanceBadgeClass(stat.rate, stat.total)}`}>
-                            {stat.total === 0 ? "No Logs" : `${stat.rate}%`}
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${getAttendanceBadgeClass(stat.rate, stat.total)}`}
+                            title={stat.rate === null ? undefined : `Attended ${stat.overallPresents} of ${stat.overallTotal} events`}
+                          >
+                            {stat.total === 0 ? "No attendance yet" : stat.rate === null ? "—" : `${stat.rate}%`}
                           </span>
-                          {stat.total > 0 && (
+                          {stat.rate !== null && (
                             <span className="text-xs text-natural-sage font-mono font-medium">
-                              ({stat.present}/{stat.total} days)
+                              ({stat.overallPresents} of {pluralize(stat.overallTotal, "event")})
                             </span>
                           )}
                         </div>
@@ -291,7 +296,7 @@ export default function AttendeeDirectory({
                       <td className="p-4 text-xs font-mono text-natural-sage font-medium">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="h-3.5 w-3.5 text-natural-sage/75" />
-                          {att.joinedDate}
+                          {formatDisplayDate(att.joinedDate)}
                         </span>
                       </td>
 
@@ -308,7 +313,16 @@ export default function AttendeeDirectory({
                           </button>
 
                           {deletingId === att.id && canEdit ? (
-                            <div className="inline-flex items-center gap-1 animate-fade-in">
+                            // US-46: the confirmation names the colleague and says what else is deleted
+                            <div
+                              role="group"
+                              aria-label={`Confirm deleting ${att.name}`}
+                              className="flex flex-col items-end gap-1.5 max-w-[260px] text-left animate-fade-in"
+                            >
+                              <p className="text-xs font-medium text-red-800">
+                                Delete {att.name}? Their attendance records and coaching notes will also be deleted.
+                              </p>
+                              <div className="inline-flex items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -326,6 +340,7 @@ export default function AttendeeDirectory({
                               >
                                 Cancel
                               </button>
+                              </div>
                             </div>
                           ) : (
                             <button
@@ -333,7 +348,8 @@ export default function AttendeeDirectory({
                               onClick={() => setDeletingId(att.id)}
                               disabled={!canEdit}
                               className="p-2 text-natural-sand/75 hover:text-red-600 hover:bg-red-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-natural-sand/75"
-                              title="Remove Colleague"
+                              title="Delete Colleague"
+                              aria-label={`Delete ${att.name}`}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
