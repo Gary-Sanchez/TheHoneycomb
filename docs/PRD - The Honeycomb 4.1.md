@@ -118,7 +118,7 @@ creados con ese propósito; este PRD los usa para el 4.0 y agrega solo lo propio
   - checklist de regresión del 4.0 en el Release;
   - `schemaVersion` y backup automático de `honeycomb-data.json` al cambiar de versión, así que
     instalar el 4.1 deja una copia de los datos del 4.0 sin pasos manuales.
-- **Línea base de la auditoría (ticket S de §3):** `docs/SNAPSHOT-4.0.md` registra, medido sobre
+- **Línea base de la auditoría (US-51, §3):** `docs/SNAPSHOT-4.0.md` registra, medido sobre
   el tag `v4.0.0`:
   - los conteos que va a vigilar el lint de §2.3 (hex arbitrarios, `text-[Npx]`, `rounded-[…]`,
     `animate-*` sin definir, colores crudos `amber`/`red`/`gray`);
@@ -239,7 +239,7 @@ creados con ese propósito; este PRD los usa para el 4.0 y agrega solo lo propio
 ### 2.5. Accesibilidad de las pantallas existentes
 
 Aplica a **Dashboard**, **Manual Check-In**, **Caserits & Progress**, **Overlap Cross-Referencer**,
-**Import Forage Logs**, **Admin Access** y el **Progress Report**:
+**Import Forage Logs**, **Settings** (panel **Admin Access**) y el **Progress Report**:
 
 - **Pestañas:** las 6 pestañas usan `Tabs` (§2.4): se navegan con flechas, `Home`/`End`, y el lector
   de pantalla anuncia cuál está seleccionada.
@@ -250,8 +250,8 @@ Aplica a **Dashboard**, **Manual Check-In**, **Caserits & Progress**, **Overlap 
   - un enlace `Skip to content` es lo primero que se enfoca con Tab;
   - el `<title>` cambia por pestaña: `<Pestaña> · The Honeycomb`.
 - **Contraste:** ningún texto con información usa `sage`, `sand` ni `moss` sobre fondos claros; los
-  botones activos `Present` / `Absent` cumplen 4.5:1; el error de **Admin Access** deja de ser arena
-  sobre arena (~2:1).
+  botones activos `Present` / `Absent` cumplen 4.5:1; el error del panel **Admin Access** (pestaña
+  **Settings**) deja de ser arena sobre arena (~2:1).
 - **Tablas:** todas usan `DataTable` (`caption`, `scope`).
 - **Formularios:**
   - todo campo usa `Field`;
@@ -385,45 +385,43 @@ tiene pestañas de actividad (US-37).
 
 ### 3.2. Olas
 
-| Ola | Ticket (provisorio) | Alcance | Archivos principales | Arranca cuando |
+| Ola | Ticket | Alcance | Archivos principales | Arranca cuando |
 |---|---|---|---|---|
-| **Previo** | **US-49** · Versión, tag y Release (ya creado) | §2.0 | `package.json` (`version`), `SettingsPanel.tsx`, `.github/workflows/` (release), `docs/` | Ya |
-| **Previo** | **US-50** · Datos y paquete de regresión (ya creado) | §2.0 | `db.ts`, `e2e/fixtures/`, capturas de referencia, `docs/` | Ya, en paralelo con US-49 |
-| **Previo** | **S** · Línea base de la auditoría | §2.0 | `docs/SNAPSHOT-4.0.md`, capturas extra (768/375 px, Progress Report, Outcome Report) | Merge de US-50 (usa su base fija) |
-| **0** | **A** · Branding y empaquetado | §2.9 (menos el logo del header) | `electron/main.js`, `package.json` (`build`, `name`), `build/` (íconos) | Snapshot publicado |
-| **0** | **B** · Lint de estilos con línea base | §2.3 (lint) | `scripts/` (nuevo), `package.json` (`scripts`), `lint-staged.config.js` | Snapshot publicado |
-| **1** | **C** · Tokens, foco global y chequeo de contraste | §2.1, §2.3 (foco y contraste) | `src/index.css`, `docs/DESIGN-TOKENS.md`, test nuevo | Snapshot publicado |
-| **1** | **D** · Fuentes propias | §2.2 (fuentes) | `src/index.css` (línea del `@import`), `index.html`, `vite.config.ts`, `package.json` | Merge de C (comparten `index.css`) |
-| **2** | **E** · Primitivas I | `Button`, `IconButton`, `Field` y controles, `Card`, `Badge` | `src/components/ui/` (archivos nuevos) | Merge de C |
-| **2** | **F** · Primitivas II | `Dialog`, `ConfirmDialog`, `Toast`, `Tabs`, `SegmentedControl`, `DataTable`, `EmptyState`, `PageHeader`, `Stat`, `ChartFrame` | `src/components/ui/` (archivos nuevos, distintos de E) | Merge de C |
-| **2** | **G** · Módulo de dominio visual | §2.8: color e ícono por actividad, `TierBadge`, formateador de fechas y porcentajes, `chartTheme` | `src/activityTheme.ts`, `src/format.ts` (nuevos), `src/beehavior.ts` | Merge de C |
-| **3** | **H** · Shell | §2.5 (pestañas, estructura, skip-link, título), §2.6 (BUG-10), §2.7 (BUG-08, BUG-09, región de toasts), logo del header | `src/App.tsx`, `ReadOnlyNotice` | Merge de E, F y G |
-| **3** | **I** · Manual Check-In | §2.5, §2.6 (BUG-12) | `AttendanceLogger.tsx` | Merge de E, F y G |
-| **3** | **J** · Dashboard | §2.5, §2.6 (BUG-11 en el Hub, KPI 1→2→4), §2.8 (paneles) | `DashboardStats.tsx`, `DashboardPanels.tsx` | Merge de E, F y G |
-| **3** | **K** · Caserits & Progress | §2.5 (`DataTable`, `ConfirmDialog`), §2.6 | `AttendeeDirectory.tsx` | Merge de E, F y G |
-| **3** | **L** · Overlap Cross-Referencer | §2.5, §2.6, §2.8 | `CrossReferenceHub.tsx` | Merge de E, F y G |
-| **3** | **M** · Progress Report y Outcome Report | §2.5 (`Dialog`), §2.8 (gráficos) | `ProgressReportModal.tsx`, `OutcomeReportModal.tsx` | Merge de E, F y G |
-| **3** | **N** · Admin Access | §2.5 (error legible, `Field`, `Alert`) | `SettingsPanel.tsx` | Merge de E y F |
-| **3** | **O** · Import Forage Logs | §2.5, §2.6 (BUG-11 en la vista previa), barra de acciones sticky con resumen, confirmación de `Discard` | `DocumentParser.tsx` | Merge de E, F y G |
-| **4** | **P** · Gobernanza y cierre | §2.11, línea base del lint a 0, retirar alias de tokens viejos | `e2e/`, `docs/DESIGN-SYSTEM.md`, `CLAUDE.md`, `src/index.css` | Merge de H a O |
+| **Previo** | **US-49** (NIC-50) · Versión, tag y Release | §2.0 | `package.json` (`version`), `SettingsPanel.tsx`, `.github/workflows/` (release), `docs/` | Ya |
+| **Previo** | **US-50** (NIC-51) · Datos y paquete de regresión | §2.0 | `db.ts`, `e2e/fixtures/`, capturas de referencia, `docs/` | Ya, en paralelo con US-49 |
+| **Previo** | **US-51** (NIC-52) · Línea base de la auditoría | §2.0 | `docs/SNAPSHOT-4.0.md`, capturas extra (768/375 px, Progress Report, Outcome Report) | Merge de US-50 (usa su base fija) |
+| **0** | **US-52** (NIC-53) · Branding y empaquetado | §2.9 (menos el logo del header) | `electron/main.js`, `package.json` (`build`, `name`), `build/` (íconos) | Snapshot publicado |
+| **0** | **US-53** (NIC-54) · Lint de estilos con línea base | §2.3 (lint) | `scripts/` (nuevo), `package.json` (`scripts`), `lint-staged.config.js` | Snapshot publicado |
+| **1** | **US-54** (NIC-55) · Tokens, foco global y chequeo de contraste | §2.1, §2.3 (foco y contraste) | `src/index.css`, `docs/DESIGN-TOKENS.md`, test nuevo | Snapshot publicado |
+| **1** | **US-55** (NIC-56) · Fuentes propias | §2.2 (fuentes) | `src/index.css` (línea del `@import`), `index.html`, `vite.config.ts`, `package.json` | Merge de US-54 (comparten `index.css`) |
+| **2** | **US-56** (NIC-57) · Primitivas I | `Button`, `IconButton`, `Field` y controles, `Card`, `Badge` | `src/components/ui/` (archivos nuevos) | Merge de US-54 |
+| **2** | **US-57** (NIC-58) · Primitivas II | `Dialog`, `ConfirmDialog`, `Toast`, `Tabs`, `SegmentedControl`, `DataTable`, `EmptyState`, `PageHeader`, `Stat`, `ChartFrame` | `src/components/ui/` (archivos nuevos, distintos de US-56) | Merge de US-54 |
+| **2** | **US-58** (NIC-59) · Módulo de dominio visual | §2.8: color e ícono por actividad, `TierBadge`, formateador de fechas y porcentajes, `chartTheme` | `src/activityTheme.ts`, `src/format.ts` (nuevos), `src/beehavior.ts` | Merge de US-54 |
+| **3** | **US-59** (NIC-60) · Shell | §2.5 (pestañas, estructura, skip-link, título), §2.6 (BUG-10), §2.7 (BUG-08, BUG-09, región de toasts), logo del header | `src/App.tsx`, `ReadOnlyNotice` | Merge de US-56, US-57 y US-58 |
+| **3** | **US-60** (NIC-61) · Manual Check-In | §2.5, §2.6 (BUG-12) | `AttendanceLogger.tsx` | Merge de US-56, US-57 y US-58 |
+| **3** | **US-61** (NIC-62) · Dashboard | §2.5, §2.6 (BUG-11 en el Hub, KPI 1→2→4), §2.8 (paneles) | `DashboardStats.tsx`, `DashboardPanels.tsx` | Merge de US-56, US-57 y US-58 |
+| **3** | **US-62** (NIC-63) · Caserits & Progress | §2.5 (`DataTable`, `ConfirmDialog`), §2.6 | `AttendeeDirectory.tsx` | Merge de US-56, US-57 y US-58 |
+| **3** | **US-63** (NIC-64) · Overlap Cross-Referencer | §2.5, §2.6, §2.8 | `CrossReferenceHub.tsx` | Merge de US-56, US-57 y US-58 |
+| **3** | **US-64** (NIC-65) · Progress Report y Outcome Report | §2.5 (`Dialog`), §2.8 (gráficos) | `ProgressReportModal.tsx`, `OutcomeReportModal.tsx` | Merge de US-56, US-57 y US-58 |
+| **3** | **US-65** (NIC-66) · Settings (Admin Access) | §2.5 (error legible, `Field`, `Alert`) | `SettingsPanel.tsx` | Merge de US-56 y US-57 |
+| **3** | **US-66** (NIC-67) · Import Forage Logs | §2.5, §2.6 (BUG-11 en la vista previa), barra de acciones sticky con resumen, confirmación de `Discard` | `DocumentParser.tsx` | Merge de US-56, US-57 y US-58 |
+| **4** | **US-67** (NIC-68) · Gobernanza y cierre | §2.11, línea base del lint a 0, retirar alias de tokens viejos | `e2e/`, `docs/DESIGN-SYSTEM.md`, `CLAUDE.md`, `src/index.css` | Merge de US-59 a US-66 |
 
-- **Orden:** primero US-49, US-50 y S, y la publicación del Release `v4.0.0`. Con el snapshot
-  publicado, A, B y C arrancan en paralelo.
-- **Cruce con US-49:** US-49 y A tocan `package.json` (`version` vs `build`/`name`); como A arranca
-  después, solo hay que rebasar. E, F y G corren en paralelo. H a O corren en
-  paralelo (cada una toca su propio componente).
+- **Orden:** primero US-49, US-50 y US-51, y la publicación del Release `v4.0.0`. Con el snapshot
+  publicado, US-52, US-53 y US-54 arrancan en paralelo.
+- **Paralelismo:** US-56, US-57 y US-58 corren en paralelo. US-59 a US-66 corren en paralelo (cada
+  uno toca su propio componente).
 - **Puntos de cruce conocidos:**
-  - `package.json` lo tocan A, B y D en claves distintas (`build`/`name`, `scripts`,
-    `dependencies`): conflicto trivial, se resuelve al rebasar.
-  - Cada ticket de la ola 3 baja la línea base del lint (B): el archivo de línea base se actualiza
-    al rebasar, tomando el menor valor de cada regla.
-  - H es el único ticket que toca `App.tsx`; la región de toasts y la pantalla de error de carga
-    viven ahí.
+  - `package.json` lo tocan US-49, US-52, US-53 y US-55 en claves distintas (`version`,
+    `build`/`name`, `scripts`, `dependencies`): conflicto trivial, se resuelve al rebasar.
+  - Cada ticket de la ola 3 baja la línea base del lint (US-53): el archivo de línea base se
+    actualiza al rebasar, tomando el menor valor de cada regla.
+  - US-59 es el único ticket que toca `App.tsx`; la región de toasts y la pantalla de error de
+    carga viven ahí.
 - **Comparación:** cada ticket de las olas 3 y 4 entrega capturas antes y después, comparadas con
   las de `v4.0.0`, a los mismos anchos.
-- **Numeración:** US-49 y US-50 ya existen (NIC-50 y NIC-51). Los tickets nuevos del 4.1 se
-  crean con la skill **Tefinha-crea-tickets** desde `US-51` (`NIC-52`), en el orden de la tabla: S
-  es `US-51`, A es `US-52` y así hasta P.
+- **Linear:** los tickets están en el proyecto **The Honeycomb** con las relaciones de bloqueo de
+  la columna "Arranca cuando" (US-NN = NIC-(NN+1)).
 
 ---
 
@@ -446,13 +444,13 @@ tiene pestañas de actividad (US-37).
 | **TC-90** | Estructura (§2.5) | Se cambia a **Caserits & Progress**. | El `<title>` dice `Caserits & Progress · The Honeycomb` y la pestaña tiene un único h2. |
 | **TC-91** | Progress Report (§2.5) | Se abre el **Progress Report** de un colega con el teclado, se pulsa Escape. | El foco entra al diálogo al abrir; Escape lo cierra y el foco vuelve al botón que lo abrió. Mientras está abierto, la página de fondo no hace scroll. |
 | **TC-92** | Formularios (§2.5) | En **Manual Check-In**, se intenta `Add & Check In` con el nombre vacío. | Se muestra un error junto al campo, el campo queda con `aria-invalid="true"` y el foco vuelve a él. |
-| **TC-93** | Contraste (§2.5) | En **Admin Access**, se ingresa una contraseña incorrecta. | El error se lee con contraste ≥ 4.5:1 y se anuncia (`role="alert"`). |
+| **TC-93** | Contraste (§2.5) | En **Settings** (panel **Admin Access**), se ingresa una contraseña incorrecta. | El error se lee con contraste ≥ 4.5:1 y se anuncia (`role="alert"`). |
 | **TC-94** | Confirmaciones (§2.5) | Se borra un colega desde **Caserits & Progress**. | Se abre un diálogo que nombra al colega y avisa la cascada (mismo texto que TC-77); Escape cancela. |
 | **TC-95** | Responsive (§2.6, BUG-10) | A 375 px, se hace scroll hasta el final del Dashboard. | Las pestañas siguen visibles debajo del header. |
 | **TC-96** | Responsive (§2.6) | A 375 y 768 px, se recorren las 6 pestañas y el Progress Report. | `scrollWidth` es igual a `innerWidth` en todos los casos. |
 | **TC-97** | Responsive (§2.6, BUG-11) | A 375 px, en el Bee-havior Hub, se desplaza la tabla horizontalmente. | Se llega a **Hive Status** y **Multi-Activity?**; la columna del nombre queda fija. |
 | **TC-98** | Responsive (§2.6, BUG-12) | A 375 px, se abre **Manual Check-In**. | `Add & Check In`, `Present` y `Absent` se leen completos; no hay scroll horizontal. |
-| **TC-99** | Responsive (§2.6) | A 768 px, se selecciona **Admin Access**. | La pestaña se desplaza hasta quedar visible y centrada; no se ve la barra de scroll nativa. |
+| **TC-99** | Responsive (§2.6) | A 768 px, se selecciona **Settings**. | La pestaña se desplaza hasta quedar visible y centrada; no se ve la barra de scroll nativa. |
 | **TC-100** | Feedback (§2.7, BUG-08) | Con el servidor devolviendo 500 en `POST /api/records`, se guarda una asistencia. | Se revierte el cambio y aparece un toast de error que explica qué no se guardó, sin el mensaje crudo del servidor. |
 | **TC-101** | Feedback (§2.7, BUG-09) | Se abre la app con el servidor caído y luego se levanta. | Se ve una pantalla de error con `Retry`; al pulsarlo, la app carga los datos. |
 | **TC-102** | Feedback (§2.7) | Se busca un nombre inexistente en el Hub, y luego se abre el Hub sin colegas. | Los dos estados vacíos usan textos distintos. |
@@ -468,7 +466,7 @@ tiene pestañas de actividad (US-37).
 | **TC-112** | Snapshot (§2.0) | Se revisa el historial de `main` y el Release `v4.0.0`. | El tag `v4.0.0` existe, el Release tiene el instalador y el checklist de regresión (US-49 y US-50), y los dos se publicaron antes del primer commit de un ticket del 4.1. |
 | **TC-113** | Snapshot (§2.0) | En una máquina sin el repo, se instala la app desde el Release `v4.0.0`. | La app abre como la 4.0 (pestañas, textos y fuentes de ese momento) y **Settings** muestra `v4.0.0`. |
 | **TC-114** | Snapshot (§2.0) | Se revisan las capturas de referencia de `v4.0.0`. | Están las 6 pestañas a 1440, 768 y 375 px, más el Progress Report y el Outcome Report, tomadas con `e2e/fixtures/v4.0.0.json`. |
-| **TC-115** | Snapshot (§2.0) | Se compara `docs/SNAPSHOT-4.0.md` con la línea base inicial del lint (B). | Los conteos de cada regla coinciden. |
+| **TC-115** | Snapshot (§2.0) | Se compara `docs/SNAPSHOT-4.0.md` con la línea base inicial del lint (US-53). | Los conteos de cada regla coinciden. |
 | **TC-116** | Snapshot (§2.0) | Se instala el 4.1 sobre una instalación 4.0 con datos. | Queda una copia `honeycomb-data.backup-v4.0.0-{fecha}.json` y los datos se ven igual que en el 4.0 (US-50). |
 
 ---
@@ -521,5 +519,5 @@ tiene pestañas de actividad (US-37).
   un punto fijo no hay forma simple de volver a una app que funcionaba ni de mostrar qué mejoró.
   US-49 y US-50 ya definen ese punto fijo para todos los PRD (tag, Release con instalador, backup
   de datos, base y capturas congeladas), así que el 4.1 los reutiliza en lugar de duplicarlos, y
-  solo agrega la línea base de la auditoría (S). Las capturas de referencia del 4.0 tienen que
+  solo agrega la línea base de la auditoría (US-51). Las capturas de referencia del 4.0 tienen que
   tomarse con la interfaz del 4.0; por eso van antes que cualquier otro ticket.
