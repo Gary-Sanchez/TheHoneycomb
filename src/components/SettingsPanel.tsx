@@ -164,6 +164,10 @@ export default function SettingsPanel({ className, auth, onAuthChange }: Setting
       id="settings-panel"
     >
       <AdminAccessSection auth={auth} onAuthChange={onAuthChange} />
+      {/* US-49: app version (package.json, inlined at build time). Kept apart from AdminAccessSection. */}
+      <p id="app-version" className="text-xs font-medium text-natural-sage border-t border-natural-border pt-4">
+        The Honeycomb v{__APP_VERSION__}
+      </p>
     </div>
   );
 }
