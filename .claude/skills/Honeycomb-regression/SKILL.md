@@ -14,8 +14,8 @@ Argumentos recibidos: `$ARGUMENTS`
 
 La regresión es **siempre de un snapshot A (línea base, ya aprobado) a un snapshot B
 (candidato)**. Un snapshot es la versión etiquetada de la app que define
-[US-49](../../../../US-49%20Snapshots%20Versionados%20por%20PRD.md) (borrador en la carpeta padre del
-repo): tag anotado `v{MAJOR}.{MINOR}.{PATCH}` sobre un commit de `main`, con `MAJOR.MINOR` = número
+[US-49](../../../../US-49%20Snapshots%20Versionados%20por%20PRD.md) (NIC-50 en Linear; borrador
+original en la carpeta padre del repo), aplicada al 4.0 por el PRD 4.1 §2.0: tag anotado `v{MAJOR}.{MINOR}.{PATCH}` sobre un commit de `main`, con `MAJOR.MINOR` = número
 de PRD. Detalle, versiones candidatas y plantillas en [`references/snapshots.md`](references/snapshots.md).
 El catálogo de métodos, qué atrapa cada uno y las reglas de triage están en
 [`references/metodos.md`](references/metodos.md) — leelo antes de la Fase 6.
@@ -36,8 +36,9 @@ El catálogo de métodos, qué atrapa cada uno y las reglas de triage están en
 - **Linear** (MCP, cargar con ToolSearch: `list_issues`, `get_issue`, `list_comments`,
   `save_comment`, `save_document`): proyecto The Honeycomb — mapeo y estados en
   [`linear-board.md`](../Tefinha-crea-tickets/references/linear-board.md).
-- **GitHub**: `gh` si está instalado y autenticado (en esta máquina hoy **no** lo está); si no, links
-  directos (`https://github.com/Gary-Sanchez/TheHoneycomb/releases/new?tag=<tag>`).
+- **GitHub**: `gh` si está instalado y autenticado — detectarlo en la Fase 0 con `gh auth status`
+  (sale con código ≠ 0, o `gh` no existe → sin `gh`), nunca asumirlo; sin `gh`, links directos
+  (`https://github.com/Gary-Sanchez/TheHoneycomb/releases/new?tag=<tag>`).
 - **Navegador integrado** (`mcp__Claude_Browser__*`) para el QA manual de la Fase 5.
 
 ## Entrada
@@ -45,9 +46,9 @@ El catálogo de métodos, qué atrapa cada uno y las reglas de triage están en
 - `A` (opcional): tag o commit de la línea base. Default: el tag `v*` más alto
   (`git tag -l "v*" --sort=-v:refname | head -1`).
 - `B` (opcional): rama, commit o PR (`#n` → su rama `origin/<head>`). Default: `origin/main`.
-- **Si no hay ningún tag `v*`** (hoy es el caso: US-49 no está implementada), no inventes la base:
+- **Si no hay ningún tag `v*`** (el caso hasta que US-49 publique `v4.0.0`), no inventes la base:
   mostrá los candidatos de cierre de PRD de [`references/snapshots.md`](references/snapshots.md)
-  (con su commit y por qué) y preguntá con `AskUserQuestion` cuál usar como A. Si el usuario no
+  (con su commit y por qué; si un PRD de `docs/` fija el commit, ese manda) y preguntá con `AskUserQuestion` cuál usar como A. Si el usuario no
   quiere base, corré el **modo línea base**: Fases 2, 3 y 5 sobre B (sin diferencial) y, si pasa,
   ofrecé crear el primer snapshot.
 
@@ -55,6 +56,7 @@ El catálogo de métodos, qué atrapa cada uno y las reglas de triage están en
 
 1. `git fetch origin --prune --tags`. Resolver A y B a SHA (`git rev-parse`) y mostrarlos.
    Verificar `git merge-base --is-ancestor A B`; si no lo es, avisar (rango no lineal) y preguntar.
+   Correr `gh auth status` y anotar si hay `gh` para las Fases 1 y 8.
 2. Asegurar que `.claude/worktrees/` y `.claude/regression/` estén en `.git/info/exclude` (agregar
    la línea si falta). Directorio de la corrida:
    `RUN=.claude/regression/runs/<A>__<B>-<AAAA-MM-DD>` (con `-2`, `-3`… si ya existe: el hook
@@ -106,12 +108,15 @@ En el worktree de B, en este orden, guardando la salida en `$RUN/gates/`:
 | Unit | `npm test` | 0 fallas |
 | Build | `npm run build` | ok |
 | Dependencias (US-13/US-48) | `npm audit` | 0 vulnerabilidades |
-| Hooks (US-07) | `node --test .claude/hooks/*.test.cjs` | 0 fallas |
+| Hooks (US-07) | `node --test .claude/hooks/*.test.cjs` | 0 fallas (ver nota) |
 | E2E | `npx playwright test` (con `dist/` ya compilado) | 0 fallas |
 | Modo US-49 | e2e de capturas con la base fija de A | ver `snapshots.md` |
 
 Cualquier rojo acá es **❌ Con regresiones** directo (o ⛔ si es de entorno, p. ej. sin red para
-`npm audit`). Delegable: un subagente puede correr esta tabla en paralelo con la Fase 4 (son
+`npm audit`). Nota de hooks: los tests de "fuera del árbol → ask" fallan si la carpeta padre del
+worktree es la raíz del disco (p. ej. `C:\hc-pr59`). Con los worktrees en `.claude/worktrees/` no
+pasa; si B vive en otro lado y solo fallan esos, es ⛔ de entorno: re-correlos en un worktree
+de `.claude/worktrees/` antes de concluir. Delegable: un subagente puede correr esta tabla en paralelo con la Fase 4 (son
 puertos distintos), pero los resultados se revisan en el hilo principal.
 
 ## Fase 4 — Regresión diferencial A → B
@@ -127,7 +132,8 @@ node $S/compare.mjs --base $RUN/capture-A --cand $RUN/capture-B --out $RUN/compa
   compares contra capturas de otra máquina o de otro día. El cache de `snapshots/` es solo registro.
 - Ambas cargan el **mismo** fixture (`compare` lo verifica con su SHA-256). En modo US-49 usá el
   fixture congelado de A (`e2e/fixtures/v<A>.json`) con `--fixture` en las dos: B tiene que
-  migrarlo y verse igual salvo lo que expliquen las US.
+  migrarlo y verse igual salvo lo que expliquen las US. Ahí `golden-db.json` no se usa: la base de
+  US-50 es la única (ver `snapshots.md` → "Convivencia con US-50").
 - Si alguna captura tiene pasos `FAIL` (pestaña que no aparece, server que no levanta, la base
   cambió al solo parsear), eso ya es un hallazgo. Si la de A falla por algo de entorno, ⛔.
 - Para inspeccionar un delta visual, abrí con `Read` la imagen de `visual-diff/` (rojo = píxeles
@@ -202,9 +208,12 @@ de [`references/snapshots.md`](references/snapshots.md#crear-un-snapshot) — en
 1. **Precondiciones** (si falla alguna, no se taggea): B es un commit de `origin/main`
    (`git merge-base --is-ancestor <B> origin/main`) — nunca un tag sobre una rama de feature; el
    tag propuesto no existe ni local ni en `origin`; el SHA taggeado es exactamente el que se probó.
-2. **Versión**: proponer `v{PRD}.{PATCH}` (PRD = el más alto de `docs/PRD - The Honeycomb *.md`
-   presente en B, PATCH = siguiente libre) y confirmarla con `AskUserQuestion` — es una decisión
-   de producto, no de QA. Avisar si `package.json` no coincide (hoy `0.0.0`; el bump es de US-49).
+2. **Versión**: proponer `v{PRD}.{PATCH}` (PRD = el que B **cierra**: el más alto de
+   `docs/PRD - The Honeycomb *.md` cuyas US están todas mergeadas en B — un PRD ya escrito pero en
+   curso, como el 4.1 mientras se trabaja, no cuenta; PATCH = siguiente libre) y confirmarla con
+   `AskUserQuestion` — es una decisión de producto, no de QA. Si un PRD fija el commit de esa
+   versión (PRD 4.1 §2.0 → `v4.0.0` sobre el merge de US-49), B tiene que ser ese commit. Avisar si
+   `package.json` → `version` no coincide (antes de US-49 es `0.0.0`).
 3. **Gate 1 — tag local**: `git tag -a v<X> <sha B> -F $RUN/tag-message.txt` (mensaje de la
    plantilla). Copiar `$RUN/capture-B` a `.claude/regression/snapshots/v<X>/` como registro.
 4. **Gate 2 — push del tag**: `git push origin v<X>` (visible para el equipo y, en modo US-49,

@@ -1,9 +1,14 @@
 # Snapshots: qué son, cómo se eligen y cómo se crean
 
-Basado en **US-49** ("Generar un Snapshot Versionado de la App al Completar Cada PRD", borrador en
-`../US-49 Snapshots Versionados por PRD.md`, carpeta padre del repo; al 2026-10-14 todavía no está
-en Linear ni implementada). Esta skill funciona antes y después de US-49: antes en **modo liviano**,
-después en **modo US-49**.
+Basado en **US-49** ("Generar un Snapshot Versionado de la App al Completar Cada PRD", NIC-50 en
+Linear; borrador original en `../US-49 Snapshots Versionados por PRD.md`, carpeta padre del repo) y
+**US-50** ("Datos y paquete de regresión", NIC-51). El **PRD 4.1 §2.0**
+(`docs/PRD - The Honeycomb 4.1.md`) las aplica al cierre del 4.0. Su estado cambia rápido: no lo
+asumas, miralo en Linear y en `git branch -r` antes de cada corrida. Esta skill funciona antes y
+después de US-49: antes en **modo liviano**, después en **modo US-49**.
+
+**Precedencia:** si un PRD de `docs/` fija el commit o el procedimiento de un snapshot (hoy, el
+PRD 4.1 §2.0 para `v4.0.0`), **manda el PRD** sobre este archivo.
 
 ## Qué es un snapshot
 
@@ -20,6 +25,21 @@ es **inmutable**: nunca se mueve, se borra ni se re-pushea con `--force`.
 
 La huella **no** reemplaza re-capturar: cada regresión re-captura A desde su tag en la misma
 máquina y corrida que B, porque DPI, fuentes y versión de Windows cambian los píxeles.
+
+### Convivencia con US-50 (un solo golden por modo)
+
+US-50 congela por versión una base fija (`e2e/fixtures/v*.json`) y capturas `toHaveScreenshot`
+de las 6 pestañas. Esta skill no mantiene un golden paralelo a ese:
+
+- **Modo US-49 (A ya trae `e2e/fixtures/v<A>.json`):** la base fija de US-50 es **la** entrada de
+  datos. `capture.mjs` la carga con `--fixture` en A y en B, y las capturas de referencia de US-50
+  corren como gate de la Fase 3. `fixtures/golden-db.json` queda solo para regresiones cuya A sea
+  anterior a US-50 (`v2.0.0`, `v3.0.0`) y no se actualiza más.
+- **Lo que US-50 no cubre y la skill sigue aportando:** el corpus de `.csv`
+  (`fixtures/corpus/`, parser y duplicados), el diferencial de texto visible y de `/api/data`, los
+  tests de A sobre B y el QA manual. El corpus no es un golden de datos: no se lleva a `e2e/`.
+- Si US-50 cambia de forma (otra ruta, otro formato), manda US-50: adaptá `--fixture` y esta
+  sección, sin crear otra base.
 
 ## Detección (Fase 0)
 
@@ -42,15 +62,21 @@ snapshot. Si el documento de `docs/` contradice este archivo, **manda el de `doc
 
 1. Si hay tags: el `v*` más alto (`git tag -l "v*" --sort=-v:refname`). El usuario puede pedir
    otro (p. ej. `v3.0.0` para ver todo lo que cambió en el PRD 4.0 completo).
-2. Si no hay tags: candidatos de cierre de PRD. Calculados el **2026-10-14** sobre
-   `git log origin/main --first-parent --merges` y los PRD de `docs/`; **re-verificalos** antes de
-   usarlos (la regla de US-49: el merge de la última US de ese PRD).
+2. Si no hay tags: candidatos de cierre de PRD. Los retroactivos se calcularon el **2026-10-14**
+   sobre `git log origin/main --first-parent --merges` y los PRD de `docs/`; **re-verificalos**
+   antes de usarlos (la regla de US-49: el merge de la última US de ese PRD). Si un PRD fija el
+   commit (ver "Precedencia"), usá el del PRD.
 
 | Versión | Commit | Por qué | Alternativa |
 |---|---|---|---|
 | `v2.0.0` | `99479c6` (2026-09-30, PR #11 US-12) | Último merge antes de abrir el PRD 3.0 (`4efa501`, PR #20). Incluye las US del PRD 2.0 (US-18 a US-21), el fix US-23 de check-in y el hardening US-10 a US-15 | `ed1c035` (PR #16, US-18: última US *funcional* del PRD 2.0) |
 | `v3.0.0` | `82567ad` (2026-10-02, PR #30 US-33) | Última US del PRD 3.0 (US-24 a US-33) | — |
-| `v4.0.0` | `d160f0b` (2026-10-14, PR #39 US-37) | Última US del PRD 4.0 (US-35 a US-48, todas `Done` en Linear al 2026-10-14) | Re-verificar: si entró algo del PRD 4.0 después, el cierre se corre |
+| `v4.0.0` | **El merge de US-49 a `main`** (todavía no existe: no hay commit fijo) | Lo fija el PRD 4.1 §2.0: el tag va sobre el commit de cierre del 4.0, que ya trae `"version": "4.0.0"`, así que tag, `package.json` y **Settings** coinciden. Ese commit tiene que traer también `e2e/fixtures/v4.0.0.json` de US-50 (van en paralelo): si no lo trae, preguntá antes de taggear | **No** taggear `d160f0b` (PR #39, última US funcional del PRD 4.0): no trae el bump de versión ni la base de US-50 |
+
+`v4.0.0` sí necesita regresión: su A natural es `v3.0.0` (`82567ad`) y su B, el merge de US-49.
+Si el usuario pide una base para el 4.0 antes de que exista ese merge, decile que el snapshot
+`v4.0.0` está pendiente de US-49/US-50 y ofrecé `d160f0b` solo como **B** de una regresión
+exploratoria, nunca como commit a taggear.
 
 Con estos candidatos, la primera regresión natural es **`82567ad` (PRD 3.0) → `origin/main`**, que
 probó esta skill al crearse: el rango trae US-13 y US-35 a US-48, y la captura, el diff y los tests
