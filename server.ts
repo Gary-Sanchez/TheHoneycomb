@@ -583,7 +583,12 @@ export async function startServer() {
 
   if (isProduction) {
     console.log("[Status] Serving static assets in PRODUCTION mode...");
-    const distPath = path.join(process.cwd(), "dist");
+    // US-49: resolve dist/ from the bundle, not the cwd. dist/server.cjs (CJS bundle) lives
+    // inside dist/, also inside app.asar in the packaged app, whose cwd is the install folder.
+    // HONEYCOMB_DIST_PATH overrides it; the cwd fallback is for running server.ts unbundled.
+    const distPath =
+      process.env.HONEYCOMB_DIST_PATH ||
+      (typeof __dirname !== "undefined" ? __dirname : path.join(process.cwd(), "dist"));
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

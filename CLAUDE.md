@@ -27,6 +27,15 @@ the doc for anything persistence-related.
   `tsc --noEmit` over the whole project whenever a staged `.ts`/`.tsx` file is present — blocking
   the commit on type errors. Skip it exceptionally with `git commit --no-verify` (see README).
 - `npm run electron:start` / `electron:build` — desktop packaging via electron-builder.
+- **Versioning (US-49)**: `package.json` `version` = PRD number (`4.0.0` = PRD 4.0; hotfixes bump
+  PATCH). It's inlined as `__APP_VERSION__` (`define` in **both** `vite.config.ts` and
+  `vitest.config.ts`, declared in `src/vite-env.d.ts`) and shown in Settings as `The Honeycomb vX.Y.Z`.
+  Pushing a `v*` tag runs `.github/workflows/release.yml` (Windows: lint, tests, build, nsis
+  installer → smoke test of `release/win-unpacked` launched from its own folder → GitHub Release,
+  notes from `docs/releases/<tag>.md`). In production `server.ts` serves `dist/` from the bundle's
+  own folder (`__dirname` of `dist/server.cjs`, overridable via `HONEYCOMB_DIST_PATH`), never from
+  `process.cwd()` — the installed app's cwd is its install folder. Closing procedure:
+  [`docs/PRD-CLOSING.md`](docs/PRD-CLOSING.md).
 
 ## Dependencies (US-13 — `npm audit` at 0)
 

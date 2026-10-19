@@ -212,7 +212,7 @@ de [`references/snapshots.md`](references/snapshots.md#crear-un-snapshot) — en
    `docs/PRD - The Honeycomb *.md` cuyas US están todas mergeadas en B — un PRD ya escrito pero en
    curso, como el 4.1 mientras se trabaja, no cuenta; PATCH = siguiente libre) y confirmarla con
    `AskUserQuestion` — es una decisión de producto, no de QA. Si un PRD fija el commit de esa
-   versión (PRD 4.1 §2.0 → `v4.0.0` sobre el merge de US-49), B tiene que ser ese commit. Avisar si
+   versión (PRD 4.1 §2.0 → `v4.0.0` sobre el merge de US-50), B tiene que ser ese commit. Avisar si
    `package.json` → `version` no coincide (antes de US-49 es `0.0.0`).
 3. **Gate 1 — tag local**: `git tag -a v<X> <sha B> -F $RUN/tag-message.txt` (mensaje de la
    plantilla). Copiar `$RUN/capture-B` a `.claude/regression/snapshots/v<X>/` como registro.

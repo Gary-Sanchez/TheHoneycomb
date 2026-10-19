@@ -110,6 +110,18 @@ en ese orden, sobre Node.js 24.
 Si alguno de esos pasos falla, el check queda en rojo (❌) en la pestaña **Checks** del PR — no
 requiere `GEMINI_API_KEY` ni ninguna otra variable de entorno.
 
+## Releases y cierre de PRD
+
+`version` en `package.json` es el número del PRD (`4.0.0` para el PRD 4.0; un hotfix sube el
+PATCH) y se muestra en **Settings** (`The Honeycomb v4.0.0`). Al cerrar un PRD se sube la versión,
+se crea el tag anotado `vX.Y.0` y se pushea; eso dispara `.github/workflows/release.yml`, que en
+Windows corre lint, tests unitarios y build, genera el instalador `nsis` con electron-builder y lo
+adjunta al GitHub Release del tag, con las notas de `docs/releases/vX.Y.0.md`. Si algo falla, no se
+publica instalador. `ci.yml` no cambia.
+
+El procedimiento completo (commit de cierre, tag, hotfix, tags retroactivos `v2.0.0`/`v3.0.0` y
+cómo probar el workflow) está en [`docs/PRD-CLOSING.md`](docs/PRD-CLOSING.md).
+
 ## Setup de MCPs
 
 Este proyecto usa Claude Code con un par de MCP servers para las skills en `.claude/skills/`.

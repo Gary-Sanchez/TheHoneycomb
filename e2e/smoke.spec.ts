@@ -53,4 +53,43 @@ test.describe("desktop app smoke test", () => {
     expect(await response.json()).toEqual({ status: "ok" });
     await api.dispose();
   });
+
+  // US-49: the installed app (shortcut / double click) runs with its install folder as cwd, not
+  // the repo root. server.ts used to serve dist/ from process.cwd(), so the packaged app answered
+  // every page with a 500. Launching from a temp cwd catches that without building the installer.
+  test("serves the app and shows the version when launched from a cwd outside the repo", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "honeycomb-e2e-cwd-"));
+    const { version } = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")
+    );
+    const cwdPort = "3104";
+
+    electronApp = await electron.launch({
+      args: [path.join(__dirname, "..", "electron", "main.js")],
+      cwd: tmpDir,
+      env: {
+        ...process.env,
+        PORT: cwdPort,
+        HONEYCOMB_DB_PATH: path.join(tmpDir, "honeycomb-data.json"),
+        HONEYCOMB_CONFIG_PATH: path.join(tmpDir, "honeycomb-config.json"),
+      },
+    });
+
+    // The window only loads once the embedded server is listening (main.js retries), so wait for
+    // the rendered app before hitting the server directly.
+    const window = await electronApp.firstWindow();
+    await expect(window.getByRole("heading", { name: "The Honeycomb" })).toBeVisible();
+
+    const api = await request.newContext();
+    const page = await api.get(`http://127.0.0.1:${cwdPort}/`);
+    expect(page.status()).toBe(200);
+    expect(await page.text()).toContain('<div id="root">');
+    await api.dispose();
+
+    await window
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("button", { name: "Settings" })
+      .click();
+    await expect(window.locator("#app-version")).toHaveText(`The Honeycomb v${version}`);
+  });
 });

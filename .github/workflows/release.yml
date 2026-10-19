@@ -1,0 +1,117 @@
+name: Release
+
+# US-49: pushing a version tag (vX.Y.Z, or vX.Y.Z-something for a test/pre-release) runs the same
+# checks as ci.yml, builds the Windows installer and attaches it to the tag's GitHub Release.
+# Procedure (closing commit, tag, notes): docs/PRD-CLOSING.md. ci.yml (push/PR to main) is untouched.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+# Never run two releases of the same tag at once (e.g. a tag deleted and pushed again).
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Steps run in order and stop at the first failure: if lint, tests or build fail, no
+      # installer is built and nothing is published.
+      - name: Lint (type-check)
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Calls electron-builder directly instead of `npm run electron:build`, which would run
+      # `npm run build` a second time. `--publish never`: the Release is handled below with gh.
+      - name: Build Windows installer (nsis)
+        run: npx electron-builder --win nsis --publish never
+
+      # The installed app runs with its install folder as cwd (shortcut / double click), not the
+      # repo root. Launch release/win-unpacked from its own folder and check that it serves the
+      # page and a bundle carrying this version, so a broken installer is never published.
+      - name: Smoke test packaged app (win-unpacked)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dir = Join-Path $PWD "release/win-unpacked"
+          $exe = Join-Path $dir "The Honeycomb.exe"
+          $data = New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP "honeycomb-smoke")
+          $env:PORT = "3300"
+          $env:HONEYCOMB_DB_PATH = Join-Path $data "honeycomb-data.json"
+          $env:HONEYCOMB_CONFIG_PATH = Join-Path $data "honeycomb-config.json"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $proc = Start-Process -FilePath $exe -WorkingDirectory $dir -PassThru
+          try {
+            $page = $null
+            for ($i = 0; $i -lt 60 -and -not $page; $i++) {
+              try { $page = Invoke-WebRequest "http://127.0.0.1:3300/" -UseBasicParsing -TimeoutSec 5 } catch { Start-Sleep -Seconds 2 }
+            }
+            if (-not $page -or $page.StatusCode -ne 200 -or -not $page.Content.Contains('<div id="root">')) {
+              throw "The packaged app did not serve the page from its install folder."
+            }
+            $src = [regex]::Match($page.Content, 'src="(/assets/[^"]+\.js)"').Groups[1].Value
+            $js = (Invoke-WebRequest ("http://127.0.0.1:3300" + $src) -UseBasicParsing).Content
+            if (-not ($js.Contains("The Honeycomb v") -and $js.Contains("`"$version`""))) {
+              throw "The packaged bundle does not carry version $version."
+            }
+            Write-Host "Packaged app OK: serves the page and version $version."
+          } finally {
+            Get-Process -Name "The Honeycomb" -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # electron-builder names it "${productName} Setup ${version}.exe" (with spaces), e.g.
+          # "release/The Honeycomb Setup 4.0.0.exe"; the array keeps each name as one argument.
+          installers=(release/*Setup*.exe)
+          if [ ${#installers[@]} -eq 0 ]; then
+            echo "::error::No nsis installer (*Setup*.exe) found in release/"
+            exit 1
+          fi
+
+          notes="docs/releases/${TAG}.md"
+          if [ -f "$notes" ]; then
+            notes_args=(--notes-file "$notes")
+          else
+            notes_args=(--notes "The Honeycomb ${TAG}. Release notes: see docs/PRD-CLOSING.md.")
+          fi
+
+          # A tag with a "-" (e.g. v0.0.1-test) is a pre-release.
+          pre_args=()
+          if [[ "$TAG" == *-* ]]; then
+            pre_args=(--prerelease)
+          fi
+
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${installers[@]}" --clobber
+          else
+            gh release create "$TAG" "${installers[@]}" --verify-tag --title "The Honeycomb ${TAG}" "${notes_args[@]}" "${pre_args[@]}"
+          fi

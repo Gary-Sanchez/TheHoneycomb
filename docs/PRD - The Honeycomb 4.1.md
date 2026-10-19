@@ -108,8 +108,9 @@ creados con ese propósito; este PRD los usa para el 4.0 y agrega solo lo propio
 
 - **US-49 (NIC-50), aplicada al 4.0:**
   - `package.json` pasa a `"version": "4.0.0"` y la versión se ve en **Settings**;
-  - tag anotado `v4.0.0` sobre el commit de cierre del 4.0 (el merge de US-49, que ya trae
-    `"version": "4.0.0"`), así que el tag, `package.json` y **Settings** dicen la misma versión;
+  - tag anotado `v4.0.0` sobre el commit de cierre del 4.0 (el merge de US-50, la última US del
+    snapshot, que ya trae `"version": "4.0.0"` de US-49), así que el tag, `package.json` y
+    **Settings** dicen la misma versión;
   - GitHub Release `v4.0.0` con el link a este PRD 4.0, la lista de US y el instalador de Windows
     generado por el workflow de release.
 - **US-50 (NIC-51), aplicada al 4.0:**

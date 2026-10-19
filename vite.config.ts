@@ -3,8 +3,13 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, type Plugin} from 'vite';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// US-49: package.json `version` (= PRD number, e.g. 4.0.0) is inlined at build time as
+// __APP_VERSION__ and shown in Settings. vitest.config.ts defines the same constant.
+const appVersion: string = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version;
 
 // index.html ships the strict, production-mode CSP (no 'unsafe-inline' scripts,
 // no dev-server origins). Vite's dev server needs more than that: the
@@ -37,6 +42,9 @@ function cspDevServerPlugin(): Plugin {
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss(), cspDevServerPlugin()],
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
