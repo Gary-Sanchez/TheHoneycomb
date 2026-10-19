@@ -35,8 +35,10 @@ anotado en git, un GitHub Release con sus notas y el instalador de Windows.
    ```
 
 4. **El workflow publica.** El push del tag dispara `.github/workflows/release.yml` (Windows):
-   `npm ci` → `npm run lint` → `npm test` → `npm run build` → `electron-builder --win nsis`. Si
-   un paso falla, el job se corta y no se publica nada. Si todo pasa, crea el Release `vX.Y.0` con
+   `npm ci` → `npm run lint` → `npm test` → `npm run build` → `electron-builder --win nsis` →
+   smoke test de `release/win-unpacked` lanzado desde su propia carpeta (como el acceso directo
+   del instalador: tiene que servir la página y un bundle con la versión). Si un paso falla, el
+   job se corta y no se publica nada. Si todo pasa, crea el Release `vX.Y.0` con
    `docs/releases/vX.Y.0.md` como notas (si falta, una nota genérica) y adjunta
    `release/The Honeycomb Setup X.Y.0.exe`. Si el Release ya existía, solo reemplaza el instalador.
 5. **Verificar:** pestaña **Actions** en verde; el Release tiene notas e instalador; instalar el

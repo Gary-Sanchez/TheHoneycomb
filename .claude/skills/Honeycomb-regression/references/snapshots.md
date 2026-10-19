@@ -71,9 +71,9 @@ snapshot. Si el documento de `docs/` contradice este archivo, **manda el de `doc
 |---|---|---|---|
 | `v2.0.0` | `99479c6` (2026-09-30, PR #11 US-12) | Último merge antes de abrir el PRD 3.0 (`4efa501`, PR #20). Incluye las US del PRD 2.0 (US-18 a US-21), el fix US-23 de check-in y el hardening US-10 a US-15 | `ed1c035` (PR #16, US-18: última US *funcional* del PRD 2.0) |
 | `v3.0.0` | `82567ad` (2026-10-02, PR #30 US-33) | Última US del PRD 3.0 (US-24 a US-33) | — |
-| `v4.0.0` | **El merge de US-49 a `main`** (todavía no existe: no hay commit fijo) | Lo fija el PRD 4.1 §2.0: el tag va sobre el commit de cierre del 4.0, que ya trae `"version": "4.0.0"`, así que tag, `package.json` y **Settings** coinciden. Ese commit tiene que traer también `e2e/fixtures/v4.0.0.json` de US-50 (van en paralelo): si no lo trae, preguntá antes de taggear | **No** taggear `d160f0b` (PR #39, última US funcional del PRD 4.0): no trae el bump de versión ni la base de US-50 |
+| `v4.0.0` | **El merge de US-50 a `main`** (todavía no existe: no hay commit fijo) | Lo fija el PRD 4.1 §2.0: el tag va sobre el commit de cierre del 4.0, el merge de US-50 (última US del snapshot), que ya trae `"version": "4.0.0"` de US-49 y `e2e/fixtures/v4.0.0.json`, así que tag, `package.json` y **Settings** coinciden. Si ese commit no trae la base fija, preguntá antes de taggear | **No** taggear `d160f0b` (PR #39, última US funcional del PRD 4.0): no trae el bump de versión ni la base de US-50 |
 
-`v4.0.0` sí necesita regresión: su A natural es `v3.0.0` (`82567ad`) y su B, el merge de US-49.
+`v4.0.0` sí necesita regresión: su A natural es `v3.0.0` (`82567ad`) y su B, el merge de US-50.
 Si el usuario pide una base para el 4.0 antes de que exista ese merge, decile que el snapshot
 `v4.0.0` está pendiente de US-49/US-50 y ofrecé `d160f0b` solo como **B** de una regresión
 exploratoria, nunca como commit a taggear.

@@ -51,7 +51,8 @@ describe("US-49: release workflow", () => {
   });
 
   it("lint, tests and build pass before the installer is built and published", () => {
-    const steps = ["npm ci", "npm run lint", "npm test", "npm run build", "electron-builder --win nsis --publish never", "gh release"];
+    // the packaged app is smoke-tested from its own install folder before anything is published
+    const steps = ["npm ci", "npm run lint", "npm test", "npm run build", "electron-builder --win nsis --publish never", "Smoke test packaged app", "-WorkingDirectory $dir", "gh release"];
     const positions = steps.map(step => release.indexOf(step));
     positions.forEach((pos, i) => expect(pos, steps[i]).toBeGreaterThan(-1));
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
