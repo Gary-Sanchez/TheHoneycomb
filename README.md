@@ -128,7 +128,7 @@ claude mcp add --transport http context7 https://mcp.context7.com/mcp
 ### Linear (tablero de tickets — "The Honeycomb")
 
 Se usa para crear/actualizar los tickets `US-XX` en Linear (workspace `nicky-arias`, team `NIC`) vía las
-skills `Tefinha-crea-tickets`, `Honeycomb-executor`, `super-tefinha-QA`, `garyale-sobreexplotados` y `super-tefinha-QA-en-lote` (ver
+skills `Tefinha-crea-tickets`, `Honeycomb-executor`, `super-tefinha-QA`, `garyale-sobreexplotados`, `super-tefinha-QA-en-lote` y `Honeycomb-regression` (ver
 `.claude/skills/Tefinha-crea-tickets/references/linear-board.md` para el detalle del tablero, su esquema
 y el flujo de estados).
 
@@ -144,4 +144,4 @@ y el flujo de estados).
    ```
 
 Con ambos MCPs conectados, las skills del repo (`Tefinha-crea-tickets`, `Honeycomb-executor`,
-`Start-Honeycomb`, `super-tefinha-QA`, `garyale-sobreexplotados`, `super-tefinha-QA-en-lote`) quedan operativas tal como están documentadas en `.claude/skills/`.
+`Start-Honeycomb`, `super-tefinha-QA`, `garyale-sobreexplotados`, `super-tefinha-QA-en-lote`, `Honeycomb-regression`) quedan operativas tal como están documentadas en `.claude/skills/`.

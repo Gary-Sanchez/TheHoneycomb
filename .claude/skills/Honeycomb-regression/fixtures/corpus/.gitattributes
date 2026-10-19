@@ -1,0 +1,2 @@
+# Bytes exactos: 06 es la variante CRLF de 01 (US-26), no dejar que git normalice los finales de línea.
+*.csv -text
