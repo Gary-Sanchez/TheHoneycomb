@@ -118,6 +118,10 @@ referencia de las 6 pestañas y un checklist de regresión en su Release. Van en
 2. **Capturas:** `npm run build && npx playwright test e2e/visual.spec.ts --update-snapshots`
    (actualiza `e2e/snapshots/current/`, que `e2e/visual.spec.ts` compara usando la base del paso 1),
    revisar las imágenes y correr `npm run test:e2e` dos veces para confirmar que son estables.
+   Antes de congelar, correr `npx playwright test e2e/visual.spec.ts` **en una segunda máquina** (o
+   con otro escalado de Windows: 100 %, 125 %, 150 %). El spec fuerza DPR 1 y una ventana de
+   1440×900 y falla con `the window must be 1440×900 CSS px at devicePixelRatio 1` si la pantalla
+   no lo permite (por ejemplo, una pantalla de menos de 900 px de alto).
 3. **Congelar:** copiar `e2e/snapshots/current/*` a `e2e/snapshots/vX.Y.0/`.
 4. **Checklist:** sección `## Checklist de regresión` en `docs/releases/vX.Y.0.md` con los QA Checks
    de las US del PRD, agrupados por US con su título (ver `docs/releases/v4.0.0.md`). Como esas

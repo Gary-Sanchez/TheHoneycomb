@@ -45,7 +45,9 @@ test.describe("visual regression of the main tabs (US-50)", () => {
     fs.copyFileSync(FIXTURE, dbPath);
 
     electronApp = await electron.launch({
-      args: [path.join(ROOT, "electron", "main.js")],
+      // Render at DPR 1 whatever the Windows display scaling (100 %, 125 %, 150 %…), so every
+      // machine produces the same pixels and the 1440×900 window fits on a 1080p screen.
+      args: ["--force-device-scale-factor=1", path.join(ROOT, "electron", "main.js")],
       env: {
         ...process.env,
         PORT,
@@ -62,7 +64,14 @@ test.describe("visual regression of the main tabs (US-50)", () => {
       ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size.width, size.height),
       { width: WIDTH, height: HEIGHT }
     );
-    await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(WIDTH);
+    // Fail with a clear message (not a pixel diff) if the screen couldn't give us that size/scale.
+    // The height matters too: a tab shorter than the viewport (Settings) is captured at the
+    // viewport's height (the app root is min-h-screen), so it must be exactly HEIGHT everywhere.
+    await expect
+      .poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight, window.devicePixelRatio]), {
+        message: `the window must be ${WIDTH}×${HEIGHT} CSS px at devicePixelRatio 1`,
+      })
+      .toEqual([WIDTH, HEIGHT, 1]);
 
     // Admin session, so every tab shows its edit controls (not the read-only notice)
     const status = await page.evaluate(async password => {
