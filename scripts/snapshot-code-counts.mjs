@@ -1,8 +1,10 @@
-#!/usr/bin/env node
 // US-51: code counts of the audit baseline (docs/SNAPSHOT-4.0.md), measured on a git ref.
 //
 //   node scripts/snapshot-code-counts.mjs [ref]          # markdown (default ref: v4.0.0)
 //   node scripts/snapshot-code-counts.mjs [ref] --json   # JSON
+//
+// No shebang on purpose: always run it with `node`. On Windows (core.autocrlf=true) the checkout
+// gets CRLF, and Vitest can't import a module whose `#!` line ends in \r\n (QA of #63).
 //
 // It reads `src/` from the ref itself (`git ls-tree` + `git show`), not from the checkout, so the
 // result is the same whatever branch is checked out. The style lint of US-53 must import
