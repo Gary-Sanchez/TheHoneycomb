@@ -1,0 +1,1215 @@
+{
+  "schemaVersion": 2,
+  "appVersion": "4.0.0",
+  "attendees": [
+    {
+      "id": "att-1",
+      "name": "Elena Rostova",
+      "email": "elena.rostova@example.com",
+      "enrolledActivities": [
+        "Speakeasy",
+        "Music Room",
+        "Writing Hood"
+      ],
+      "joinedDate": "2026-04-05"
+    },
+    {
+      "id": "att-2",
+      "name": "Daisuke Tanaka",
+      "email": "daisuke.t@example.com",
+      "enrolledActivities": [
+        "Reading Club",
+        "Writing Hood"
+      ],
+      "joinedDate": "2026-04-10"
+    },
+    {
+      "id": "att-3",
+      "name": "Amara Okafor",
+      "email": "amara.o@example.com",
+      "enrolledActivities": [
+        "Speakeasy",
+        "Reading Club"
+      ],
+      "joinedDate": "2026-04-12"
+    },
+    {
+      "id": "att-4",
+      "name": "Benjamin Dupont",
+      "email": "b.dupont@example.com",
+      "enrolledActivities": [
+        "Speakeasy",
+        "Music Room"
+      ],
+      "joinedDate": "2026-04-15"
+    },
+    {
+      "id": "att-5",
+      "name": "Hana Kimura",
+      "email": "hana.k@example.com",
+      "enrolledActivities": [
+        "Writing Hood"
+      ],
+      "joinedDate": "2026-04-20"
+    },
+    {
+      "id": "att-6",
+      "name": "Farah Al-Saeed",
+      "email": "farah.as@example.com",
+      "enrolledActivities": [
+        "Reading Club"
+      ],
+      "joinedDate": "2026-04-22"
+    },
+    {
+      "id": "att-7",
+      "name": "Carlos Gomez",
+      "email": "carlos.g@example.com",
+      "enrolledActivities": [
+        "Music Room"
+      ],
+      "joinedDate": "2026-04-25"
+    },
+    {
+      "id": "att-8",
+      "name": "Gabriel Martin",
+      "email": "g.martin@example.com",
+      "enrolledActivities": [
+        "Speakeasy"
+      ],
+      "joinedDate": "2026-05-01"
+    }
+  ],
+  "records": [
+    {
+      "id": "log-1",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-04-08",
+      "status": "present"
+    },
+    {
+      "id": "log-2",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-04-08",
+      "status": "present"
+    },
+    {
+      "id": "log-3",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-04-08",
+      "status": "present"
+    },
+    {
+      "id": "log-4",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-5",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-6",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-7",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-8",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-9",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-10",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-11",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-12",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-04-15",
+      "status": "present"
+    },
+    {
+      "id": "log-13",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-14",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-15",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-16",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-17",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-18",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-19",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-20",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-21",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-22",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-23",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-04-22",
+      "status": "present"
+    },
+    {
+      "id": "log-24",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-25",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-26",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-27",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-28",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-29",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-30",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-31",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-32",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-33",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-34",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-04-29",
+      "status": "present"
+    },
+    {
+      "id": "log-35",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-04-29",
+      "status": "absent"
+    },
+    {
+      "id": "log-36",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-37",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-38",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-39",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-40",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-41",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-42",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-43",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-44",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-45",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-46",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-05-06",
+      "status": "absent"
+    },
+    {
+      "id": "log-47",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-05-06",
+      "status": "absent"
+    },
+    {
+      "id": "log-48",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-05-06",
+      "status": "present"
+    },
+    {
+      "id": "log-49",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-50",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-51",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-52",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-53",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-54",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-55",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-56",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-57",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-58",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-05-13",
+      "status": "absent"
+    },
+    {
+      "id": "log-59",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-05-13",
+      "status": "absent"
+    },
+    {
+      "id": "log-60",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-61",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-05-13",
+      "status": "present"
+    },
+    {
+      "id": "log-62",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-63",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-64",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-65",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-66",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-67",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-68",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-69",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-05-20",
+      "status": "absent"
+    },
+    {
+      "id": "log-70",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-05-20",
+      "status": "absent"
+    },
+    {
+      "id": "log-71",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-05-20",
+      "status": "absent"
+    },
+    {
+      "id": "log-72",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-73",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-74",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-05-20",
+      "status": "present"
+    },
+    {
+      "id": "log-75",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-76",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-77",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-78",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-79",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-80",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-05-27",
+      "status": "absent"
+    },
+    {
+      "id": "log-81",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-05-27",
+      "status": "absent"
+    },
+    {
+      "id": "log-82",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-05-27",
+      "status": "absent"
+    },
+    {
+      "id": "log-83",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-05-27",
+      "status": "absent"
+    },
+    {
+      "id": "log-84",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-85",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-86",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-87",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-05-27",
+      "status": "present"
+    },
+    {
+      "id": "log-88",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-89",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-90",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-91",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-92",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-93",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-06-03",
+      "status": "absent"
+    },
+    {
+      "id": "log-94",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-06-03",
+      "status": "absent"
+    },
+    {
+      "id": "log-95",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-96",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-97",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-98",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-99",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-100",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-06-03",
+      "status": "present"
+    },
+    {
+      "id": "log-101",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-102",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-103",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-104",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-105",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-106",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-107",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-108",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-109",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-110",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-111",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-112",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-113",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-06-10",
+      "status": "present"
+    },
+    {
+      "id": "log-114",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-115",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-116",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-117",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-118",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-119",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-120",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-121",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-122",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-123",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-124",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-125",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-06-17",
+      "status": "present"
+    },
+    {
+      "id": "log-126",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-06-17",
+      "status": "absent"
+    },
+    {
+      "id": "log-127",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Speakeasy",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-128",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Music Room",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-129",
+      "attendeeId": "att-1",
+      "attendeeName": "Elena Rostova",
+      "activity": "Writing Hood",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-130",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Reading Club",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-131",
+      "attendeeId": "att-2",
+      "attendeeName": "Daisuke Tanaka",
+      "activity": "Writing Hood",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-132",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Speakeasy",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-133",
+      "attendeeId": "att-3",
+      "attendeeName": "Amara Okafor",
+      "activity": "Reading Club",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-134",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Speakeasy",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-135",
+      "attendeeId": "att-4",
+      "attendeeName": "Benjamin Dupont",
+      "activity": "Music Room",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-136",
+      "attendeeId": "att-5",
+      "attendeeName": "Hana Kimura",
+      "activity": "Writing Hood",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-137",
+      "attendeeId": "att-6",
+      "attendeeName": "Farah Al-Saeed",
+      "activity": "Reading Club",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-138",
+      "attendeeId": "att-7",
+      "attendeeName": "Carlos Gomez",
+      "activity": "Music Room",
+      "date": "2026-06-24",
+      "status": "present"
+    },
+    {
+      "id": "log-139",
+      "attendeeId": "att-8",
+      "attendeeName": "Gabriel Martin",
+      "activity": "Speakeasy",
+      "date": "2026-06-24",
+      "status": "absent"
+    }
+  ],
+  "notes": {
+    "att-1": "Demo note: great pronunciation in Speakeasy; next goal is leading a Writing Hood prompt."
+  },
+  "imports": [
+    {
+      "hash": "1f30bfc77fc71306994a0a1010590f6786283f5c4f428eba93c3bdf440bf3722",
+      "filename": "speakeasy-2026-06-17.csv",
+      "activity": "Speakeasy",
+      "date": "2026-06-17",
+      "attendeeCount": 3,
+      "attendeeNames": [
+        "Elena Rostova",
+        "Amara Okafor",
+        "Benjamin Dupont"
+      ],
+      "importedAt": "2026-06-17T18:00:00.000Z"
+    }
+  ]
+}

@@ -64,6 +64,17 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   deleted in the preview excluded). `lowdb` is loaded via a lazy
   dynamic `import()` — see the comment in `db.ts` for why (Electron's bundled Node breaks on a
   static ESM-in-CJS `require`).
+- **Data versions & backups (US-50)**: the data file also stores `schemaVersion`
+  (`CURRENT_SCHEMA_VERSION` in `db.ts`, today 2) and `appVersion` (package.json's version, read via
+  a JSON import that esbuild bundles into `dist/server.cjs`). `startServer()` awaits `db.init()`
+  before listening, which opens the DB once (`openDb`): no file → created stamped, no backup; file
+  `schemaVersion` > supported → nothing is written, `[ERROR]` lists the
+  `<data-file-stem>.backup-*.json` to restore, and every db function rejects with `NewerSchemaError`
+  (data routes answer 503); pending `MIGRATIONS` or another `appVersion` → first
+  `fs.copyFile(COPYFILE_EXCL)` to `<stem>.backup-v{previous appVersion|0.0.0}-{local YYYY-MM-DD}[-N].json`
+  next to the file, then migrate + stamp in one write — if the backup fails nothing is migrated or
+  stamped (retried next start). No `schemaVersion` = current schema (just stamped). `resetToSeed`
+  keeps both fields. A new schema change = bump `CURRENT_SCHEMA_VERSION` + append a migration (up only).
 - **Graceful shutdown (US-15)**: `server.ts` exports `shutdown()` (also wired to `SIGTERM`/`SIGINT`):
   stops accepting connections, waits for in-flight requests, then awaits `db.flush()` (pending
   `lowdb` writes tracked in `db.ts`) and force-closes any remaining connections, capped at 5s.

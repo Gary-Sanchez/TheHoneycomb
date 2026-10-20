@@ -203,6 +203,9 @@ for (const runtime of runtimes) {
     test("a keep-alive request mid-write when shutdown starts is persisted and exit follows right after", async () => {
       // Each lowdb write takes 1s, so the save below is still writing when the signal arrives.
       server = await startServer({ US15_SLOW_WRITE_MS: "1000" });
+      // US-50: startup already wrote the fresh data file (and logged its own "write started");
+      // only the save below counts
+      output = "";
       const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
 
       const post = (urlPath: string, body: string, headers: http.OutgoingHttpHeaders = {}) =>

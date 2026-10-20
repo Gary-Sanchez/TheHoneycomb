@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -207,5 +207,153 @@ describe("importParsedData against existing records (US-33)", () => {
     expect(noop.records).toHaveLength(2);
     expect(noop.imports).toHaveLength(1);
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+// US-50: schemaVersion, migrations and the automatic backup, run against a real file (NODE_ENV=test
+// would give lowdb's in-memory adapter) through a fresh module, like the app at startup.
+describe("data file versions at startup (US-50)", () => {
+  type StartOptions = { dbName?: string; failCopy?: boolean; before?: (dir: string) => void };
+
+  async function startWith(content: object | null, opts: StartOptions = {}) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "honeycomb-us50-"));
+    const dbPath = path.join(dir, opts.dbName ?? "honeycomb-data.json");
+    if (content) fs.writeFileSync(dbPath, JSON.stringify(content, null, 2));
+    opts.before?.(dir);
+    process.env.HONEYCOMB_DB_PATH = dbPath;
+    const nodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    vi.resetModules();
+    const errors: string[] = [];
+    const logs: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation((...args) => { errors.push(args.join(" ")); });
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => { logs.push(args.join(" ")); });
+    const copySpy = opts.failCopy
+      ? vi.spyOn(fs.promises, "copyFile").mockRejectedValue(Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }))
+      : null;
+    const db = await import("./db");
+    const ok = await db.init();
+    copySpy?.mockRestore();
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+    return {
+      db, ok, dir, dbPath, errors, logs,
+      backups: () => fs.readdirSync(dir).filter(f => f.includes(".backup-")).sort(),
+      raw: () => fs.readFileSync(dbPath, "utf-8"),
+      read: () => JSON.parse(fs.readFileSync(dbPath, "utf-8")),
+      cleanup: () => {
+        process.env.NODE_ENV = nodeEnv;
+        fs.rmSync(dir, { recursive: true, force: true });
+      },
+    };
+  }
+
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const attendee = { id: "att-1", name: "Ana Lopez", enrolledActivities: ["Speakeasy"], joinedDate: "2026-06-10" };
+  const legacyData = { attendees: [attendee], records: [], notes: { "att-1": "Keep practicing" }, imports: [] };
+  const { version: appVersion } = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
+
+  it("creates a fresh file with the current versions and makes no backup", async () => {
+    const t = await startWith(null);
+    expect(t.ok).toBe(true);
+    expect(t.db.APP_VERSION).toBe(appVersion);
+    expect(t.read()).toMatchObject({ schemaVersion: t.db.CURRENT_SCHEMA_VERSION, appVersion, attendees: [] });
+    expect(t.backups()).toEqual([]);
+    t.cleanup();
+  });
+
+  it("treats a file without schemaVersion as the current schema: stamped, data intact, no backup (QA-01)", async () => {
+    const t = await startWith({ ...legacyData, appVersion });
+    expect(t.ok).toBe(true);
+    expect(t.read()).toEqual({ ...legacyData, appVersion, schemaVersion: 2 });
+    expect(t.backups()).toEqual([]);
+    t.cleanup();
+  });
+
+  it("backs up a file from before US-49/US-50 (no versions at all) as v0.0.0, then stamps it", async () => {
+    const t = await startWith(legacyData);
+    const name = `honeycomb-data.backup-v0.0.0-${today}.json`;
+    expect(t.backups()).toEqual([name]);
+    expect(JSON.parse(fs.readFileSync(path.join(t.dir, name), "utf-8"))).toEqual(legacyData);
+    expect(t.read()).toEqual({ ...legacyData, schemaVersion: 2, appVersion });
+    t.cleanup();
+  });
+
+  it("backs up the original file, then migrates a schema 1 file without imports (QA-02)", async () => {
+    const v1 = { schemaVersion: 1, appVersion, attendees: [attendee], records: [], notes: {} };
+    const t = await startWith(v1);
+    const name = `honeycomb-data.backup-v${appVersion}-${today}.json`;
+    expect(t.backups()).toEqual([name]);
+    expect(fs.readFileSync(path.join(t.dir, name), "utf-8")).toBe(JSON.stringify(v1, null, 2));
+    expect(t.read()).toEqual({ ...v1, schemaVersion: 2, imports: [] });
+    const log = t.logs.join("\n");
+    expect(log).toContain("[Status] Backed up");
+    expect(log).toContain("[Status] Migrated");
+    expect(log.indexOf("Backed up")).toBeLessThan(log.indexOf("Migrated"));
+    t.cleanup();
+  });
+
+  it("names the backup after the previous app version when only the app version changed", async () => {
+    const t = await startWith({ ...legacyData, schemaVersion: 2, appVersion: "3.0.0" });
+    expect(t.backups()).toEqual([`honeycomb-data.backup-v3.0.0-${today}.json`]);
+    expect(t.read()).toEqual({ ...legacyData, schemaVersion: 2, appVersion });
+    t.cleanup();
+  });
+
+  it("adds -2 when that backup name is taken, and follows the data file's own name", async () => {
+    const t = await startWith({ ...legacyData, schemaVersion: 2, appVersion: "3.0.0" }, {
+      dbName: "data.json",
+      before: dir => fs.writeFileSync(path.join(dir, `data.backup-v3.0.0-${today}.json`), "earlier backup"),
+    });
+    expect(t.backups()).toEqual([`data.backup-v3.0.0-${today}-2.json`, `data.backup-v3.0.0-${today}.json`]);
+    expect(fs.readFileSync(path.join(t.dir, `data.backup-v3.0.0-${today}.json`), "utf-8")).toBe("earlier backup");
+    t.cleanup();
+  });
+
+  it("applies no migration and leaves the file untouched when the backup fails (QA-03)", async () => {
+    const v1 = { schemaVersion: 1, appVersion: "3.0.0", attendees: [attendee], records: [], notes: {} };
+    const t = await startWith(v1, { failCopy: true });
+    expect(t.raw()).toBe(JSON.stringify(v1, null, 2));
+    expect(t.backups()).toEqual([]);
+    expect(t.errors.join("\n")).toMatch(/\[ERROR\] Could not back up .*honeycomb-data\.json.*EACCES.*No migration was applied/s);
+    // The app keeps running with the data as it is
+    expect(t.ok).toBe(true);
+    expect((await t.db.getState()).attendees).toEqual([attendee]);
+    t.cleanup();
+  });
+
+  it("never touches a file from a newer app and points to the backups to restore (QA-04)", async () => {
+    const newer = { ...legacyData, schemaVersion: 99, appVersion: "9.0.0" };
+    const backup = "honeycomb-data.backup-v4.0.0-2026-10-01.json";
+    const t = await startWith(newer, { before: dir => fs.writeFileSync(path.join(dir, backup), "{}") });
+    const original = JSON.stringify(newer, null, 2);
+    expect(t.ok).toBe(false);
+    expect(t.raw()).toBe(original);
+    const error = t.errors.join("\n");
+    expect(error).toContain("[ERROR]");
+    expect(error).toContain("schema version 99");
+    expect(error).toContain(`supports up to schema version ${t.db.CURRENT_SCHEMA_VERSION}`);
+    expect(error).toContain("replace the data file with the backup");
+    expect(error).toContain(path.join(t.dir, backup));
+
+    // Locked: reads and writes reject, and the file stays byte-identical
+    await expect(t.db.getState()).rejects.toBeInstanceOf(t.db.NewerSchemaError);
+    await expect(t.db.addAttendee(attendee)).rejects.toBeInstanceOf(t.db.NewerSchemaError);
+    await expect(t.db.resetToSeed()).rejects.toBeInstanceOf(t.db.NewerSchemaError);
+    await t.db.flush();
+    expect(t.raw()).toBe(original);
+    expect(await t.db.unavailableReason()).toBeInstanceOf(t.db.NewerSchemaError);
+    t.cleanup();
+  });
+
+  it("keeps schemaVersion and appVersion through a reset to the demo seed", async () => {
+    const t = await startWith(null);
+    const reset = await t.db.resetToSeed();
+    expect(reset).toMatchObject({ schemaVersion: 2, appVersion });
+    expect(reset.attendees.length).toBeGreaterThan(0);
+    await t.db.flush();
+    expect(t.read()).toMatchObject({ schemaVersion: 2, appVersion });
+    t.cleanup();
   });
 });

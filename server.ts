@@ -240,6 +240,23 @@ app.post("/api/auth/setup", (req, res): any => {
 // replacing what used to be read/written directly to the browser's localStorage.
 // Reads are public; every mutation requires an admin session (US-11) and a body that passes its
 // validation.ts schema (US-10) — an invalid payload gets a 400 before anything reaches db.ts.
+// US-50: when the data file can't be used (e.g. it was written by a newer app — see db.ts openDb),
+// every route that touches it answers 503 with what happened instead of an unhandled rejection
+// (Express 4 doesn't catch async errors). Runs before requireAdmin and multer, so nothing is read.
+app.use(
+  ["/api/data", "/api/attendees", "/api/records", "/api/notes", "/api/reset", "/api/parse-attendance-file", "/api/parse-attendance-batch"],
+  async (req, res, next): Promise<any> => {
+    const reason = await db.unavailableReason();
+    if (!reason) return next();
+    res.status(503).json({
+      error:
+        reason instanceof db.NewerSchemaError
+          ? "The Honeycomb can't open its data: the file was saved by a newer version of the app, so it was left untouched. Install that version again or restore a backup (see the server log)."
+          : "The Honeycomb can't open its data file. Restart The Honeycomb; if it keeps happening, check the server log.",
+    });
+  }
+);
+
 app.get("/api/data", async (req, res) => {
   res.json(await db.getState());
 });
@@ -579,6 +596,9 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 // Serve Vite-generated assets and app
 export async function startServer() {
   scrubLegacyGeminiKey();
+  // US-50: back up and migrate the data file (or refuse one from a newer app) before serving
+  // anything. Never throws — a failure is logged and the data routes answer 503.
+  await db.init();
   const isProduction = process.env.NODE_ENV === "production";
 
   if (isProduction) {

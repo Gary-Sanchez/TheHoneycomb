@@ -36,7 +36,11 @@ export default function App() {
 
   const loadData = () =>
     fetch("/api/data")
-      .then(res => res.json())
+      .then(res => {
+        // US-50: e.g. a 503 when the data file is from a newer app — keep the empty state, don't crash
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(applyServerState)
       .catch(err => console.error("Failed to load data from server:", err));
 
