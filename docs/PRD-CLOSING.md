@@ -23,6 +23,7 @@ anotado en git, un GitHub Release con sus notas y el instalador de Windows.
      --package-lock-only` o a mano);
    - `docs/releases/vX.Y.0.md` con las notas: link al PRD (`https://github.com/Gary-Sanchez/TheHoneycomb/blob/vX.Y.0/docs/<archivo>`,
      espacios como `%20`) y la tabla de US con título y PR (ver `docs/releases/v4.0.0.md`);
+   - paquete de regresión: base fija, capturas y checklist (ver [Paquete de regresión](#paquete-de-regresión-us-50));
    - PR, CI verde, merge.
 3. **Tag anotado sobre el merge de ese PR** (el commit de `main` que trae la versión nueva):
 
@@ -60,7 +61,8 @@ El PRD 4.1 (§2.0) congela el 4.0 con dos US: US-49 (versión, tag, Release) y U
 fija, capturas de referencia, backup). Por decisión del product owner, `v4.0.0` va sobre el
 **merge de US-50**, no sobre el de US-49: US-50 es la última US del snapshot y ya hereda
 `"version": "4.0.0"` de US-49, así que ese merge cumple la regla (el tag apunta a un commit con la
-versión) y además incluye todo el snapshot. No hay commit de cierre aparte.
+versión) y además incluye todo el snapshot, paquete de regresión incluido (`e2e/fixtures/v4.0.0.json`,
+`e2e/snapshots/v4.0.0/` y el checklist de `docs/releases/v4.0.0.md`). No hay commit de cierre aparte.
 
 ## Tags retroactivos (PRD 2.0 y 3.0)
 
@@ -106,5 +108,42 @@ El instalador de la prueba lleva la versión de `package.json`, no la del tag.
 
 ## Paquete de regresión (US-50)
 
-_Pendiente: US-50 agrega acá el paso de base de prueba fija, capturas y checklist de regresión del
-Release._
+Cada versión `vX.Y.0` deja en el repo, congelados, una base de prueba fija, las capturas de
+referencia de las 6 pestañas y un checklist de regresión en su Release. Van en el **PR de cierre**
+(paso 2 del procedimiento; en el 4.0, en el PR de US-50):
+
+1. **Base de prueba fija:** `npx tsx e2e/fixtures/build-fixture.ts X.Y.0` → `e2e/fixtures/vX.Y.0.json`
+   (seed demo de `src/mockData.ts` + una nota y un fingerprint demo; determinista, sin nombres reales).
+   Si el PRD cambió el esquema de datos, el script ya sale con el `schemaVersion` nuevo.
+2. **Capturas:** `npm run build && npx playwright test e2e/visual.spec.ts --update-snapshots`
+   (actualiza `e2e/snapshots/current/`, que `e2e/visual.spec.ts` compara usando la base del paso 1),
+   revisar las imágenes y correr `npm run test:e2e` dos veces para confirmar que son estables.
+3. **Congelar:** copiar `e2e/snapshots/current/*` a `e2e/snapshots/vX.Y.0/`.
+4. **Checklist:** sección `## Checklist de regresión` en `docs/releases/vX.Y.0.md` con los QA Checks
+   de las US del PRD, agrupados por US con su título (ver `docs/releases/v4.0.0.md`). Como esas
+   notas son el cuerpo del Release, el checklist queda en el Release.
+
+Durante el PRD siguiente, el ticket que cambie la interfaz a propósito actualiza
+`e2e/snapshots/current/` con `--update-snapshots` y adjunta en su PR el diff de las capturas
+(`test-results/**/*-diff.png` de la corrida que falló). Las carpetas `vX.Y.0/` y los
+`e2e/fixtures/vX.Y.0.json` de versiones cerradas no se regeneran nunca. Las capturas son de Windows
+(`*-win32.png`, la plataforma del instalador). Detalle en `e2e/README.md` y `e2e/snapshots/README.md`.
+
+## Datos entre versiones (US-50)
+
+- `honeycomb-data.json` guarda `schemaVersion` (forma del archivo; hoy `2`, `CURRENT_SCHEMA_VERSION`
+  en `db.ts`) y `appVersion` (la versión de la app que lo escribió). Un archivo sin `schemaVersion`
+  se trata como del esquema actual. Si un PRD cambia la forma de los datos: subir
+  `CURRENT_SCHEMA_VERSION` y agregar la migración a `MIGRATIONS` en `db.ts` (solo hacia arriba).
+- **Backup automático:** al arrancar, si hay migraciones pendientes o cambió la versión de la app,
+  antes de tocar nada se copia el archivo a `honeycomb-data.backup-v{versión anterior}-{AAAA-MM-DD}.json`
+  en la misma carpeta (`-2`, `-3`… si ya existe; `v0.0.0` si el archivo es de antes de US-49). En la
+  app instalada esa carpeta es `%APPDATA%\The Honeycomb\`. Si el backup falla no se migra, el
+  archivo queda igual y el error sale en el log; se reintenta en el próximo arranque.
+- **Rollback manual** (no hay botón): cerrar la app, instalar el Release anterior y reemplazar
+  `honeycomb-data.json` por el backup `honeycomb-data.backup-v{esa versión}-….json` (renombrarlo).
+  Lo cargado después del upgrade no está en ese backup.
+- **Error "uses data schema version N, but this version … only supports up to …":** el archivo lo
+  escribió una versión más nueva (típico tras instalar un Release anterior sin restaurar el
+  backup). La app no lo modifica y no muestra datos; el log lista los backups encontrados. Volver a
+  instalar la versión nueva o restaurar el backup como arriba.

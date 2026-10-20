@@ -1,0 +1,9 @@
+/* US-50: applied by e2e/visual.spec.ts only while taking screenshots (toHaveScreenshot stylePath).
+   Without it a tall tab shows a scrollbar that eats 16px, so tabs would come out 1424 or 1440 px
+   wide depending on their height. */
+html {
+  scrollbar-width: none;
+}
+::-webkit-scrollbar {
+  display: none;
+}
