@@ -164,3 +164,45 @@ revisaron después del cierre de US-13 (2026-09-30): `http-cache-semantics` el 2
 que corre en cada PR y push a `main`, y además a diario sobre `main` (`schedule`, 11:00 UTC; en esa
 corrida se saltea `lint-and-build`). Si el job programado falla sin cambios en el código, es un
 advisory nuevo: seguir este documento.
+
+## 6. Regresión de 2026-10-20 (US-69): `vite` / `launch-editor`
+
+Relevado el 2026-10-20 sobre `main` @ `26b4243` (Node 26.8.1 / npm 11.19.0): `npm audit` volvió a
+reportar **1 vulnerabilidad alta** en `vite` 6.4.3. Tampoco la introdujo un cambio del repo: son
+tres advisories de `launch-editor`, que `vite` trae embebido en su bundle, revisados por GitHub ese
+mismo día. Se detectaron porque el job `audit` falló en el PR #63 (US-51).
+
+| Advisory | Severidad | Problema | Versión corregida |
+|---|---|---|---|
+| [GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv) | moderada | `escapeCmdArgs()` no escapa `%` en Windows | `launch-editor` 2.14.2 / `vite` 6.4.4 |
+| [GHSA-r825-w8mm-5pxw](https://github.com/advisories/GHSA-r825-w8mm-5pxw) | moderada | Un flag de la CLI del editor se interpreta mal y permite ejecutar comandos con algunos editores | `launch-editor` 2.14.2 / `vite` 6.4.4 |
+| [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm) | alta | En Windows se puede saltear el chequeo de existencia con `fs.existsSync()` | `launch-editor` 2.14.2 / `vite` 6.4.4 |
+
+**Alcance real:** `launch-editor` solo lo usa el middleware `/__open-in-editor` del servidor de
+desarrollo de Vite. `server.ts` monta ese servidor únicamente fuera de producción (`npm run dev`,
+que escucha en `127.0.0.1` salvo `HONEYCOMB_ALLOW_LAN=true`). La app de escritorio fija
+`NODE_ENV=production` (`electron/main.js`) y sirve `dist/` estático, así que el instalador no
+expone ese middleware.
+
+### 6.1 Corrección
+
+`npm audit fix` (sin `--force`) sube `vite` **6.4.3 → 6.4.4** dentro del rango ya declarado; es la
+única entrada del lockfile que cambia (una sola copia, deduplicada para `@vitejs/plugin-react`,
+`@tailwindcss/vite` y `vitest`). Además el rango en `package.json` pasa de `^6.2.3` a **`^6.4.4`**,
+para que un `npm install` sin lockfile no pueda resolver una versión vulnerable.
+
+- `vite` sigue **solo** en `dependencies`, sin entrada en `devDependencies` (ver §2).
+- Sin cambio de versión mayor (7.x / 8.x quedan fuera de alcance).
+- Los `overrides` de §5.2 y el origen de `xlsx` (§3) no cambian.
+- Sin install scripts nuevos (`npm install-scripts ls` → nada pendiente).
+
+### 6.2 Estado final
+
+```
+$ npm ci && npm audit
+found 0 vulnerabilities
+```
+
+Verificado después del cambio: `npm ls vite` (una sola versión, 6.4.4), `npm run lint`,
+`npm test`, `npm run build`, `npm run dev` con HMR, `npm run test:e2e` (incluye las capturas
+visuales) y `npm run electron:build` + arranque del ejecutable empaquetado.
