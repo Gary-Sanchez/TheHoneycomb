@@ -123,7 +123,12 @@ referencia de las 6 pestañas y un checklist de regresión en su Release. Van en
    1440×900 y falla con `the window must be 1440×900 CSS px at devicePixelRatio 1` si la pantalla
    no lo permite (por ejemplo, una pantalla de menos de 900 px de alto).
 3. **Congelar:** copiar `e2e/snapshots/current/*` a `e2e/snapshots/vX.Y.0/`.
-4. **Checklist:** sección `## Checklist de regresión` en `docs/releases/vX.Y.0.md` con los QA Checks
+4. **Línea base de la auditoría (US-51):** repetir la medición de
+   [`docs/SNAPSHOT-4.0.md`](SNAPSHOT-4.0.md#cómo-repetir-la-medición) sobre el tag nuevo (conteos
+   de código, métricas por pestaña a 1440/768/375 px, contraste y lint/test/e2e) y comparar con
+   las tablas del 4.0. Las capturas a 768/375 px y de los modales Progress Report y Outcome Report
+   van en `e2e/snapshots/current/` junto a las de 1440 y se congelan en el paso 3 igual que ellas.
+5. **Checklist:** sección `## Checklist de regresión` en `docs/releases/vX.Y.0.md` con los QA Checks
    de las US del PRD, agrupados por US con su título (ver `docs/releases/v4.0.0.md`). Como esas
    notas son el cuerpo del Release, el checklist queda en el Release.
 

@@ -1,111 +1,113 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { _electron as electron, test, expect } from "@playwright/test";
-import type { ElectronApplication, Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { launchVisualApp, SIZES, TABS, VISUAL_CSS } from "./fixtures/visual-app";
+import type { VisualApp } from "./fixtures/visual-app";
 
 // US-50: visual regression of the 6 main tabs. Each tab is loaded with the fixed regression
 // database of this version (e2e/fixtures/vX.Y.0.json, built by e2e/fixtures/build-fixture.ts)
 // and compared pixel by pixel against e2e/snapshots/current/ (see e2e/snapshots/README.md).
+// US-51 adds the 6 tabs at 768 and 375 px and the Progress Report / Outcome Report modals open
+// at 1440, 768 and 375 px (same fixture, same app instance).
 // Update the references on purpose with:
 //   npx playwright test e2e/visual.spec.ts --update-snapshots
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..");
 const PORT = "3105";
-// Test-only admin password for the isolated temp data dir (never a real credential).
-const TEST_ADMIN_PASSWORD = "e2e-visual-password";
-const WIDTH = 1440;
-const HEIGHT = 900;
+const [DESKTOP, ...NARROW] = SIZES;
 
-const { version } = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf-8"));
-const [major, minor] = version.split(".");
-const FIXTURE = path.join(__dirname, "fixtures", `v${major}.${minor}.0.json`);
-
-const TABS = [
-  { name: "Dashboard", slug: "dashboard" },
-  { name: "Manual Check-In", slug: "manual-check-in" },
-  { name: "Caserits & Progress", slug: "caserits-progress" },
-  { name: "Overlap Cross-Referencer", slug: "overlap-cross-referencer" },
-  { name: "Import Forage Logs", slug: "import-forage-logs" },
-  { name: "Settings", slug: "settings" },
-];
+const SCREENSHOT_OPTIONS = {
+  animations: "disabled" as const,
+  caret: "hide" as const,
+  stylePath: VISUAL_CSS,
+  timeout: 15_000,
+};
 
 test.describe("visual regression of the main tabs (US-50)", () => {
-
-  let electronApp: ElectronApplication;
+  let app: VisualApp;
   let page: Page;
-  let tmpDir: string;
 
   test.beforeAll(async () => {
-    // Never point the app at the repo fixture: lowdb writes the file it opens.
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "honeycomb-e2e-visual-"));
-    const dbPath = path.join(tmpDir, "honeycomb-data.json");
-    fs.copyFileSync(FIXTURE, dbPath);
-
-    electronApp = await electron.launch({
-      // Render at DPR 1 whatever the Windows display scaling (100 %, 125 %, 150 %…), so every
-      // machine produces the same pixels and the 1440×900 window fits on a 1080p screen.
-      args: ["--force-device-scale-factor=1", path.join(ROOT, "electron", "main.js")],
-      env: {
-        ...process.env,
-        PORT,
-        HONEYCOMB_DB_PATH: dbPath,
-        HONEYCOMB_CONFIG_PATH: path.join(tmpDir, "honeycomb-config.json"),
-        HONEYCOMB_ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
-      },
-    });
-    page = await electronApp.firstWindow();
-    await expect(page.getByRole("heading", { name: "The Honeycomb" })).toBeVisible();
-
-    // A fixed content size, so the references don't depend on the screen or the window frame.
-    await electronApp.evaluate(
-      ({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size.width, size.height),
-      { width: WIDTH, height: HEIGHT }
-    );
-    // Fail with a clear message (not a pixel diff) if the screen couldn't give us that size/scale.
-    // The height matters too: a tab shorter than the viewport (Settings) is captured at the
-    // viewport's height (the app root is min-h-screen), so it must be exactly HEIGHT everywhere.
-    await expect
-      .poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight, window.devicePixelRatio]), {
-        message: `the window must be ${WIDTH}×${HEIGHT} CSS px at devicePixelRatio 1`,
-      })
-      .toEqual([WIDTH, HEIGHT, 1]);
-
-    // Admin session, so every tab shows its edit controls (not the read-only notice)
-    const status = await page.evaluate(async password => {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      return res.status;
-    }, TEST_ADMIN_PASSWORD);
-    expect(status).toBe(200);
-    await page.reload();
-    await expect(page.locator("#auth-badge")).toHaveText("Admin");
+    app = await launchVisualApp({ port: PORT, ...DESKTOP });
+    page = app.page;
   });
 
   test.afterAll(async () => {
-    await electronApp?.close();
-    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    await app?.close();
   });
 
+  // US-50 references (1440×900): `<slug>-win32.png`
   for (const tab of TABS) {
     test(`${tab.name} matches its reference screenshot`, async () => {
-      await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: tab.name }).click();
-      await expect(page.getByRole("status").filter({ hasText: "Loading The Honeycomb" })).toHaveCount(0);
-      await page.evaluate(() => document.fonts.ready.then(() => undefined));
+      await app.setSize(DESKTOP.width, DESKTOP.height);
+      await app.openTab(tab.name);
       // Leave the mouse out of the page, so no hover state ends up in the screenshot
       await page.mouse.move(0, 0);
-      await expect(page).toHaveScreenshot(`${tab.slug}.png`, {
-        fullPage: true,
-        animations: "disabled",
-        caret: "hide",
-        stylePath: path.join(__dirname, "visual.css"),
-        timeout: 15_000,
+      await expect(page).toHaveScreenshot(`${tab.slug}.png`, { fullPage: true, ...SCREENSHOT_OPTIONS });
+    });
+  }
+
+  // US-51 references (768×1024 and 375×812): `<slug>-<width>-win32.png`
+  for (const size of NARROW) {
+    for (const tab of TABS) {
+      test(`${tab.name} at ${size.width} px matches its reference screenshot`, async () => {
+        await app.setSize(size.width, size.height);
+        await app.openTab(tab.name);
+        await page.mouse.move(0, 0);
+        await expect(page).toHaveScreenshot(`${tab.slug}-${size.width}.png`, { fullPage: true, ...SCREENSHOT_OPTIONS });
       });
+    }
+  }
+
+  // US-51: the two report modals open, viewport only (they are fixed overlays):
+  // `progress-report-<width>-win32.png`, `outcome-report-<width>-win32.png`
+  for (const size of SIZES) {
+    test(`Progress Report at ${size.width} px matches its reference screenshot`, async () => {
+      await app.setSize(size.width, size.height);
+      await app.openTab("Caserits & Progress");
+      await page.getByRole("row").filter({ hasText: "Elena Rostova" }).getByRole("button", { name: "Progress Report" }).click();
+      const modal = page.locator("#progress-report-modal");
+      await expect(modal).toBeVisible();
+      await waitForChartBars(page, "#progress-report-modal");
+      await page.mouse.move(0, 0);
+      await expect(page).toHaveScreenshot(`progress-report-${size.width}.png`, { fullPage: false, ...SCREENSHOT_OPTIONS });
+      await page.getByRole("button", { name: "Close progress report" }).click();
+      await expect(modal).toHaveCount(0);
+    });
+
+    test(`Outcome Report at ${size.width} px matches its reference screenshot`, async () => {
+      await app.setSize(size.width, size.height);
+      await app.openTab("Dashboard");
+      await page.locator("#generate-outcome-report").click();
+      const modal = page.locator("#outcome-report-modal");
+      await expect(modal).toBeVisible();
+      await page.mouse.move(0, 0);
+      await expect(page).toHaveScreenshot(`outcome-report-${size.width}.png`, { fullPage: false, ...SCREENSHOT_OPTIONS });
+      // In 4.0 the sticky header/nav paint over the top of this modal (docs/SNAPSHOT-4.0.md) and
+      // intercept a real click on the close button at some sizes, so the click is dispatched.
+      await page.getByRole("button", { name: "Close Outcome Report" }).dispatchEvent("click");
+      await expect(modal).toHaveCount(0);
     });
   }
 });
+
+/**
+ * The Progress Report chart (recharts <Bar>) animates its bars in with JS, which
+ * `animations: "disabled"` doesn't stop: wait until every bar keeps the same size for a while.
+ */
+async function waitForChartBars(page: Page, root: string) {
+  let previous = "";
+  let stableFor = 0;
+  await expect
+    .poll(
+      async () => {
+        const current = await page.evaluate(sel => {
+          const bars = [...document.querySelectorAll(`${sel} .recharts-bar-rectangle path, ${sel} .recharts-bar-rectangle rect`)];
+          return JSON.stringify(bars.map(b => b.getAttribute("d") ?? `${b.getAttribute("height")}`));
+        }, root);
+        stableFor = current === previous && current !== "[]" ? stableFor + 1 : 0;
+        previous = current;
+        return stableFor;
+      },
+      { message: "the Progress Report chart bars must stop animating", intervals: [250], timeout: 10_000 }
+    )
+    .toBeGreaterThanOrEqual(3);
+}
