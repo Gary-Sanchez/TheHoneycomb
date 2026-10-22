@@ -371,7 +371,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           
           <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 bg-natural-forest rounded-xl flex items-center justify-center text-natural-wheat shadow-md font-serif font-bold italic text-lg" aria-hidden="true">
+            <div className="h-10 w-10 bg-natural-forest rounded-xl flex items-center justify-center text-natural-wheat shadow-md font-serif italic text-lg" aria-hidden="true">
               H
             </div>
             <div>

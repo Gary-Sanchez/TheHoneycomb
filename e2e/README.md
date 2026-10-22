@@ -21,8 +21,9 @@ build (see `playwright.config.ts` and `npm run test:e2e`).
     e2e/visual.spec.ts --update-snapshots`, review the images, and attach the diff to the PR. See
     `snapshots/README.md` for `current/` vs the frozen `vX.Y.0/` folders.
   - Baselines are Windows-only (`*-win32.png`); on another OS the spec has no reference to compare to.
-  - Fonts (Inter, Playfair Display, JetBrains Mono) still load from Google Fonts until US-55, so the
-    run needs network access; offline, fallback fonts would make the tabs differ from the references.
+  - Fonts (Inter, Playfair Display, JetBrains Mono) are bundled with the app since US-55, so the run
+    no longer needs network access. Checkouts of tags before US-55 (e.g. `v4.0.0`) still load them
+    from Google Fonts and need network.
   - US-51 adds, in the same spec and app instance, the 6 tabs at 768×1024 and 375×812
     (`<slug>-768-win32.png`, `<slug>-375-win32.png`, full page) and the Progress Report / Outcome
     Report modals open at 1440, 768 and 375 (`progress-report-<width>-win32.png`,

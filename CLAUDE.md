@@ -133,6 +133,9 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
 - **Content-Security-Policy (US-14)**: the strict production CSP lives in `index.html`; in dev,
   `cspDevServerPlugin` (`vite.config.ts`) swaps in a relaxed one (inline script for React Fast
   Refresh, HMR websocket). Any new external origin (CDN, fonts, images) must be added to **both**.
+  Fonts are self-hosted (US-55): `@font-face` rules in `src/index.css` point at the woff2 files of
+  `@fontsource-variable/{inter,playfair-display,jetbrains-mono}` (in `dependencies`), so both CSPs
+  keep `font-src 'self' data:` with no Google origins (`src/fonts.test.ts` checks it).
   Dev HMR is only allowed via `localhost` / `127.0.0.1` — with `HONEYCOMB_ALLOW_LAN=true` and a LAN
   IP the page loads but HMR is CSP-blocked (reload manually). Electron's `webPreferences`
   (`contextIsolation`, `nodeIntegration: false`, `sandbox`) are set explicitly in `electron/main.js`.
