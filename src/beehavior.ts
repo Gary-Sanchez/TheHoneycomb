@@ -1,13 +1,18 @@
 import { Attendee, AttendanceRecord, ACTIVITIES } from "./types";
+import { MONTH_ABBR } from "./format";
 
 // US-24: Caserits Bee-havior Hub maths. Pure on purpose (no React) so it can be unit-tested.
 
+// US-58: which tier this is, as the `--color-tier-*` token suffix. TierBadge maps it to its token
+// classes and Lucide icon (the old emoji icon is gone).
+export type HiveTierKey = "busy-bee" | "forager" | "hatcher" | "dormant" | "no-data";
+
 export interface HiveTier {
+  key: HiveTierKey;
   label: string;
   color: string;
   bgLight: string;
   textColor: string;
-  icon: string;
   meaning: string;
 }
 
@@ -39,40 +44,40 @@ const percent = (presents: number, total: number) => Math.round((presents / tota
 export function getHiveTier(rate: number): HiveTier {
   if (rate >= 76) {
     return {
+      key: "busy-bee",
       label: "Busy Bee",
       color: "#D4AF37", // Metallic/Golden Yellow for contrast
       bgLight: "#FFFDF0", // Light Bright Golden Yellow tint
       textColor: "#7A5E00",
-      icon: "🐝",
       meaning: "Queen's favorite. Elite attendance and top-tier dedication.",
     };
   }
   if (rate >= 51) {
     return {
+      key: "forager",
       label: "Forager",
       color: "#E68A00", // Rich Warm Orange for contrast
       bgLight: "#FFF7E6", // Light warm orange tint
       textColor: "#804C00",
-      icon: "🌸",
       meaning: "Honey maker. Solid presence, regularly contributing to the buzz.",
     };
   }
   if (rate >= 26) {
     return {
+      key: "hatcher",
       label: "Hatcher",
       color: "#B89F30", // Darker gold/amber to ensure contrast on off-white or yellow backgrounds
       bgLight: "#FEFBEA", // Light Pale Amber tint
       textColor: "#6B5800",
-      icon: "🥚",
       meaning: "Getting cozy. Halfway to becoming a regular flyer.",
     };
   }
   return {
+    key: "dormant",
     label: "Dormant",
     color: "#2F4F4F", // Charcoal
     bgLight: "#E6ECEC", // Light charcoal tint
     textColor: "#2F4F4F",
-    icon: "💤",
     meaning: "Hibernating. Rare sightings. Still getting to know the honeycomb.",
   };
 }
@@ -81,11 +86,11 @@ export function getHiveTier(rate: number): HiveTier {
 // events) is not the same as attending none of them — grey, no tier color, no icon. textColor is
 // darker than `color` so the label keeps ≥ 4.5:1 on bgLight (US-42).
 export const NO_DATA_TIER: HiveTier = {
+  key: "no-data",
   label: "No data",
   color: "#6B7280",
   bgLight: "#F3F4F6",
   textColor: "#4B5563",
-  icon: "",
   meaning: "No events to rate this colleague on yet.",
 };
 
@@ -161,14 +166,12 @@ export function resolvePeriod(filter: PeriodFilter): DatePeriod | null {
     : null;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 // "Jun 1 – Jun 30, 2026" (the year goes on both ends when the range spans two years).
 // Parsed by hand from the ISO string so the user's timezone can't shift the day.
 export function formatPeriodLabel(period: DatePeriod): string {
   const part = (iso: string) => {
     const [y, m, d] = iso.split("-").map(Number);
-    return { y, text: `${MONTHS[m - 1]} ${d}` };
+    return { y, text: `${MONTH_ABBR[m - 1]} ${d}` };
   };
   const s = part(period.start);
   const e = part(period.end);
@@ -261,7 +264,7 @@ export function getMonthlyRates(attendee: Attendee, records: AttendanceRecord[])
 
   return rated.map(({ month, rate }) => {
     const [y, m] = month.split("-");
-    const name = MONTHS[Number(m) - 1];
+    const name = MONTH_ABBR[Number(m) - 1];
     return { month, label: multiYear ? `${name} ${y}` : name, rate };
   });
 }

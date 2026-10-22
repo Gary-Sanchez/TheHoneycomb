@@ -164,17 +164,19 @@
   --color-tier-no-data-bg: #F3F4F6;
   --color-tier-no-data-border: #6B7280;
 
-  /* Activities: fill = today's chart colors (DashboardStats); -text = variant readable as text */
-  --color-activity-speakeasy: var(--color-sage);
-  --color-activity-speakeasy-text: var(--color-sage-text);
-  --color-activity-reading-club: var(--color-forest);
+  /* Activities (US-58): fills ≥ 3:1 on surface and distinguishable under deuteranopia (separated by
+     lightness and the blue–yellow axis, checked in src/designTokens.test.ts); -text = variant readable
+     as text. Always paired with the activity's icon (src/activityTheme.ts). */
+  --color-activity-speakeasy: #4A7A3C;
+  --color-activity-speakeasy-text: var(--color-activity-speakeasy);
+  --color-activity-reading-club: #2D3E35;
   --color-activity-reading-club-text: var(--color-forest);
-  --color-activity-music-room: var(--color-sand);
+  --color-activity-music-room: #C68030;
   --color-activity-music-room-text: var(--color-sand-text);
-  --color-activity-writing-hood: var(--color-moss);
-  --color-activity-writing-hood-text: #556B2F;
+  --color-activity-writing-hood: #7A5C9E;
+  --color-activity-writing-hood-text: var(--color-activity-writing-hood);
 
-  /* Charts (recharts reads them as CSS variables once the panels migrate) */
+  /* Charts: recharts reads them through src/chartTheme.ts (US-58) */
   --color-chart-1: var(--color-activity-speakeasy);
   --color-chart-2: var(--color-activity-reading-club);
   --color-chart-3: var(--color-activity-music-room);

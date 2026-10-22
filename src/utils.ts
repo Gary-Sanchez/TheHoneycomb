@@ -1,4 +1,5 @@
 import { isBlacklistedName } from "./blacklist";
+import { formatDate } from "./format";
 
 // System reference date (see CLAUDE.md) — dashboards, default session dates and new colleagues'
 // joinedDate key off this, never the real current date.
@@ -90,18 +91,9 @@ export function sortByName<T extends { name: string }>(items: readonly T[]): T[]
 export const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`;
 
-const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-// US-46: the one on-screen date format, "Jun 24, 2026". Takes an ISO date (YYYY-MM-DD, extra time
-// part ignored) and parses it by hand so the user's timezone can't shift the day. Generated files
-// and file names keep ISO. Anything unparseable is returned as is.
-export function formatDisplayDate(iso: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!match) return iso;
-  const [, y, m, d] = match;
-  const month = MONTH_ABBR[Number(m) - 1];
-  return month ? `${month} ${Number(d)}, ${y}` : iso;
-}
+// US-46: the one on-screen date format, "Jun 24, 2026". US-58 moved it to src/format.ts
+// (formatDate); this name stays for the existing callers.
+export const formatDisplayDate = formatDate;
 
 // US-26: when a .csv was imported, as "Jun 24, 2026 at 14:05" (local time). Shared by the server's
 // 409 message and the Doc Parser so both say the same thing.
