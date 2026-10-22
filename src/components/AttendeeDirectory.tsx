@@ -124,7 +124,7 @@ export default function AttendeeDirectory({
               placeholder="Search colleagues by name or email…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-natural-cream/20 border border-natural-border rounded-xl pl-11 pr-4 py-2.5 text-sm text-natural-forest placeholder-natural-sage/70 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
+              className="w-full bg-natural-cream/20 border border-natural-border rounded-xl pl-11 pr-4 py-2.5 text-sm text-natural-forest placeholder-natural-sage/70 focus:border-natural-sage transition duration-150"
             />
           </div>
 
@@ -133,7 +133,7 @@ export default function AttendeeDirectory({
             aria-label="Filter by activity"
             value={selectedActivityFilter}
             onChange={(e) => setSelectedActivityFilter(e.target.value)}
-            className="bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-2.5 text-sm text-natural-forest font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
+            className="bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-2.5 text-sm text-natural-forest font-medium focus:border-natural-sage transition duration-150"
           >
             <option value="All">All Activities</option>
             {ACTIVITIES.map(act => (
@@ -185,7 +185,7 @@ export default function AttendeeDirectory({
                   placeholder="e.g. Elena Rostova"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition"
+                  className="w-full bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:border-natural-sage transition"
                 />
               </div>
 
@@ -197,7 +197,7 @@ export default function AttendeeDirectory({
                   placeholder="e.g. elena@example.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition"
+                  className="w-full bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:border-natural-sage transition"
                 />
               </div>
             </div>
@@ -262,7 +262,7 @@ export default function AttendeeDirectory({
                             {att.name.split(" ").map(n => n[0]).join("")}
                           </div>
                           <div>
-                            <h4 className="font-bold text-[#1A1A1A] text-sm leading-tight">{att.name}</h4>
+                            <h4 className="font-bold text-natural-forest text-sm leading-tight">{att.name}</h4>
                             {att.email && (
                               <p className="text-xs text-natural-sage flex items-center gap-1 mt-0.5 font-medium">
                                 <Mail className="h-3 w-3" />
