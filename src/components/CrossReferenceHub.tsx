@@ -321,11 +321,11 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                         <div className="flex items-center space-x-2">
                           <span>{att.name}</span>
                           {numActivities >= 3 ? (
-                            <span className="text-[9px] uppercase font-black tracking-widest bg-natural-forest text-natural-cream border border-natural-forest/30 px-1.5 py-0.5 rounded">
+                            <span className="text-[9px] uppercase font-bold tracking-widest bg-natural-forest text-natural-cream border border-natural-forest/30 px-1.5 py-0.5 rounded">
                               Super Active
                             </span>
                           ) : numActivities >= 2 ? (
-                            <span className="text-[9px] uppercase font-black tracking-widest bg-natural-wheat text-natural-sand border border-natural-border/60 px-1.5 py-0.5 rounded">
+                            <span className="text-[9px] uppercase font-bold tracking-widest bg-natural-wheat text-natural-sand border border-natural-border/60 px-1.5 py-0.5 rounded">
                               Multi-Activity
                             </span>
                           ) : null}
@@ -345,7 +345,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                                 </div>
                               ) : (
                                 <>
-                                  <span className="text-natural-wheat font-black" aria-hidden="true">—</span>
+                                  <span className="text-natural-wheat font-bold" aria-hidden="true">—</span>
                                   <span className="sr-only">Not attended</span>
                                 </>
                               )}
