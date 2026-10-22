@@ -122,6 +122,26 @@ publica instalador. `ci.yml` no cambia.
 El procedimiento completo (commit de cierre, tag, hotfix, tags retroactivos `v2.0.0`/`v3.0.0` y
 cómo probar el workflow) está en [`docs/PRD-CLOSING.md`](docs/PRD-CLOSING.md).
 
+## Íconos de la app
+
+El ícono de la app de escritorio (instalador, ventana y barra de tareas) es la «H» de
+`public/favicon.svg`, rasterizada a `electron/icons/`: `icon.png` (512 px), `icon.ico` (Windows,
+16–256 px) e `icon.icns` (macOS, 16–1024 px). Esos tres archivos se commitean; `electron-builder`
+los toma de `build.win.icon` / `build.mac.icon` en `package.json`.
+
+Para regenerarlos (por ejemplo, si aparece un logo oficial):
+
+1. Reemplazar `public/favicon.svg` por el SVG nuevo (cuadrado; el favicon del navegador cambia
+   con él), o pasar otra ruta: `npm run icons -- ruta/al/logo.svg`.
+2. `npm run icons` — corre `scripts/generate-icons.cjs` con Electron (sin dependencias extra) y
+   sobrescribe los tres archivos de `electron/icons/`.
+3. `npm run electron:build` para que el instalador lleve el ícono nuevo, y commitear
+   `electron/icons/`.
+
+La «H» actual es texto en Georgia, así que el resultado depende de las fuentes instaladas en la
+máquina que corre el script (Windows y macOS la traen). Un logo oficial con el texto convertido a
+trazos no tiene ese problema.
+
 ## Setup de MCPs
 
 Este proyecto usa Claude Code con un par de MCP servers para las skills en `.claude/skills/`.

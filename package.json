@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "the-honeycomb",
   "private": true,
   "version": "4.0.0",
   "type": "module",
@@ -15,7 +15,8 @@
     "electron:start": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder",
     "prepare": "husky",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "electron scripts/generate-icons.cjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -68,7 +69,11 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "electron/icons/icon.ico"
+    },
+    "mac": {
+      "icon": "electron/icons/icon.icns"
     }
   },
   "allowScripts": {

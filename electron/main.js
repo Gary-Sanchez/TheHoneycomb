@@ -1,9 +1,10 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 
-// package.json's "name" ("react-example", the AI Studio scaffold default) would
-// otherwise be used for app.getPath("userData") in dev runs (`electron .`);
-// the packaged build already gets this from electron-builder's productName.
+// package.json's "name" ("the-honeycomb") differs from the productName, and would
+// otherwise be used for app.getPath("userData") in dev runs (`electron .`); the
+// packaged build already gets this from electron-builder's productName. Keeping it
+// pins userData (honeycomb-data.json / honeycomb-config.json) to "The Honeycomb".
 app.setName("The Honeycomb");
 
 const PORT = process.env.PORT || "3000";
@@ -32,6 +33,11 @@ function createWindow() {
     width: 1280,
     height: 800,
     title: "The Honeycomb",
+    // US-52: the «H» icon (scripts/generate-icons.cjs) for the window/taskbar in dev runs too,
+    // and the app's cream background (--color-natural-cream) so there's no white flash before
+    // the UI loads.
+    icon: path.join(__dirname, "icons", "icon.png"),
+    backgroundColor: "#FDFBF7",
     // Explicit security posture instead of relying on Electron defaults: no direct
     // Node access from the renderer (nodeIntegration: false), the renderer's JS
     // context stays isolated from the preload/main world (contextIsolation: true),

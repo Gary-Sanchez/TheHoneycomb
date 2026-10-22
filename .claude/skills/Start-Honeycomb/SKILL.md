@@ -113,7 +113,7 @@ que en el flujo de Electron. Esta vía es útil para iterar sobre el código; la
   comentario en `db.ts` y en `CLAUDE.md`). Si reaparece, alguien revirtió ese fix — no tocar el
   `import` estático de `lowdb/node`.
 - **`EADDRINUSE`** — el puerto elegido ya estaba ocupado; volver al paso 1 y elegir otro.
-- **La carpeta de datos aparece como `react-example` en vez de `The Honeycomb`** — `electron/main.js`
+- **La carpeta de datos aparece como `the-honeycomb` en vez de `The Honeycomb`** — `electron/main.js`
   tiene `app.setName("The Honeycomb")` al principio del archivo; si falta, `app.getPath("userData")`
   cae al nombre de `package.json`.
 - **Errores de sintaxis raros de Node muy viejo** — el `PATH` no se corrigió antes del comando;
