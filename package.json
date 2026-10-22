@@ -10,7 +10,7 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && node scripts/lint-styles.mjs",
     "test:e2e": "npm run build && playwright test",
     "electron:start": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder",

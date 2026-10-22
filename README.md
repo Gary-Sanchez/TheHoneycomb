@@ -61,7 +61,8 @@ cd TheHoneycomb
 
 - `npm run build` — build de producción (Vite + esbuild bundlea `server.ts` a `dist/server.cjs`)
 - `npm start` — corre el build ya generado
-- `npm run lint` — chequeo de tipos (`tsc --noEmit`); no hay test suite automatizada todavía
+- `npm run lint` — chequeo de tipos (`tsc --noEmit`) + lint de estilos (ver
+  [Lint de estilos](#lint-de-estilos-us-53)); no hay test suite automatizada todavía
 - `npm run electron:start` — compila y abre la app de escritorio (Electron)
 - `npm run electron:build` — genera el instalador de escritorio (electron-builder)
 
@@ -89,6 +90,16 @@ staged. Actualmente eso significa: si hay algún `.ts`/`.tsx` staged, corre `tsc
 **todo el proyecto** (el chequeo de tipos de TypeScript no se puede acotar de forma confiable a
 un subconjunto de archivos sin perder el `tsconfig.json`). Si falla, el `git commit` se bloquea
 hasta corregir el error.
+
+### Lint de estilos (US-53)
+
+`npm run lint` y el pre-commit (con un `.tsx`, `src/index.css` o la línea base staged) también
+corren `node scripts/lint-styles.mjs`: cuenta en los `.tsx` de `src/` los hex arbitrarios en
+clases, los `text-[Npx]`, los `rounded-[…]`, los `animate-*` sin keyframes y los colores Tailwind
+crudos (`amber-*`, `red-*`, `gray-*`), y falla si alguna regla supera su línea base
+(`scripts/style-lint-baseline.json`, que arranca en los valores de `docs/SNAPSHOT-4.0.md` y solo
+puede bajar). Cada ocurrencia sale con archivo, línea y regla. Reglas, salida y cómo bajar la
+línea base: [`docs/STYLE-LINT.md`](docs/STYLE-LINT.md).
 
 El hook se instala solo al correr `npm install` (script `prepare`), sin pasos manuales.
 
