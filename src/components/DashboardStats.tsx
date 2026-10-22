@@ -121,7 +121,7 @@ export default function DashboardStats({
   );
 
   const dateFieldClass =
-    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-[#1A1A1A] focus:outline-none focus:ring-2 focus:ring-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
+    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
 
   return (
     <div className="space-y-8 animate-fade-in" id="dashboard-tab">
@@ -184,7 +184,7 @@ export default function DashboardStats({
             id="generate-outcome-report"
             onClick={() => setReportOpen(true)}
             aria-haspopup="dialog"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-natural-forest"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-sm transition"
           >
             <FileDown className="h-4 w-4" aria-hidden="true" />
             Generate Outcome Report
@@ -224,7 +224,7 @@ export default function DashboardStats({
               emptyPeriod("kpi-total-attendees-empty")
             ) : (
               <>
-                <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{totalAttendees}</h3>
+                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">{totalAttendees}</h3>
                 <span className="text-xs text-natural-forest/60 font-medium flex items-center mt-1">
                   {period ? "Attended in this period" : "Active across all activities"}
                 </span>
@@ -314,7 +314,7 @@ export default function DashboardStats({
       <div id="caserits-bee-havior-section" className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 md:p-8 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
+            <h3 className="text-xl font-serif font-bold text-natural-forest flex items-center gap-2">
               <span className="text-2xl" aria-hidden="true">🍯</span> Caserits Bee-havior Hub
             </h3>
             <p className="text-xs text-natural-sage font-medium mt-1">
@@ -331,7 +331,7 @@ export default function DashboardStats({
               placeholder="Search colleagues by name…"
               value={beeSearchQuery}
               onChange={(e) => setBeeSearchQuery(e.target.value)}
-              className="w-full bg-natural-cream/30 border border-natural-border rounded-2xl pl-10 pr-4 py-2 text-xs text-[#1A1A1A] placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-medium"
+              className="w-full bg-natural-cream/30 border border-natural-border rounded-2xl pl-10 pr-4 py-2 text-xs text-natural-forest placeholder-natural-sage/75 focus:border-natural-sage font-medium"
             />
           </div>
         </div>
@@ -404,7 +404,7 @@ export default function DashboardStats({
                             {attendee.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
                           </div>
                           <div>
-                            <h4 className="font-bold text-[#1A1A1A] text-xs leading-tight">{attendee.name}</h4>
+                            <h4 className="font-bold text-natural-forest text-xs leading-tight">{attendee.name}</h4>
                             {attendee.email && (
                               <p className="text-[10px] text-natural-sage font-mono mt-0.5">{attendee.email}</p>
                             )}
@@ -434,7 +434,7 @@ export default function DashboardStats({
                       })}
 
                       {/* Overall Rate */}
-                      <td className="p-4 text-center font-mono font-bold text-[#1A1A1A]">
+                      <td className="p-4 text-center font-mono font-bold text-natural-forest">
                         {overallRate === null ? (
                           <span className="text-natural-sage/50">—</span>
                         ) : (
@@ -499,18 +499,18 @@ export default function DashboardStats({
                     </span>
                     <span className="text-xs text-natural-sage font-semibold">Voluntary participation</span>
                   </div>
-                  <h4 className="font-serif font-bold text-[#1A1A1A] text-base mt-3 leading-snug line-clamp-1">{act.name}</h4>
+                  <h4 className="font-serif font-bold text-natural-forest text-base mt-3 leading-snug line-clamp-1">{act.name}</h4>
                   <p className="text-xs text-[#8A9A5B] mt-1">{isWeekly ? "Weekly events" : "Biweekly events"}</p>
                 </div>
 
                 <div className="mt-5 space-y-2">
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-natural-forest/70">Events:</span>
-                    <span className="font-bold text-[#1A1A1A]">{act.events}</span>
+                    <span className="font-bold text-natural-forest">{act.events}</span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
                     <span className="text-natural-forest/70">Avg. colleagues per event:</span>
-                    <span className="font-bold text-[#1A1A1A]" title="Present colleagues per event">
+                    <span className="font-bold text-natural-forest" title="Present colleagues per event">
                       {formatAvgAttendees(act.avgPresent)}
                     </span>
                   </div>

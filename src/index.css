@@ -7,19 +7,22 @@
   --font-serif: "Playfair Display", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-natural-forest: #2D3E35;
-  --color-natural-sage: #8A9A5B;
-  --color-natural-sand: #D4A373;
-  --color-natural-moss: #CCD5AE;
-  --color-natural-wheat: #FAEDCD;
-  --color-natural-cream: #FDFBF7;
-  --color-natural-border: #E9E5D9;
+  /* US-54: old names, kept as aliases of the new tokens until the last screen migrates (US-67).
+     Same values as v4.0.0, so every existing *-natural-* utility renders exactly as before. */
+  --color-natural-forest: var(--color-forest);
+  --color-natural-sage: var(--color-sage);
+  --color-natural-sand: var(--color-sand);
+  --color-natural-moss: var(--color-moss);
+  --color-natural-wheat: var(--color-wheat);
+  --color-natural-cream: var(--color-cream);
+  --color-natural-border: var(--color-border);
 
   /* Entrance and attention animations used by the animate-* classes in the components.
-     Without these definitions Tailwind generated no CSS for those classes (UX/UI audit M1). */
-  --animate-fade-in: fade-in 250ms ease-out both;
-  --animate-slide-up: slide-up 250ms ease-out both;
-  --animate-slide-down: slide-down 250ms ease-out both;
+     Without these definitions Tailwind generated no CSS for those classes (UX/UI audit M1).
+     US-54: the 250 ms ones use --duration-base. */
+  --animate-fade-in: fade-in var(--duration-base) ease-out both;
+  --animate-slide-up: slide-up var(--duration-base) ease-out both;
+  --animate-slide-down: slide-down var(--duration-base) ease-out both;
   --animate-bounce-subtle: bounce-subtle 600ms ease-out 1;
   --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
   --animate-pulse-slow: pulse-subtle 3s ease-in-out infinite;
@@ -45,6 +48,150 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
   }
+}
+
+/* US-54: design tokens (PRD 4.1 §2.1). Catalog, use and contrast of each one: docs/DESIGN-TOKENS.md.
+   Text/background and border/background pairs are checked by src/designTokens.test.ts (≥ 4.5:1 and
+   ≥ 3:1). `static` emits them all in :root even before a screen uses them (the *-natural-* aliases
+   above and the charts read them as CSS variables). */
+@theme static {
+  /* Brand palette (unchanged values) */
+  --color-forest: #2D3E35;
+  --color-sage: #8A9A5B;
+  --color-sand: #D4A373;
+  --color-moss: #CCD5AE;
+  --color-wheat: #FAEDCD;
+  --color-cream: #FDFBF7;
+  --color-border: #E9E5D9;
+
+  /* Surfaces and text. sage, sand and moss are never text on light backgrounds: use the -text ones. */
+  --color-forest-hover: #213028;
+  --color-surface: #FFFFFF;
+  --color-sage-text: #5F6F3A;
+  --color-sand-text: #8A5A2B;
+  --color-text-muted: #626E68;
+  --color-input-border: #8F8B7A;
+
+  /* Status: text (bare name), background (-bg) and border (-border) */
+  --color-danger: #B3261E;
+  --color-danger-bg: #FDECEA;
+  --color-danger-border: #D2554C;
+  --color-warning: #7A4B12;
+  --color-warning-bg: #FDF3E6;
+  --color-warning-border: #A8733A;
+  --color-success: #4A5B22;
+  --color-success-bg: #F2F5E6;
+  --color-success-border: #788A42;
+  --color-info: #34544A;
+  --color-info-bg: #EEF3F0;
+  --color-info-border: #648479;
+
+  /* Hive Status tiers: same values as src/beehavior.ts (fg = textColor, bg = bgLight, border = color) */
+  --color-tier-busy-bee: #7A5E00;
+  --color-tier-busy-bee-bg: #FFFDF0;
+  --color-tier-busy-bee-border: #D4AF37;
+  --color-tier-forager: #804C00;
+  --color-tier-forager-bg: #FFF7E6;
+  --color-tier-forager-border: #E68A00;
+  --color-tier-hatcher: #6B5800;
+  --color-tier-hatcher-bg: #FEFBEA;
+  --color-tier-hatcher-border: #B89F30;
+  --color-tier-dormant: #2F4F4F;
+  --color-tier-dormant-bg: #E6ECEC;
+  --color-tier-dormant-border: #2F4F4F;
+  --color-tier-no-data: #4B5563;
+  --color-tier-no-data-bg: #F3F4F6;
+  --color-tier-no-data-border: #6B7280;
+
+  /* Activities: fill = today's chart colors (DashboardStats); -text = variant readable as text */
+  --color-activity-speakeasy: var(--color-sage);
+  --color-activity-speakeasy-text: var(--color-sage-text);
+  --color-activity-reading-club: var(--color-forest);
+  --color-activity-reading-club-text: var(--color-forest);
+  --color-activity-music-room: var(--color-sand);
+  --color-activity-music-room-text: var(--color-sand-text);
+  --color-activity-writing-hood: var(--color-moss);
+  --color-activity-writing-hood-text: #556B2F;
+
+  /* Charts (recharts reads them as CSS variables once the panels migrate) */
+  --color-chart-1: var(--color-activity-speakeasy);
+  --color-chart-2: var(--color-activity-reading-club);
+  --color-chart-3: var(--color-activity-music-room);
+  --color-chart-4: var(--color-activity-writing-hood);
+  --color-chart-primary: var(--color-forest);
+  --color-chart-grid: var(--color-border);
+  --color-chart-axis: var(--color-forest);
+  --color-chart-axis-muted: var(--color-sage-text);
+  --color-chart-tooltip-bg: var(--color-forest);
+  --color-chart-tooltip-text: var(--color-cream);
+  --color-chart-tooltip-accent: var(--color-wheat);
+
+  /* Text scale (size / line height) */
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.75rem;
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 2rem;
+  --text-h1: 1.875rem;
+  --text-h1--line-height: 2.25rem;
+  --text-kpi: 2.25rem;
+  --text-kpi--line-height: 2.5rem;
+
+  /* Radii */
+  --radius-control: 0.75rem;
+  --radius-card: 1.5rem;
+  --radius-panel: 2rem;
+  --radius-chip: calc(infinity * 1px);
+
+  /* Shadows: same values as Tailwind's defaults, so shadow-sm / shadow-md / shadow-2xl don't change */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+  /* Stacking order */
+  --z-nav: 20;
+  --z-header: 30;
+  --z-dropdown: 40;
+  --z-dialog: 50;
+  --z-toast: 60;
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+}
+
+@layer base {
+  :root {
+    /* No dark mode (PRD 4.1 D-4): form controls and scrollbars stay light even on a dark OS. */
+    color-scheme: light;
+
+    /* Focus ring (PRD 4.1 §2.3). Overridable per container with the focus-ring-* utilities below. */
+    --focus-ring-width: 2px;
+    --focus-ring-offset: 2px;
+    --focus-ring-color: var(--color-forest);
+  }
+
+  /* Every interactive element: keyboard focus only (a mouse click on a button shows nothing). */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+/* Inside an overflow container whose items touch its edges (the tab bar), an outer ring would be
+   clipped: draw it inside the element, keeping the 2 px gap. */
+@utility focus-ring-inset {
+  --focus-ring-offset: calc(-1 * (var(--focus-ring-width) + 2px));
+}
+
+/* On forest / dark backgrounds a forest ring is invisible: use cream (10.97:1 on forest). */
+@utility focus-ring-on-dark {
+  --focus-ring-color: var(--color-cream);
 }
 
 /* Respect the OS "reduce motion" setting. Loading spinners keep turning so progress stays visible. */

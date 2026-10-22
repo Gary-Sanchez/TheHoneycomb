@@ -573,7 +573,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             const isNew = !rec.matchedAttendeeId;
             return (
               <tr key={i} className="hover:bg-natural-cream/10 transition">
-                <td className="p-4 font-bold text-[#1A1A1A]">
+                <td className="p-4 font-bold text-natural-forest">
                   <div className="flex flex-wrap items-center gap-2">
                     <span>{rec.name}</span>
                     {rec.needsReview && (
@@ -601,7 +601,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                     aria-label={`Event date for ${rec.name}`}
                     value={rec.date}
                     onChange={(e) => handleUpdateDate(i, e.target.value)}
-                    className="bg-white border border-natural-border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-mono"
+                    className="bg-white border border-natural-border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:border-natural-sage font-mono"
                   />
                 </td>
                 <td className="p-4">
@@ -678,14 +678,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 aria-expanded={!isCollapsed}
                 aria-controls={`file-group-${group.id}-rows`}
                 disabled={isBlocked || rows.length === 0}
-                className="flex items-center gap-2 min-w-0 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest disabled:cursor-default"
+                className="flex items-center gap-2 min-w-0 rounded-lg text-left disabled:cursor-default"
               >
                 <ChevronDown
                   aria-hidden="true"
                   className={`h-4 w-4 shrink-0 text-natural-forest transition-transform ${isCollapsed ? "-rotate-90" : ""} ${isBlocked || rows.length === 0 ? "invisible" : ""}`}
                 />
                 <FileText className="h-4 w-4 text-natural-sage shrink-0" />
-                <span className="font-serif font-bold text-[#1A1A1A] text-sm truncate" title={group.filename}>
+                <span className="font-serif font-bold text-natural-forest text-sm truncate" title={group.filename}>
                   {group.filename}
                 </span>
               </button>
@@ -698,7 +698,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                   type="date"
                   value={groupDate}
                   onChange={(e) => handleUpdateGroupDate(group.id, e.target.value)}
-                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium font-mono focus:outline-none focus:ring-2 focus:ring-natural-sage/20 ${
+                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium font-mono ${
                     groupDate ? "border-natural-border" : "border-natural-sand"
                   }`}
                 />
@@ -729,7 +729,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                   aria-label={`Activity for ${group.filename}`}
                   value={group.activity}
                   onChange={(e) => handleSelectGroupActivity(group.id, e.target.value)}
-                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 ${
+                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium ${
                     group.activity ? "border-natural-border" : "border-amber-400"
                   }`}
                 >
@@ -798,7 +798,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
             <ul className="bg-white border border-natural-border/60 rounded-xl divide-y divide-natural-border/40 text-xs" aria-label="Excluded colleagues">
               {group.excludedByDuration.map(ex => (
                 <li key={ex.name} className="flex justify-between gap-4 px-3 py-2">
-                  <span className="font-semibold text-[#1A1A1A]">{ex.name}</span>
+                  <span className="font-semibold text-natural-forest">{ex.name}</span>
                   <span className="font-mono text-natural-sage">{ex.duration}</span>
                 </li>
               ))}
@@ -827,7 +827,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-8 animate-fade-in" id="smart-parser-tab">
       {/* Header */}
       <div className="border-b border-natural-border pb-6">
-        <h2 className="text-2xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
+        <h2 className="text-2xl font-serif font-bold text-natural-forest flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-natural-sage" />
           Smart Doc Parser
         </h2>
@@ -918,21 +918,21 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
               {files.length === 1 ? (
                 <div className="space-y-1">
-                  <p className="font-serif font-bold text-[#1A1A1A] text-base">{files[0].name}</p>
+                  <p className="font-serif font-bold text-natural-forest text-base">{files[0].name}</p>
                   <p className="text-xs text-natural-sage font-semibold">
                     {(files[0].size / 1024).toFixed(1)} KB • Ready to import
                   </p>
                 </div>
               ) : files.length > 1 ? (
                 <div className="space-y-1">
-                  <p className="font-serif font-bold text-[#1A1A1A] text-base">{files.length} .csv files selected</p>
+                  <p className="font-serif font-bold text-natural-forest text-base">{files.length} .csv files selected</p>
                   <p className="text-xs text-natural-sage font-semibold max-w-md mx-auto break-words">
                     {files.map(f => f.name).join(", ")} • Ready to import
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="font-serif font-bold text-[#1A1A1A] text-base">
+                  <p className="font-serif font-bold text-natural-forest text-base">
                     Drag and drop your attendance file here
                   </p>
                   <p className="text-sm text-natural-sage max-w-sm mx-auto font-medium">
@@ -975,19 +975,19 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 <li className="flex items-start gap-2">
                   <FileSpreadsheet className="h-4 w-4 text-natural-sage shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-[#1A1A1A]">Spreadsheets:</strong> Row columns with colleague names, dates, and presence indicators (Present, Absent, P, A, 1, 0).
+                    <strong className="text-natural-forest">Spreadsheets:</strong> Row columns with colleague names, dates, and presence indicators (Present, Absent, P, A, 1, 0).
                   </div>
                 </li>
                 <li className="flex items-start gap-2">
                   <FileText className="h-4 w-4 text-natural-forest shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-[#1A1A1A]">Word/Text Files:</strong> Formatted lines like "John Doe - Speakeasy - June 10 - Present" or standard CSV rosters.
+                    <strong className="text-natural-forest">Word/Text Files:</strong> Formatted lines like "John Doe - Speakeasy - June 10 - Present" or standard CSV rosters.
                   </div>
                 </li>
                 <li className="flex items-start gap-2">
                   <Clock className="h-4 w-4 text-natural-sage shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-[#1A1A1A]">CSV meeting reports:</strong> Colleagues with less than 10 minutes in the "Duration" / "In-Meeting Duration" column are left out.
+                    <strong className="text-natural-forest">CSV meeting reports:</strong> Colleagues with less than 10 minutes in the "Duration" / "In-Meeting Duration" column are left out.
                   </div>
                 </li>
               </ul>
@@ -1024,7 +1024,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
         <div className="space-y-6 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-natural-border pb-4">
             <div>
-              <h3 className="font-serif font-bold text-[#1A1A1A] text-lg">Review Extracted Records</h3>
+              <h3 className="font-serif font-bold text-natural-forest text-lg">Review Extracted Records</h3>
               <p className="text-xs text-natural-sage font-medium">
                 {isMultiFile
                   ? `Found ${pluralize(parsedRecords.length, "attendance record")} across ${pluralize(fileCount, "file")}. New colleagues will be added to the directory.`
@@ -1094,7 +1094,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 aria-label="Event date for all files"
                 value={batchDate}
                 onChange={(e) => setBatchDate(e.target.value)}
-                className="bg-white border border-natural-border rounded-xl px-3 py-2 text-natural-forest text-xs font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage"
+                className="bg-white border border-natural-border rounded-xl px-3 py-2 text-natural-forest text-xs font-medium focus:border-natural-sage"
               />
               <button
                 type="button"
@@ -1112,14 +1112,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               <button
                 type="button"
                 onClick={() => setCollapsedGroups(new Set())}
-                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream"
               >
                 Expand All
               </button>
               <button
                 type="button"
                 onClick={() => setCollapsedGroups(new Set(fileGroups.map(g => g.id)))}
-                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream"
               >
                 Collapse All
               </button>

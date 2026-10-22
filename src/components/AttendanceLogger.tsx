@@ -184,7 +184,7 @@ export default function AttendanceLogger({
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-natural-border pb-6">
         <div>
-          <h2 className="text-2xl font-serif font-bold text-[#1A1A1A]">Log Event Attendance</h2>
+          <h2 className="text-2xl font-serif font-bold text-natural-forest">Log Event Attendance</h2>
           <p className="text-sm text-natural-sage font-medium">Select a date and activity to check in colleagues.</p>
         </div>
         
@@ -249,7 +249,7 @@ export default function AttendanceLogger({
               setSelectedDate(e.target.value);
               setStatuses({});
             }}
-            className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-natural-forest font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
+            className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-natural-forest font-medium focus:border-natural-sage transition duration-150"
           />
         </div>
 
@@ -262,7 +262,7 @@ export default function AttendanceLogger({
               setSelectedActivity(e.target.value as ActivityType);
               setStatuses({});
             }}
-            className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-natural-forest font-medium focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
+            className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-natural-forest font-medium focus:border-natural-sage transition duration-150"
           >
             {ACTIVITIES.map(act => (
               <option key={act} value={act}>
@@ -312,7 +312,7 @@ export default function AttendanceLogger({
             placeholder="Enter the colleague's full name…"
             value={inlineName}
             onChange={(e) => setInlineName(e.target.value)}
-            className="flex-1 bg-white border border-natural-border rounded-xl px-4 py-2.5 text-natural-forest text-sm focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage font-medium placeholder-natural-sage/50"
+            className="flex-1 bg-white border border-natural-border rounded-xl px-4 py-2.5 text-natural-forest text-sm focus:border-natural-sage font-medium placeholder-natural-sage/50"
           />
           <button
             type="submit"
@@ -352,7 +352,7 @@ export default function AttendanceLogger({
                 placeholder="e.g. Jean Dupont"
                 value={quickName}
                 onChange={(e) => setQuickName(e.target.value)}
-                className="w-full bg-white border border-natural-border/85 rounded-xl px-3 py-2 text-natural-forest text-sm focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage"
+                className="w-full bg-white border border-natural-border/85 rounded-xl px-3 py-2 text-natural-forest text-sm focus:border-natural-sage"
               />
             </div>
             
@@ -364,7 +364,7 @@ export default function AttendanceLogger({
                 placeholder="e.g. jean@example.com"
                 value={quickEmail}
                 onChange={(e) => setQuickEmail(e.target.value)}
-                className="w-full bg-white border border-natural-border/85 rounded-xl px-3 py-2 text-natural-forest text-sm focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage"
+                className="w-full bg-white border border-natural-border/85 rounded-xl px-3 py-2 text-natural-forest text-sm focus:border-natural-sage"
               />
             </div>
           </div>
@@ -420,7 +420,7 @@ export default function AttendanceLogger({
               return (
                 <div key={att.id} className="flex items-center justify-between p-4 bg-white hover:bg-natural-cream/30 transition">
                   <div>
-                    <h4 className="font-bold text-[#1A1A1A] text-sm leading-tight">{att.name}</h4>
+                    <h4 className="font-bold text-natural-forest text-sm leading-tight">{att.name}</h4>
                     <p className="text-xs text-natural-sage font-mono mt-0.5">{att.email || "No email registered"}</p>
                   </div>
 

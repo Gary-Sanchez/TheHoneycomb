@@ -79,7 +79,7 @@ export default function ProgressReportModal({
               {attendee.name.split(" ").map(n => n[0]).join("")}
             </div>
             <div>
-              <h3 className="font-serif font-bold text-[#1A1A1A] text-xl leading-tight">{attendee.name}</h3>
+              <h3 className="font-serif font-bold text-natural-forest text-xl leading-tight">{attendee.name}</h3>
               <p className="text-xs text-natural-sage font-mono mt-0.5">{attendee.email || "No email registered"}</p>
             </div>
           </div>
@@ -106,7 +106,7 @@ export default function ProgressReportModal({
                 <div>
                   <h4 className="text-xs font-bold text-natural-sage uppercase tracking-wider">Attendance Rate</h4>
                   <div className="flex items-baseline space-x-2 mt-4">
-                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]">{rate === null ? "—" : `${rate}%`}</span>
+                    <span className="text-5xl font-serif font-bold text-natural-forest">{rate === null ? "—" : `${rate}%`}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs text-natural-sage font-semibold border-t border-natural-border/60 pt-3 mt-4">
                     <span>Present: <strong className="text-natural-forest">{presentLogs}</strong></span>
@@ -166,7 +166,7 @@ export default function ProgressReportModal({
                 <div key={bd.activity} className="border border-natural-border rounded-[20px] p-4 bg-white hover:border-natural-sage transition">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h5 className="font-serif font-bold text-[#1A1A1A] text-sm">{bd.activity}</h5>
+                      <h5 className="font-serif font-bold text-natural-forest text-sm">{bd.activity}</h5>
                       {/* US-41: the fraction behind the event-based rate */}
                       {bd.rate !== null && (
                         <p className="text-[10px] text-natural-sage font-medium mt-0.5">
@@ -184,7 +184,7 @@ export default function ProgressReportModal({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 mt-3 text-center border-t border-natural-border/60 pt-3 text-[11px] text-[#1A1A1A]">
+                  <div className="grid grid-cols-3 gap-2 mt-3 text-center border-t border-natural-border/60 pt-3 text-[11px] text-natural-forest">
                     <div>
                       <p className="text-natural-sage font-medium">Present</p>
                       <p className="font-bold text-natural-forest mt-0.5">{bd.presents}</p>
@@ -223,7 +223,7 @@ export default function ProgressReportModal({
                   placeholder="Record learning milestones, speaking progress, pronunciation issues, or assignment submissions here…"
                   rows={6}
                   readOnly={!canEdit}
-                  className="w-full bg-white border border-natural-border rounded-xl p-4 text-sm text-natural-forest placeholder-natural-sage/75 focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150 resize-none font-medium read-only:bg-natural-cream/30"
+                  className="w-full bg-white border border-natural-border rounded-xl p-4 text-sm text-natural-forest placeholder-natural-sage/75 focus:border-natural-sage transition duration-150 resize-none font-medium read-only:bg-natural-cream/30"
                 />
 
                 <div className="flex justify-between items-center">
@@ -264,7 +264,7 @@ export default function ProgressReportModal({
                   {attLogs.map(log => (
                     <div key={log.id} className="flex justify-between items-center p-3 bg-white text-xs hover:bg-natural-cream/30">
                       <div>
-                        <p className="font-bold text-[#1A1A1A]">{log.activity}</p>
+                        <p className="font-bold text-natural-forest">{log.activity}</p>
                         <p className="text-[10px] text-natural-sage font-mono mt-0.5">{formatDisplayDate(log.date)}</p>
                       </div>
 

@@ -56,7 +56,7 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
   return (
     <div className="space-y-4" id="admin-access">
       <div>
-        <h2 className="text-2xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
+        <h2 className="text-2xl font-serif font-bold text-natural-forest flex items-center gap-2">
           <Lock className="h-6 w-6 text-natural-sage" />
           Admin Access
         </h2>
@@ -69,7 +69,7 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
         <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 rounded-[24px] p-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-natural-sage shrink-0" />
-            <p className="text-sm font-bold text-[#1A1A1A]">Signed in as admin. Editing is enabled.</p>
+            <p className="text-sm font-bold text-natural-forest">Signed in as admin. Editing is enabled.</p>
           </div>
           <button
             type="button"
@@ -91,7 +91,7 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
           className="bg-natural-cream/20 border border-natural-border p-6 rounded-[24px] space-y-4"
         >
           {isSetup && (
-            <p className="text-sm font-bold text-[#1A1A1A]">
+            <p className="text-sm font-bold text-natural-forest">
               No admin password is set yet. Create one to enable editing (minimum 8 characters).
             </p>
           )}
@@ -106,7 +106,7 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={isSetup ? "new-password" : "current-password"}
-                className="w-full bg-white border border-natural-border rounded-xl pl-4 pr-11 py-3 text-sm text-natural-forest focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
+                className="w-full bg-white border border-natural-border rounded-xl pl-4 pr-11 py-3 text-sm text-natural-forest focus:border-natural-sage transition duration-150"
               />
               <button
                 type="button"
@@ -129,7 +129,7 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 autoComplete="new-password"
-                className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:outline-none focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage transition duration-150"
+                className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:border-natural-sage transition duration-150"
               />
             </div>
           )}

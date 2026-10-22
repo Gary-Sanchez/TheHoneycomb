@@ -86,10 +86,10 @@ function Panel({
           aria-expanded={open}
           aria-controls={`panel-${id}-content`}
           onClick={onToggle}
-          className="w-full flex items-center justify-between gap-4 p-5 text-left rounded-[24px] focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest focus-visible:ring-offset-2 hover:bg-natural-cream/30 transition"
+          className="w-full flex items-center justify-between gap-4 p-5 text-left rounded-[24px] hover:bg-natural-cream/30 transition"
         >
           <span>
-            <span className="block text-lg font-serif font-bold text-[#1A1A1A]">{title}</span>
+            <span className="block text-lg font-serif font-bold text-natural-forest">{title}</span>
             <span className="block text-sm font-medium text-natural-forest mt-0.5">{summary}</span>
           </span>
           <ChevronDown
@@ -113,7 +113,7 @@ function Panel({
 }
 
 const thClass = "p-3 text-left text-xs font-bold uppercase tracking-wider text-natural-forest";
-const tdClass = "p-3 text-sm text-[#1A1A1A]";
+const tdClass = "p-3 text-sm text-natural-forest";
 
 export default function DashboardPanels({
   attendees,
@@ -185,7 +185,7 @@ export default function DashboardPanels({
                   type="button"
                   aria-pressed={grouping === g}
                   onClick={() => setGrouping(g)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold border focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
                     grouping === g
                       ? "bg-natural-forest text-white border-natural-forest"
                       : "bg-white text-natural-forest border-natural-border hover:bg-natural-cream/40"
@@ -332,7 +332,7 @@ export default function DashboardPanels({
                 {engagement.tiers.map(t => (
                   <li key={t.label} className="flex justify-between rounded-xl border border-natural-border px-3 py-2 text-sm">
                     <span className="font-semibold text-natural-forest">{t.label}</span>
-                    <span className="font-bold text-[#1A1A1A]">{t.count}</span>
+                    <span className="font-bold text-natural-forest">{t.count}</span>
                   </li>
                 ))}
               </ul>

@@ -118,7 +118,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Single Activity Only</p>
-            <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{stats.single}</h3>
+            <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">{stats.single}</h3>
             <span className="text-xs text-natural-sage font-semibold">Attended one activity</span>
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Multi-Activity</p>
-            <h3 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight">{stats.multi}</h3>
+            <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">{stats.multi}</h3>
             <span className="text-xs text-natural-sand font-semibold">Active in 2+ activities</span>
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Interactive Compare Tool Card */}
-        <div className="lg:col-span-2 bg-gradient-to-br from-[#2D3E35] to-[#1E2923] text-natural-cream rounded-[32px] p-6 shadow-md border border-[#E9E5D9]/25 flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-gradient-to-br from-[#2D3E35] to-[#1E2923] text-natural-cream rounded-[32px] p-6 shadow-md border border-[#E9E5D9]/25 flex flex-col justify-between focus-ring-on-dark">
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-[#CCD5AE]" />
@@ -170,7 +170,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                   id="compare-activity-1"
                   value={compareAct1}
                   onChange={(e) => setCompareAct1(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-natural-sage/50"
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white"
                 >
                   {ACTIVITIES.map(act => (
                     <option key={act} value={act} className="text-natural-forest font-medium">
@@ -186,7 +186,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                   id="compare-activity-2"
                   value={compareAct2}
                   onChange={(e) => setCompareAct2(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-natural-sage/50"
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white"
                 >
                   {ACTIVITIES.map(act => (
                     <option key={act} value={act} className="text-natural-forest font-medium">
@@ -208,7 +208,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
             ) : intersectingAttendees.length === 0 ? (
               <p className="text-xs text-natural-wheat/65 italic">No colleagues attended both activities yet.</p>
             ) : (
-              <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto">
+              <div className="flex flex-wrap gap-2 max-h-[128px] overflow-y-auto p-1 -m-1">
                 {intersectingAttendees.map(att => (
                   <button
                     key={att.id}
@@ -317,7 +317,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                     <tr key={att.id} className="hover:bg-natural-cream/10 transition">
                       
                       {/* Name with Overlap Badge */}
-                      <td className="p-4 pl-6 font-bold text-[#1A1A1A]">
+                      <td className="p-4 pl-6 font-bold text-natural-forest">
                         <div className="flex items-center space-x-2">
                           <span>{att.name}</span>
                           {numActivities >= 3 ? (

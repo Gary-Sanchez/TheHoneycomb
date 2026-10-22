@@ -375,7 +375,7 @@ export default function App() {
               H
             </div>
             <div>
-              <h1 className="text-xl font-serif font-bold text-[#1A1A1A] tracking-tight">The Honeycomb</h1>
+              <h1 className="text-xl font-serif font-bold text-natural-forest tracking-tight">The Honeycomb</h1>
               <p className="text-[10px] text-natural-sage font-bold uppercase tracking-wider">Attendance & Cross-Referencing</p>
             </div>
           </div>
@@ -407,7 +407,7 @@ export default function App() {
 
       {/* Navigation Sub-Header */}
       <nav aria-label="Main" className="bg-[#FAEDCD]/20 border-b border-natural-border sticky top-[73px] sm:top-[73px] z-20 backdrop-blur-md" id="nav-tabs">
-        <div className="max-w-7xl mx-auto px-6 flex space-x-1 sm:space-x-4 overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-6 flex space-x-1 sm:space-x-4 overflow-x-auto focus-ring-inset">
           
           {/* Tab 1: Dashboard */}
           <button

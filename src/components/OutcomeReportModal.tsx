@@ -124,12 +124,12 @@ export default function OutcomeReportModal({
     setTiers(prev => (prev.includes(tier) ? prev.filter(t => t !== tier) : [...prev, tier]));
 
   const fieldClass =
-    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-[#1A1A1A] focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
+    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
   const nInput = (id: string, label: string, value: string, onChange: (v: string) => void) => {
     const invalid = parseTopN(value) === null;
     return (
       <div key={id} className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-semibold text-[#1A1A1A]">{label}</label>
+        <label htmlFor={id} className="text-sm font-semibold text-natural-forest">{label}</label>
         {/* Text, not type="number": a number input reports "" for a bad entry like "5e", which
             parseTopN would read as 0 (left out) instead of invalid. */}
         <input
@@ -170,7 +170,7 @@ export default function OutcomeReportModal({
       >
         <div className="p-6 border-b border-natural-border flex justify-between items-start gap-4 bg-natural-cream/40">
           <div>
-            <h2 id="outcome-report-title" className="font-serif font-bold text-[#1A1A1A] text-xl leading-tight">
+            <h2 id="outcome-report-title" className="font-serif font-bold text-natural-forest text-xl leading-tight">
               Outcome Report
             </h2>
             <p id="outcome-report-desc" className="text-sm text-natural-forest mt-1">
@@ -181,7 +181,7 @@ export default function OutcomeReportModal({
             type="button"
             onClick={onClose}
             aria-label="Close Outcome Report"
-            className="p-2 text-natural-forest hover:bg-natural-cream rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+            className="p-2 text-natural-forest hover:bg-natural-cream rounded-xl transition"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -193,7 +193,7 @@ export default function OutcomeReportModal({
             <legend className="text-sm font-bold text-natural-forest mb-2">Period</legend>
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-col gap-1">
-                <label htmlFor="report-period-mode" className="text-sm font-semibold text-[#1A1A1A]">Range</label>
+                <label htmlFor="report-period-mode" className="text-sm font-semibold text-natural-forest">Range</label>
                 <select
                   id="report-period-mode"
                   value={periodFilter.mode}
@@ -207,7 +207,7 @@ export default function OutcomeReportModal({
               {periodFilter.mode === "custom" && (
                 <>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="report-period-start" className="text-sm font-semibold text-[#1A1A1A]">Start date</label>
+                    <label htmlFor="report-period-start" className="text-sm font-semibold text-natural-forest">Start date</label>
                     <input
                       id="report-period-start"
                       type="date"
@@ -219,7 +219,7 @@ export default function OutcomeReportModal({
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="report-period-end" className="text-sm font-semibold text-[#1A1A1A]">End date</label>
+                    <label htmlFor="report-period-end" className="text-sm font-semibold text-natural-forest">End date</label>
                     <input
                       id="report-period-end"
                       type="date"
@@ -272,12 +272,12 @@ export default function OutcomeReportModal({
             <p className="text-xs text-natural-forest">Lists every colleague in the chosen tiers for the period.</p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               {REPORT_TIERS.map(tier => (
-                <label key={tier} className="inline-flex items-center gap-2 text-sm font-semibold text-[#1A1A1A] cursor-pointer">
+                <label key={tier} className="inline-flex items-center gap-2 text-sm font-semibold text-natural-forest cursor-pointer">
                   <input
                     type="checkbox"
                     checked={tiers.includes(tier)}
                     onChange={() => toggleTier(tier)}
-                    className="h-4 w-4 accent-[#2D3E35] focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+                    className="h-4 w-4 accent-[#2D3E35]"
                   />
                   {tier}
                 </label>
@@ -301,7 +301,7 @@ export default function OutcomeReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 bg-white border border-natural-border text-natural-forest font-bold text-sm rounded-xl transition hover:bg-natural-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-natural-forest"
+            className="px-5 py-2.5 bg-white border border-natural-border text-natural-forest font-bold text-sm rounded-xl transition hover:bg-natural-cream"
           >
             Cancel
           </button>
@@ -311,7 +311,7 @@ export default function OutcomeReportModal({
             onClick={handleDownload}
             disabled={!canDownload}
             aria-describedby={noBlock && !invalidN ? "report-no-block" : undefined}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-natural-forest"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
             Download Report
