@@ -54,69 +54,78 @@ export default function DataTable<Row>({
   const pinned = (i: number) => stickyFirstColumn && i === 0;
 
   return (
-    <div
-      role="region"
-      aria-label={caption}
-      tabIndex={0}
-      // isolate: the sticky cells' z-index stays local to this table (pinned header > header > pinned column)
-      className={cx("isolate overflow-x-auto rounded-card border border-border bg-surface focus-ring-inset", className)}
-    >
-      <table className="w-full border-separate border-spacing-0 text-forest">
-        <caption className={hideCaption ? "sr-only" : "px-4 py-3 text-left text-h3 font-semibold"}>{caption}</caption>
-        <thead>
-          <tr>
-            {columns.map((column, i) => (
-              <th
-                key={column.key}
-                scope="col"
-                className={cx(
-                  CELL,
-                  "sticky top-0 border-b border-border bg-cream font-semibold",
-                  pinned(i) ? "left-0 z-[var(--z-dropdown)]" : "z-[var(--z-header)]",
-                  align(column)
-                )}
-              >
-                {column.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
+    <div className="overflow-hidden rounded-card border border-border bg-surface">
+      {/* The visible title sits outside the scroll region so it never scrolls away (or gets cut at
+          375 px); the real <caption> stays in the table for assistive tech */}
+      {!hideCaption && (
+        <p aria-hidden="true" className="px-4 py-3 text-h3 font-semibold text-forest">
+          {caption}
+        </p>
+      )}
+      <div
+        role="region"
+        aria-label={caption}
+        tabIndex={0}
+        // isolate: the sticky cells' z-index stays local to this table (pinned header > header > pinned column)
+        className={cx("isolate overflow-x-auto focus-ring-inset", className)}
+      >
+        <table className="w-full border-separate border-spacing-0 text-forest">
+          <caption className="sr-only">{caption}</caption>
+          <thead>
             <tr>
-              <td colSpan={columns.length} className={cx(CELL, "text-center text-text-muted")}>
-                {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            rows.map((row, r) => (
-              <tr key={getRowKey(row, r)} className="group">
-                {columns.map((column, i) => {
-                  // The last row's border is dropped here rather than with group-last:, whose generated
-                  // `:is(:where(.group):last-child *)` selector shifted the existing modals' text
-                  // rendering in the 1440 px visual snapshots.
-                  const cellClass = cx(
+              {columns.map((column, i) => (
+                <th
+                  key={column.key}
+                  scope="col"
+                  className={cx(
                     CELL,
-                    "bg-surface transition-colors duration-[var(--duration-fast)] group-hover:bg-wheat",
-                    r < rows.length - 1 && "border-b border-border",
-                    pinned(i) && "sticky left-0 z-[var(--z-nav)]",
+                    "sticky top-0 border-b border-border bg-cream font-semibold",
+                    pinned(i) ? "left-0 z-[var(--z-dropdown)]" : "z-[var(--z-header)]",
                     align(column)
-                  );
-                  return rowHeader && i === 0 ? (
-                    <th key={column.key} scope="row" className={cx(cellClass, "font-semibold")}>
-                      {content(column, row)}
-                    </th>
-                  ) : (
-                    <td key={column.key} className={cellClass}>
-                      {content(column, row)}
-                    </td>
-                  );
-                })}
+                  )}
+                >
+                  {column.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className={cx(CELL, "text-center text-text-muted")}>
+                  {emptyMessage}
+                </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              rows.map((row, r) => (
+                <tr key={getRowKey(row, r)} className="group">
+                  {columns.map((column, i) => {
+                    // The last row's border is dropped here rather than with group-last:, whose generated
+                    // `:is(:where(.group):last-child *)` selector shifted the existing modals' text
+                    // rendering in the 1440 px visual snapshots.
+                    const cellClass = cx(
+                      CELL,
+                      "bg-surface transition-colors duration-[var(--duration-fast)] group-hover:bg-wheat",
+                      r < rows.length - 1 && "border-b border-border",
+                      pinned(i) && "sticky left-0 z-[var(--z-nav)]",
+                      align(column)
+                    );
+                    return rowHeader && i === 0 ? (
+                      <th key={column.key} scope="row" className={cx(cellClass, "font-semibold")}>
+                        {content(column, row)}
+                      </th>
+                    ) : (
+                      <td key={column.key} className={cellClass}>
+                        {content(column, row)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -86,6 +86,17 @@ describe("US-57: Tabs", () => {
       expect(t.className).toContain("font-semibold");
     }
   });
+
+  it("the selected indicator stays inside the scrolling tablist (QA #71): no -mb-px, no vertical overflow", () => {
+    render(<Tabs label="Sections" tabs={TABS} />);
+    const tablist = screen.getByRole("tablist").className.split(" ");
+    expect(tablist).toContain("overflow-x-auto");
+    expect(tablist).toContain("overflow-y-hidden");
+    // The baseline is an inset shadow, so it isn't a border the tabs have to overlap with -1px
+    expect(tablist).not.toContain("border-b");
+    expect(tablist.some(c => c.startsWith("shadow-[inset"))).toBe(true);
+    for (const t of screen.getAllByRole("tab")) expect(t.className.split(" ")).not.toContain("-mb-px");
+  });
 });
 
 describe("US-57: SegmentedControl", () => {

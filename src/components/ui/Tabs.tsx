@@ -48,7 +48,14 @@ export default function Tabs({ label, tabs, value, defaultValue, onValueChange, 
 
   return (
     <div {...rest} className={className}>
-      <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex overflow-x-auto border-b border-border">
+      {/* The baseline is an inset shadow, not a border: a scrolling tablist clips anything outside its
+          padding box, so the selected tab's 2 px indicator has to sit inside it, over the baseline */}
+      <div
+        role="tablist"
+        aria-label={label}
+        onKeyDown={onKeyDown}
+        className="flex overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-border)]"
+      >
         {tabs.map((tab, i) => {
           const isSelected = tab.id === selected;
           return (
@@ -66,7 +73,7 @@ export default function Tabs({ label, tabs, value, defaultValue, onValueChange, 
               onClick={() => select(tab.id)}
               className={cx(
                 // Border always present (only its color changes) and one font weight: no 1 px jump on selection
-                "-mb-px shrink-0 border-b-2 px-4 py-3 text-body font-semibold whitespace-nowrap transition-colors duration-[var(--duration-fast)] focus-ring-inset",
+                "shrink-0 border-b-2 px-4 py-3 text-body font-semibold whitespace-nowrap transition-colors duration-[var(--duration-fast)] focus-ring-inset",
                 isSelected ? "border-forest text-forest" : "border-transparent text-text-muted hover:border-input-border hover:text-forest"
               )}
             >

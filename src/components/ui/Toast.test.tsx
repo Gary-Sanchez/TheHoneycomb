@@ -70,6 +70,45 @@ describe("US-57: Toast", () => {
     expect(alert.textContent).toBe("");
   });
 
+  it("WCAG 2.2.1: hover or focus pauses the auto-dismiss, which resumes with the time left", () => {
+    vi.useFakeTimers();
+    render(
+      <ToastProvider>
+        <Triggers />
+      </ToastProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Success" }));
+    const { status } = regions();
+    const toast = () => status.firstElementChild as HTMLElement;
+
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    fireEvent.mouseEnter(toast());
+    act(() => {
+      vi.advanceTimersByTime(SUCCESS_TOAST_DURATION * 2);
+    });
+    expect(status.textContent).toContain("Attendance saved");
+
+    // Focus inside keeps it paused even after the pointer leaves
+    fireEvent.focus(within(toast()).getByRole("button", { name: "Dismiss notification" }));
+    fireEvent.mouseLeave(toast());
+    act(() => {
+      vi.advanceTimersByTime(SUCCESS_TOAST_DURATION * 2);
+    });
+    expect(status.textContent).toContain("Attendance saved");
+
+    fireEvent.blur(within(toast()).getByRole("button", { name: "Dismiss notification" }));
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(status.textContent).toContain("Attendance saved");
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(status.textContent).toBe("");
+  });
+
   it("useToast outside a provider throws", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => render(<Triggers />)).toThrow(/ToastProvider/);

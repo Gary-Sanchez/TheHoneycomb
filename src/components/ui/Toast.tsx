@@ -22,6 +22,8 @@ export interface ToastItem {
   id: number;
   kind: ToastKind;
   message: ReactNode;
+  /** ms before it closes by itself; null keeps it until dismissed. */
+  duration: number | null;
 }
 
 export interface ToastApi {
@@ -41,11 +43,38 @@ export function useToast(): ToastApi {
   return api;
 }
 
+// WCAG 2.2.1: the auto-dismiss countdown pauses while the pointer is over the toast or focus is in
+// it, and resumes with the time that was left.
 function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void; key?: number }) {
   const tone = item.kind === "error" ? "danger" : "success";
   const Icon = STATUS_ICON[tone];
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
+  const remaining = useRef(item.duration);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
+  useEffect(() => {
+    if (paused || remaining.current === null) return;
+    const startedAt = Date.now();
+    const timer = setTimeout(() => onDismissRef.current(), remaining.current);
+    return () => {
+      clearTimeout(timer);
+      if (remaining.current !== null) remaining.current = Math.max(0, remaining.current - (Date.now() - startedAt));
+    };
+  }, [paused]);
+
   return (
-    <div className={cx("pointer-events-auto flex items-start gap-3 rounded-card border p-4 text-body shadow-md animate-slide-up", STATUS_SURFACE[tone])}>
+    <div
+      className={cx("pointer-events-auto flex items-start gap-3 rounded-card border p-4 text-body shadow-md animate-slide-up", STATUS_SURFACE[tone])}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e: FocusEvent) => {
+        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
       <Icon className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
       <div className="min-w-0 flex-1 pt-0.5">{item.message}</div>
       <IconButton aria-label="Dismiss notification" icon={<X className="size-4" />} className="-my-2 -mr-2" onClick={onDismiss} />
@@ -56,29 +85,17 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void; ke
 export function ToastProvider({ children }: { children?: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   const dismiss = useCallback((id: number) => {
-    const timer = timers.current.get(id);
-    if (timer) clearTimeout(timer);
-    timers.current.delete(id);
     setToasts(list => list.filter(t => t.id !== id));
   }, []);
 
-  const show = useCallback(
-    (kind: ToastKind, message: ReactNode, options: ToastOptions = {}) => {
-      const id = nextId.current++;
-      setToasts(list => [...list, { id, kind, message }]);
-      const duration = options.duration === undefined ? (kind === "success" ? SUCCESS_TOAST_DURATION : null) : options.duration;
-      if (duration !== null) timers.current.set(id, setTimeout(() => dismiss(id), duration));
-      return id;
-    },
-    [dismiss]
-  );
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach(clearTimeout);
+  // Each Toast runs its own (pausable) countdown; unmounting it clears the timer
+  const show = useCallback((kind: ToastKind, message: ReactNode, options: ToastOptions = {}) => {
+    const id = nextId.current++;
+    const duration = options.duration === undefined ? (kind === "success" ? SUCCESS_TOAST_DURATION : null) : options.duration;
+    setToasts(list => [...list, { id, kind, message, duration }]);
+    return id;
   }, []);
 
   const api = useMemo<ToastApi>(

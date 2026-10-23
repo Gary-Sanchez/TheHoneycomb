@@ -2,7 +2,7 @@
 import { cloneElement, ReactElement } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import ChartFrame, { chartAriaLabel, type ChartDatum } from "./ChartFrame";
+import ChartFrame, { chartAriaLabel, formatChartValue, tooltipFormatter, type ChartDatum } from "./ChartFrame";
 
 // jsdom has no layout: give the chart a fixed size so the real <svg> renders (as in DashboardPanels.test)
 vi.mock("recharts", async importOriginal => {
@@ -59,6 +59,27 @@ describe("US-57: ChartFrame", () => {
     expect(within(table).getAllByRole("columnheader").map(h => h.textContent)).toEqual(["Month", "Attendance rate"]);
     expect(within(table).getByRole("rowheader", { name: "Feb" }).parentElement?.textContent).toBe("FebNo data");
     expect(within(table).getByRole("rowheader", { name: "Jan" }).parentElement?.textContent).toBe("Jan80%");
+  });
+
+  it("bar kind labels a missing month No data on the chart itself, so it can't pass for 0% (QA #71)", () => {
+    const { container } = render(<ChartFrame title="By month" kind="bar" data={data} series={series} />);
+    const labels = [...container.querySelectorAll("svg text.chart-no-data")];
+    expect(labels.map(l => l.textContent)).toEqual(["No data"]);
+  });
+
+  it("the tooltip says No data for a gap, also in bar mode where it's plotted at 0 (QA #71)", () => {
+    // jsdom can't hover a Recharts chart; filterNull={false} on the Tooltip is what lets the
+    // formatter see the null entries at all (checked in the browser on the examples page)
+    const format = tooltipFormatter(series);
+    expect(format(null, "Attendance rate", { payload: data[1] })).toBe("No data");
+    expect(format(0, "Attendance rate", { payload: data[1] })).toBe("No data");
+    expect(format(80, "Attendance rate", { payload: data[0] })).toBe("80%");
+    expect(format(75, "Goal")).toBe("75%");
+  });
+
+  it("values are rounded to whole percents", () => {
+    expect(formatChartValue(66.6667)).toBe("67%");
+    expect(formatChartValue(null)).toBe("No data");
   });
 
   it("bar kind renders bars; empty data reads No data", () => {

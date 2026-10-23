@@ -119,6 +119,45 @@ describe("US-57: Dialog", () => {
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Other" }));
   });
+
+  it("an Escape already handled inside (defaultPrevented) doesn't close the dialog", () => {
+    render(<Harness />);
+    openDialog();
+    const input = screen.getByRole("textbox", { name: "Name" });
+    input.addEventListener("keydown", e => e.preventDefault());
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeNull();
+  });
+
+  it("if the trigger is gone on close, focus falls back to the page's first focusable element", () => {
+    function RemovedTrigger() {
+      const [open, setOpen] = useState(false);
+      const [removed, setRemoved] = useState(false);
+      return (
+        <>
+          <button type="button">First</button>
+          {!removed && (
+            <button type="button" onClick={() => setOpen(true)}>
+              Open dialog
+            </button>
+          )}
+          <Dialog
+            open={open}
+            onClose={() => {
+              setRemoved(true);
+              setOpen(false);
+            }}
+            title="Remove colleague"
+          />
+        </>
+      );
+    }
+    render(<RemovedTrigger />);
+    openDialog();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "Open dialog" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "First" }));
+  });
 });
 
 describe("US-57: ConfirmDialog", () => {

@@ -49,6 +49,17 @@ describe("US-57: DataTable", () => {
     expect(screen.getAllByRole("columnheader")[0].className).toContain("left-0");
   });
 
+  it("the visible title sits outside the scroll region, so it never scrolls away (QA #71)", () => {
+    render(<DataTable caption="Attendance" columns={columns} rows={rows} getRowKey={r => r.name} />);
+    const region = screen.getByRole("region", { name: "Attendance" });
+    const title = screen.getByText("Attendance", { selector: "p" });
+    expect(region.contains(title)).toBe(false);
+    expect(title.getAttribute("aria-hidden")).toBe("true");
+    // The table keeps its real caption for assistive tech
+    expect(document.querySelector("caption")?.className).toBe("sr-only");
+    expect(screen.getByRole("table", { name: "Attendance" })).toBeTruthy();
+  });
+
   it("no rows: a single row with the empty message", () => {
     render(<DataTable caption="Attendance" columns={columns} rows={[]} getRowKey={() => ""} emptyMessage="No colleagues yet" />);
     const table = screen.getByRole("table");

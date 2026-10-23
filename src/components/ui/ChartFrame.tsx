@@ -1,5 +1,18 @@
 import type { ReactNode } from "react";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  Rectangle,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type BarShapeProps,
+} from "recharts";
 import DataTable, { type DataTableColumn } from "./DataTable";
 import { cx } from "./styles";
 
@@ -51,7 +64,12 @@ export const SERIES_COLORS = [
   "var(--color-info-border)",
 ];
 
-const AXIS_TICK = { fill: "var(--color-chart-axis)", fontSize: 12 };
+// Type scale token for chart text; SVG geometry (line width, bar corners) takes plain numbers, so it
+// lives in these named constants instead of inline literals.
+const CHART_TEXT_SIZE = "var(--text-micro)";
+export const LINE_WIDTH = 3;
+export const BAR_RADIUS: [number, number, number, number] = [6, 6, 0, 0];
+const AXIS_TICK = { fill: "var(--color-chart-axis)", fontSize: CHART_TEXT_SIZE };
 const TOOLTIP_PROPS = {
   contentStyle: {
     backgroundColor: "var(--color-chart-tooltip-bg)",
@@ -64,7 +82,43 @@ const TOOLTIP_PROPS = {
 };
 
 const isMissing = (v: unknown): v is null | undefined => v === null || v === undefined;
-export const formatChartValue = (v: unknown) => (isMissing(v) ? NO_DATA : `${v}%`);
+export const formatChartValue = (v: unknown) => (isMissing(v) ? NO_DATA : `${typeof v === "number" ? Math.round(v) : v}%`);
+
+/**
+ * Bar mode: an empty slot would look like 0 %, so a missing value is labeled "No data", written
+ * upwards from the baseline to fit the bar's width. Recharts drops null bars entirely (no shape, no
+ * label), so bar mode plots a missing value at 0 and this shape, told it's missing, draws the label
+ * instead of the (zero-height) Rectangle.
+ */
+function BarOrNoData({ missing, ...props }: BarShapeProps & { missing: boolean }) {
+  const { x, y, width } = props;
+  if (!missing) return <Rectangle {...props} />;
+  const centerX = Number(x) + Number(width) / 2;
+  const baseY = Number(y);
+  if (!Number.isFinite(centerX) || !Number.isFinite(baseY)) return null;
+  return (
+    <text
+      x={centerX}
+      y={baseY}
+      dx={6}
+      dominantBaseline="central"
+      transform={`rotate(-90 ${centerX} ${baseY})`}
+      fill="var(--color-chart-axis)"
+      fontSize={CHART_TEXT_SIZE}
+      className="chart-no-data"
+    >
+      {NO_DATA}
+    </text>
+  );
+}
+
+/** Tooltip value: read from the datum itself (bar mode plots a missing value at 0), so a gap says "No data". */
+export const tooltipFormatter =
+  (series: ChartSeries[]) =>
+  (value: unknown, name: unknown, item?: { payload?: ChartDatum }) => {
+    const key = series.find(s => s.name === name)?.key;
+    return formatChartValue(key && item?.payload ? item.payload[key] : value);
+  };
 
 /** "Title. Series: Jan 80%, Feb No data. Other: …" — what the role="img" wrapper announces. */
 export function chartAriaLabel(title: string, data: ChartDatum[], series: ChartSeries[]): string {
@@ -95,8 +149,11 @@ export default function ChartFrame({
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-chart-grid)" />
       <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS_TICK} />
       <YAxis domain={[0, 100]} ticks={PERCENT_TICKS} tickFormatter={(v: number) => `${v}%`} tickLine={false} axisLine={false} tick={AXIS_TICK} />
-      <Tooltip {...TOOLTIP_PROPS} formatter={(v: unknown) => formatChartValue(v)} />
-      <Legend wrapperStyle={{ fontSize: 12, color: "var(--color-chart-axis)" }} />
+      {/* filterNull={false}: Recharts drops null entries from the tooltip by default, so the formatter
+          would never get to say "No data" for a missing month. The value is read from the datum
+          itself, since bar mode plots missing values at 0. */}
+      <Tooltip {...TOOLTIP_PROPS} filterNull={false} formatter={tooltipFormatter(series)} />
+      <Legend wrapperStyle={{ fontSize: CHART_TEXT_SIZE, color: "var(--color-chart-axis)" }} />
     </>
   );
 
@@ -112,7 +169,15 @@ export default function ChartFrame({
             <BarChart accessibilityLayer={false} data={data} margin={margin}>
               {shared}
               {series.map((s, i) => (
-                <Bar key={s.key} dataKey={s.key} name={s.name} fill={color(s, i)} radius={[6, 6, 0, 0]} isAnimationActive={false} />
+                <Bar
+                  key={s.key}
+                  dataKey={(d: ChartDatum) => d[s.key] ?? 0}
+                  name={s.name}
+                  fill={color(s, i)}
+                  radius={BAR_RADIUS}
+                  shape={(p: BarShapeProps) => <BarOrNoData {...p} missing={isMissing((p.payload as ChartDatum | undefined)?.[s.key])} />}
+                  isAnimationActive={false}
+                />
               ))}
             </BarChart>
           ) : (
@@ -126,7 +191,7 @@ export default function ChartFrame({
                   dataKey={s.key}
                   name={s.name}
                   stroke={color(s, i)}
-                  strokeWidth={3}
+                  strokeWidth={LINE_WIDTH}
                   dot={{ r: 4 }}
                   connectNulls={false}
                   isAnimationActive={false}

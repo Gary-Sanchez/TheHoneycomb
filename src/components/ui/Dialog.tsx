@@ -79,7 +79,8 @@ function DialogContent({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (openStack[openStack.length - 1] !== token || !dialog) return;
-      if (e.key === "Escape") {
+      // An Escape already handled inside (e.g. closing a listbox or popup) doesn't close the dialog too
+      if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
         onCloseRef.current();
         return;
@@ -106,7 +107,10 @@ function DialogContent({
       document.removeEventListener("keydown", onKeyDown);
       openStack.splice(openStack.indexOf(token), 1);
       document.body.style.overflow = prevOverflow;
-      returnTo?.focus();
+      // The trigger may be gone (e.g. the row it lived in was deleted): fall back to the page's first
+      // focusable element rather than leaving focus on <body>
+      const fallback = returnTo?.isConnected ? returnTo : document.querySelector<HTMLElement>(FOCUSABLE);
+      fallback?.focus();
     };
   }, []);
 
