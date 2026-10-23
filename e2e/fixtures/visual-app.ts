@@ -106,9 +106,10 @@ export async function launchVisualApp(options: { port: string; width: number; he
     // time, so a tab looks the same whichever tab was open before (or if it runs alone with -g).
     await page.evaluate(() => {
       window.scrollTo(0, 0);
-      document.querySelector("#nav-tabs > div")?.scrollTo(0, 0);
+      document.querySelector("#nav-tabs [role=tablist]")?.scrollTo(0, 0);
     });
-    await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name }).click();
+    // US-59: the nav holds a tablist (Tabs), so each tab is role="tab"
+    await page.getByRole("navigation", { name: "Main" }).getByRole("tab", { name }).click();
     await expect(page.getByRole("status").filter({ hasText: "Loading The Honeycomb" })).toHaveCount(0);
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
   };

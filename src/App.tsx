@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Attendee, AttendanceRecord, AuthStatus, ImportFingerprint, ImportOutcome, ManualCheckInResult } from "./types";
 import { formatDisplayDate, nameKey, REFERENCE_DATE } from "./utils";
 import { ALL_TIME, PeriodFilter } from "./beehavior";
@@ -9,9 +9,23 @@ import CrossReferenceHub from "./components/CrossReferenceHub";
 import DocumentParser from "./components/DocumentParser";
 import ProgressReportModal from "./components/ProgressReportModal";
 import SettingsPanel from "./components/SettingsPanel";
-import { LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { Alert, Button, Tabs, useToast } from "./components/ui";
+import { LayoutDashboard, CheckSquare, Users, GitCompare, FileUp, Clock, Settings, Loader2, Lock, ShieldCheck, RotateCw } from "lucide-react";
 
 type ServerState = { attendees: Attendee[]; records: AttendanceRecord[]; notes: Record<string, string> };
+
+// US-59: the 6 main tabs (names unchanged). The id is the activeTab value the screens navigate with.
+const MAIN_TABS = [
+  { id: "dashboard", name: "Dashboard", Icon: LayoutDashboard },
+  { id: "logger", name: "Manual Check-In", Icon: CheckSquare },
+  { id: "attendees", name: "Caserits & Progress", Icon: Users },
+  { id: "crossref", name: "Overlap Cross-Referencer", Icon: GitCompare },
+  { id: "parser", name: "Import Forage Logs", Icon: FileUp },
+  { id: "settings", name: "Settings", Icon: Settings },
+] as const;
+
+// BUG-08: what a reverted change tells the user (never the raw error); see persist()
+const RETRY_HINT = "Check the connection and try again.";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
@@ -22,6 +36,11 @@ export default function App() {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  // BUG-09: why the initial load failed (null = it didn't), shown with a Retry button
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const toast = useToast();
+  const headerRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const [auth, setAuth] = useState<AuthStatus>({ authenticated: false, adminConfigured: false, setupAllowed: false });
   const canEdit = auth.authenticated;
 
@@ -34,15 +53,23 @@ export default function App() {
   const mutationSeq = useRef(0);
   const reloadWhenIdle = useRef(false);
 
-  const loadData = () =>
+  // Resolves to null when the data loaded, or to the cause to show when it didn't (BUG-09). US-50:
+  // e.g. a 503 when the data file is from a newer app, whose body says what happened.
+  const loadData = (): Promise<string | null> =>
     fetch("/api/data")
-      .then(res => {
-        // US-50: e.g. a 503 when the data file is from a newer app — keep the empty state, don't crash
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+      .then(async res => {
+        if (!res.ok) {
+          const message = await res.json().then(body => body?.error, () => undefined);
+          throw new Error(message || `The server answered with an error (HTTP ${res.status}).`);
+        }
+        applyServerState(await res.json());
+        return null;
       })
-      .then(applyServerState)
-      .catch(err => console.error("Failed to load data from server:", err));
+      .catch(err => {
+        console.error("Failed to load data from server:", err);
+        // fetch() itself rejects with a TypeError when the server can't be reached
+        return err instanceof TypeError ? "Couldn't reach The Honeycomb server." : String(err?.message ?? err);
+      });
 
   // Reload the canonical state, unless a newer mutation started meanwhile — its own response
   // will then be the fresher snapshot, and this GET may already be stale
@@ -65,9 +92,17 @@ export default function App() {
       .then((data: AuthStatus) => setAuth(data))
       .catch(err => console.error("Failed to load auth status:", err));
 
-  // Load initial state from the server-backed database on mount
+  // Load initial state from the server-backed database (on mount, and again from Retry)
+  const loadInitialState = () => {
+    setIsLoading(true);
+    setLoadError(null);
+    Promise.all([loadData(), refreshAuth()])
+      .then(([error]) => setLoadError(error))
+      .finally(() => setIsLoading(false));
+  };
+
   useEffect(() => {
-    Promise.all([loadData(), refreshAuth()]).finally(() => setIsLoading(false));
+    loadInitialState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,6 +110,27 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [activeTab]);
+
+  // US-59: the window title names the open tab
+  const activeTabName = MAIN_TABS.find(tab => tab.id === activeTab)?.name ?? MAIN_TABS[0].name;
+  useEffect(() => {
+    document.title = `${activeTabName} · The Honeycomb`;
+  }, [activeTabName]);
+
+  // BUG-10: the sticky nav sits right below the header, whose height changes with the width
+  // (it wraps on phones): measure it into --header-height instead of a fixed top-[73px]
+  const showShell = !isLoading && !loadError;
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!showShell || !header) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty("--header-height", `${header.getBoundingClientRect().height}px`);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [showShell]);
 
   // Apply the server's canonical state after a mutation round-trips
   function applyServerState(data: ServerState) {
@@ -93,11 +149,14 @@ export default function App() {
   // Resolves to whether the server accepted the mutation (US-27 reports a failed batch import).
   // US-26: `onSaved` gets the server's state after the mutation; `onRejected` the server's error
   // message when it refuses it (e.g. a duplicate .csv).
+  // BUG-08: any other failure (server error, unreachable server) shows `failureMessage` as an error
+  // toast: what wasn't saved and what to do, never the raw error. A caller with `onRejected` shows
+  // the error itself (Import Forage Logs, inline), so it gets no toast. A 401 only drops to read-only.
   const persist = (
     url: string,
     init: RequestInit,
     label: string,
-    hooks: { onSaved?: (data: ServerState) => void; onRejected?: (message: string) => void } = {}
+    hooks: { onSaved?: (data: ServerState) => void; onRejected?: (message: string) => void; failureMessage?: string } = {}
   ): Promise<boolean> => {
     inFlightMutations.current += 1;
     mutationSeq.current += 1;
@@ -123,6 +182,7 @@ export default function App() {
       .catch(err => {
         console.error(`Failed to persist ${label}:`, err);
         reloadWhenIdle.current = true;
+        if (!hooks.onRejected) toast.error(hooks.failureMessage ?? `Couldn't save the changes. ${RETRY_HINT}`);
         return false;
       })
       .finally(() => {
@@ -154,7 +214,9 @@ export default function App() {
 
     setAttendees(prev => [...prev, newAttendee]);
 
-    persist("/api/attendees", jsonRequest("POST", newAttendee), "new attendee");
+    persist("/api/attendees", jsonRequest("POST", newAttendee), "new attendee", {
+      failureMessage: `Couldn't add the colleague. ${RETRY_HINT}`,
+    });
 
     return newAttendee;
   };
@@ -170,7 +232,9 @@ export default function App() {
       setActiveReportAttendee(prev => (prev ? { ...prev, enrolledActivities: activities } : null));
     }
 
-    persist(`/api/attendees/${attendeeId}/enrollment`, jsonRequest("PUT", { activities }), "enrollment update");
+    persist(`/api/attendees/${attendeeId}/enrollment`, jsonRequest("PUT", { activities }), "enrollment update", {
+      failureMessage: `Couldn't save the activities. ${RETRY_HINT}`,
+    });
   };
 
   const handleRemoveAttendee = (attendeeId: string) => {
@@ -186,7 +250,9 @@ export default function App() {
       setActiveReportAttendee(null);
     }
 
-    persist(`/api/attendees/${attendeeId}`, { method: "DELETE" }, "attendee removal");
+    persist(`/api/attendees/${attendeeId}`, { method: "DELETE" }, "attendee removal", {
+      failureMessage: `Couldn't remove the colleague. ${RETRY_HINT}`,
+    });
   };
 
   // 3. Save manual session checklist records
@@ -206,7 +272,9 @@ export default function App() {
       return [...filtered, ...instantiated];
     });
 
-    persist("/api/records", jsonRequest("POST", { records: instantiated }), "records");
+    persist("/api/records", jsonRequest("POST", { records: instantiated }), "records", {
+      failureMessage: `Couldn't save the attendance. ${RETRY_HINT}`,
+    });
   };
 
   // 3b. Manually add one colleague to the session for a date+activity (US-20). Reuses an existing
@@ -251,7 +319,8 @@ export default function App() {
     persist(
       "/api/records/manual",
       jsonRequest("POST", { attendee: existingAttendee ? undefined : attendee, record }),
-      "manual check-in"
+      "manual check-in",
+      { failureMessage: `Couldn't check in the colleague. ${RETRY_HINT}` }
     );
 
     return { attendee, isNew: !existingAttendee, joinedExistingSession, alreadyInSession: Boolean(alreadyInSession) };
@@ -346,12 +415,21 @@ export default function App() {
   const handleSaveNotes = (attendeeId: string, text: string) => {
     setNotes(prev => ({ ...prev, [attendeeId]: text }));
 
-    persist(`/api/notes/${attendeeId}`, jsonRequest("PUT", { text }), "note");
+    persist(`/api/notes/${attendeeId}`, jsonRequest("PUT", { text }), "note", {
+      failureMessage: `Couldn't save the note. ${RETRY_HINT}`,
+    });
   };
 
   // Helper to open progress report of colleague
   const handleNavigateToAttendeeReport = (att: Attendee) => {
     setActiveReportAttendee(att);
+  };
+
+
+  // US-59: the skip link moves focus to the open tab's content (not only the scroll position)
+  const skipToContent = (e: MouseEvent) => {
+    e.preventDefault();
+    mainRef.current?.focus();
   };
 
   if (isLoading) {
@@ -363,26 +441,118 @@ export default function App() {
     );
   }
 
+  // BUG-09: the initial load failed: say why and offer to request the data again
+  if (loadError) {
+    return (
+      <main className="min-h-screen bg-cream flex items-center justify-center px-4 py-8 font-sans text-forest">
+        <div className="w-full max-w-lg space-y-4">
+          <h1 className="text-h2 font-serif font-bold">The Honeycomb</h1>
+          <Alert tone="danger" title="Couldn't load The Honeycomb's data." id="load-error">
+            <p>{loadError}</p>
+            <p className="mt-1">Check that The Honeycomb is running, then try again.</p>
+          </Alert>
+          <Button onClick={loadInitialState} icon={<RotateCw className="size-4" />}>
+            Retry
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  // The 3 tabs whose screen has no h2 of its own get a visually hidden one named after the tab
+  // (Manual Check-In, Import Forage Logs and Settings render theirs)
+  const tabHeading = (name: string) => <h2 className="sr-only">{name}</h2>;
+
+  const tabContent: Record<string, any> = {
+    dashboard: (
+      <>
+        {tabHeading("Dashboard")}
+        <DashboardStats
+          attendees={attendees}
+          records={records}
+          periodFilter={periodFilter}
+          onPeriodFilterChange={setPeriodFilter}
+          onNavigate={(tab) => setActiveTab(tab)}
+        />
+      </>
+    ),
+    logger: (
+      <AttendanceLogger
+        attendees={attendees}
+        records={records}
+        onAddAttendee={handleAddAttendee}
+        onSaveRecords={handleSaveRecords}
+        onManualCheckIn={handleManualCheckIn}
+        canEdit={canEdit}
+        onSignIn={() => setActiveTab("settings")}
+      />
+    ),
+    attendees: (
+      <>
+        {tabHeading("Caserits & Progress")}
+        <AttendeeDirectory
+          attendees={attendees}
+          records={records}
+          onAddAttendee={handleAddAttendee}
+          onUpdateEnrollment={handleUpdateEnrollment}
+          onViewReport={handleNavigateToAttendeeReport}
+          onRemoveAttendee={handleRemoveAttendee}
+          canEdit={canEdit}
+          onSignIn={() => setActiveTab("settings")}
+        />
+      </>
+    ),
+    crossref: (
+      <>
+        {tabHeading("Overlap Cross-Referencer")}
+        <CrossReferenceHub
+          attendees={attendees}
+          records={records}
+          onNavigateToAttendee={(att) => {
+            setActiveReportAttendee(att);
+          }}
+        />
+      </>
+    ),
+    parser: (
+      <DocumentParser
+        attendees={attendees}
+        onImportData={handleImportParsedData}
+        canEdit={canEdit}
+        onSignIn={() => setActiveTab("settings")}
+        onSessionExpired={() => setAuth(prev => ({ ...prev, authenticated: false }))}
+      />
+    ),
+    settings: <SettingsPanel auth={auth} onAuthChange={refreshAuth} />,
+  };
+
   return (
-    <div className="min-h-screen bg-natural-cream flex flex-col font-sans text-natural-forest antialiased selection:bg-natural-wheat selection:text-natural-forest">
-      
+    <div className="min-h-screen bg-cream flex flex-col font-sans text-forest antialiased selection:bg-wheat selection:text-forest">
+      {/* US-59: first focusable element of the page; visible only while focused */}
+      <a
+        href="#main-content"
+        onClick={skipToContent}
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[var(--z-toast)] focus:rounded-control focus:border focus:border-forest focus:bg-surface focus:px-4 focus:py-2 focus:text-body focus:font-semibold focus:text-forest"
+      >
+        Skip to content
+      </a>
+
       {/* Top Banner Branding Header */}
-      <header className="bg-white border-b border-natural-border sticky top-0 z-30 shadow-sm" id="main-header">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          
-          <div className="flex items-center space-x-3">
-            <div className="h-10 w-10 bg-natural-forest rounded-xl flex items-center justify-center text-natural-wheat shadow-md font-serif italic text-lg" aria-hidden="true">
-              H
-            </div>
-            <div>
-              <h1 className="text-xl font-serif font-bold text-natural-forest tracking-tight">The Honeycomb</h1>
-              <p className="text-[10px] text-natural-sage font-bold uppercase tracking-wider">Attendance & Cross-Referencing</p>
+      <header ref={headerRef} className="bg-surface border-b border-border sticky top-0 z-[var(--z-header)] shadow-sm" id="main-header">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+
+          <div className="flex min-w-0 items-center gap-3">
+            {/* The logo has its own name, outside the h1, so the heading is still just "The Honeycomb" */}
+            <img src="/logo.svg" alt="The Honeycomb logo" width={40} height={40} className="size-10 shrink-0 rounded-xl shadow-md" />
+            <div className="min-w-0">
+              <h1 className="text-xl font-serif font-bold text-forest tracking-tight">The Honeycomb</h1>
+              <p className="text-micro text-sage-text font-bold uppercase tracking-wider">Attendance & Cross-Referencing</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4 self-end sm:self-auto text-xs text-natural-forest/80 font-medium">
-            <span className="flex items-center gap-1.5 bg-natural-wheat/40 px-3 py-1.5 rounded-lg border border-natural-border/60">
-              <Clock className="h-3.5 w-3.5 text-natural-sage" />
+          <div className="flex items-center gap-3 sm:gap-4 ml-auto text-xs text-forest/80 font-medium">
+            <span className="flex items-center gap-1.5 bg-wheat/40 px-3 py-1.5 rounded-lg border border-border/60 whitespace-nowrap">
+              <Clock className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
               {/* US-46: the header date comes from REFERENCE_DATE, in the one display format */}
               <span>{formatDisplayDate(REFERENCE_DATE)}</span>
             </span>
@@ -390,14 +560,14 @@ export default function App() {
               type="button"
               onClick={() => setActiveTab("settings")}
               id="auth-badge"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-bold whitespace-nowrap transition ${
                 canEdit
-                  ? "bg-[#CCD5AE]/30 border-[#CCD5AE]/70 text-natural-forest"
-                  : "bg-white border-natural-border text-natural-forest/70 hover:text-natural-forest"
+                  ? "bg-moss/30 border-moss/70 text-forest"
+                  : "bg-surface border-border text-forest/70 hover:text-forest"
               }`}
               title={canEdit ? "Admin session active" : "Read-only — sign in as admin in Settings"}
             >
-              {canEdit ? <ShieldCheck className="h-3.5 w-3.5 text-natural-sage" /> : <Lock className="h-3.5 w-3.5 text-natural-sage" />}
+              {canEdit ? <ShieldCheck className="h-3.5 w-3.5 text-sage" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5 text-sage" aria-hidden="true" />}
               <span>{canEdit ? "Admin" : "Sign In"}</span>
             </button>
           </div>
@@ -405,159 +575,35 @@ export default function App() {
         </div>
       </header>
 
-      {/* Navigation Sub-Header */}
-      <nav aria-label="Main" className="bg-[#FAEDCD]/20 border-b border-natural-border sticky top-[73px] sm:top-[73px] z-20 backdrop-blur-md" id="nav-tabs">
-        <div className="max-w-7xl mx-auto px-6 flex space-x-1 sm:space-x-4 overflow-x-auto focus-ring-inset">
-          
-          {/* Tab 1: Dashboard */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("dashboard")}
-            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
-              activeTab === "dashboard"
-                ? "border-natural-forest text-natural-forest font-bold"
-                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
-            }`}
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            <span>Dashboard</span>
-          </button>
-
-          {/* Tab 2: Manual Check-in */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("logger")}
-            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
-              activeTab === "logger"
-                ? "border-natural-forest text-natural-forest font-bold"
-                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
-            }`}
-          >
-            <CheckSquare className="h-4 w-4" />
-            <span>Manual Check-In</span>
-          </button>
-
-          {/* Tab 3: Attendees Directory */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("attendees")}
-            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
-              activeTab === "attendees"
-                ? "border-natural-forest text-natural-forest font-bold"
-                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            <span>Caserits & Progress</span>
-          </button>
-
-          {/* Tab 4: Cross-Referencer */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("crossref")}
-            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
-              activeTab === "crossref"
-                ? "border-natural-forest text-natural-forest font-bold"
-                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
-            }`}
-          >
-            <GitCompare className="h-4 w-4" />
-            <span>Overlap Cross-Referencer</span>
-          </button>
-
-          {/* Tab 5: Smart Parser */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("parser")}
-            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
-              activeTab === "parser"
-                ? "border-natural-forest text-natural-forest font-bold"
-                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
-            }`}
-          >
-            <FileUp className="h-4 w-4" />
-            <span>Import Forage Logs</span>
-          </button>
-
-          {/* Tab 6: Settings */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("settings")}
-            className={`flex items-center gap-2 py-4 px-3 font-semibold text-sm border-b-2 transition duration-200 whitespace-nowrap font-serif ${
-              activeTab === "settings"
-                ? "border-natural-forest text-natural-forest font-bold"
-                : "border-transparent text-natural-forest/60 hover:text-natural-forest hover:border-natural-sage"
-            }`}
-          >
-            <Settings className="h-4 w-4" />
-            <span>Settings</span>
-          </button>
-
-        </div>
-      </nav>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-        
-        {/* Tab Router Panels */}
-        {activeTab === "dashboard" && (
-          <DashboardStats
-            attendees={attendees}
-            records={records}
-            periodFilter={periodFilter}
-            onPeriodFilterChange={setPeriodFilter}
-            onNavigate={(tab) => setActiveTab(tab)}
-          />
+      {/* US-59: the tab list goes in the sticky nav (opaque, right below the header at its real height,
+          BUG-10) and the open tab's panel in <main>, the skip link's target */}
+      <Tabs
+        label="Main sections"
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="contents"
+        panelClassName=""
+        tabs={MAIN_TABS.map(({ id, name, Icon }) => ({
+          id,
+          label: (
+            <span className="inline-flex items-center gap-2">
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              {name}
+            </span>
+          ),
+          content: tabContent[id],
+        }))}
+        renderList={list => (
+          <nav aria-label="Main" className="bg-cream sticky top-[var(--header-height)] z-[var(--z-nav)] shadow-[inset_0_-1px_0_var(--color-border)]" id="nav-tabs">
+            <div className="max-w-7xl mx-auto sm:px-6">{list}</div>
+          </nav>
         )}
-
-        {activeTab === "logger" && (
-          <AttendanceLogger
-            attendees={attendees}
-            records={records}
-            onAddAttendee={handleAddAttendee}
-            onSaveRecords={handleSaveRecords}
-            onManualCheckIn={handleManualCheckIn}
-            canEdit={canEdit}
-            onSignIn={() => setActiveTab("settings")}
-          />
+        renderPanels={panels => (
+          <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+            {panels}
+          </main>
         )}
-
-        {activeTab === "attendees" && (
-          <AttendeeDirectory
-            attendees={attendees}
-            records={records}
-            onAddAttendee={handleAddAttendee}
-            onUpdateEnrollment={handleUpdateEnrollment}
-            onViewReport={handleNavigateToAttendeeReport}
-            onRemoveAttendee={handleRemoveAttendee}
-            canEdit={canEdit}
-            onSignIn={() => setActiveTab("settings")}
-          />
-        )}
-
-        {activeTab === "crossref" && (
-          <CrossReferenceHub
-            attendees={attendees}
-            records={records}
-            onNavigateToAttendee={(att) => {
-              setActiveReportAttendee(att);
-            }}
-          />
-        )}
-
-        {activeTab === "parser" && (
-          <DocumentParser
-            attendees={attendees}
-            onImportData={handleImportParsedData}
-            canEdit={canEdit}
-            onSignIn={() => setActiveTab("settings")}
-            onSessionExpired={() => setAuth(prev => ({ ...prev, authenticated: false }))}
-          />
-        )}
-
-        {activeTab === "settings" && <SettingsPanel auth={auth} onAuthChange={refreshAuth} />}
-
-      </main>
+      />
 
       {/* Popups and Modals */}
       {activeReportAttendee && (
@@ -572,7 +618,7 @@ export default function App() {
       )}
 
       {/* Simple Professional Footer */}
-      <footer className="bg-natural-forest text-natural-cream border-t border-natural-forest/20 py-8 text-center text-xs font-serif uppercase tracking-widest mt-12">
+      <footer className="bg-forest text-cream border-t border-forest/20 px-4 py-8 text-center text-xs font-serif uppercase tracking-widest mt-12">
         <span>© 2026 The Honeycomb • English Activities Dashboard</span>
       </footer>
 

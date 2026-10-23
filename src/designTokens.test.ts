@@ -285,6 +285,10 @@ describe("US-54: one ink and a visible focus ring", () => {
   });
 
   it("the tab bar draws the ring inside its overflow container", () => {
-    expect(readFileSync(join(__dirname, "App.tsx"), "utf8")).toMatch(/overflow-x-auto focus-ring-inset/);
+    // US-59: the app's tab bar is the Tabs component; its scrolling tablist's tabs use focus-ring-inset
+    expect(readFileSync(join(__dirname, "App.tsx"), "utf8")).toMatch(/<Tabs\b/);
+    const tabs = readFileSync(join(__dirname, "components", "ui", "Tabs.tsx"), "utf8");
+    expect(tabs).toMatch(/flex overflow-x-auto/);
+    expect(tabs).toMatch(/focus-ring-inset/);
   });
 });

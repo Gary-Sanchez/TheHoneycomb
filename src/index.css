@@ -257,6 +257,27 @@
   --focus-ring-color: var(--color-cream);
 }
 
+/* US-59: a sideways scroller without a visible native scrollbar (it still scrolls with touch,
+   trackpad, wheel + Shift and the keyboard). Used by the tab bar. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* US-59: fades the content out at the edges that have more to scroll, so it reads as "there's more
+   this way" on any background. Width per edge via --fade-start / --fade-end (0 = no fade). */
+@utility scroll-fade-x {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--fade-start, 0px),
+    black calc(100% - var(--fade-end, 0px)),
+    transparent
+  );
+}
+
 /* Respect the OS "reduce motion" setting. Loading spinners keep turning so progress stays visible. */
 @media (prefers-reduced-motion: reduce) {
   *:not(.animate-spin),
