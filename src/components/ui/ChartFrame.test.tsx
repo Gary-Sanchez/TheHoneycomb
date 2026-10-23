@@ -82,6 +82,26 @@ describe("US-57: ChartFrame", () => {
     expect(formatChartValue(null)).toBe("No data");
   });
 
+  it("US-61: hideTitle keeps the title for assistive tech only; ariaLabel overrides the generated one", () => {
+    const { container } = render(<ChartFrame title="Attendance Trends" hideTitle ariaLabel="Custom label" data={data} series={series} hideTable />);
+    expect(container.querySelector("figcaption")?.className).toBe("sr-only");
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Custom label");
+  });
+
+  it("US-61: count format plots plain integers (no %, no 0–100 axis) in ticks, table and aria-label", () => {
+    const counts: ChartDatum[] = [
+      { label: "Dormant", count: 3 },
+      { label: "Busy Bee", count: 1 },
+    ];
+    const countSeries = [{ key: "count", name: "Colleagues" }];
+    const { container } = render(<ChartFrame title="Colleagues per Hive Status" kind="bar" valueFormat="count" data={counts} series={countSeries} />);
+    const ticks = [...container.querySelectorAll("text.recharts-cartesian-axis-tick-value")].map(t => t.textContent);
+    expect(ticks.some(t => t?.endsWith("%"))).toBe(false);
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Colleagues per Hive Status. Colleagues: Dormant 3, Busy Bee 1.");
+    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Dormant" }).parentElement?.textContent).toBe("Dormant3");
+    expect(tooltipFormatter(countSeries, "count")(3, "Colleagues", { payload: counts[0] })).toBe("3");
+  });
+
   it("bar kind renders bars; empty data reads No data", () => {
     const { container } = render(<ChartFrame title="By activity" kind="bar" data={data} series={series} />);
     expect(container.querySelector(".recharts-bar")).not.toBeNull();

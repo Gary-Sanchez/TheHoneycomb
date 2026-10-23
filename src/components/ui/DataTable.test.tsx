@@ -18,6 +18,25 @@ const columns = [
   { key: "reading", header: "Reading Club", align: "right" as const },
 ];
 
+describe("US-61: DataTable dense", () => {
+  it("tighter padding and wrapping headers; body cells stay on one line; default unchanged", () => {
+    render(<DataTable caption="Dense" dense columns={columns} rows={rows} getRowKey={r => r.name} />);
+    const header = screen.getAllByRole("columnheader")[0];
+    expect(header.className).toContain("px-2.5");
+    expect(header.className).toContain("whitespace-normal");
+    expect(header.className).not.toContain("whitespace-nowrap");
+    const cell = screen.getByRole("rowheader", { name: "Ana Pérez" });
+    expect(cell.className).toContain("px-2.5");
+    expect(cell.className).toContain("whitespace-nowrap");
+    cleanup();
+
+    render(<DataTable caption="Default" columns={columns} rows={rows} getRowKey={r => r.name} />);
+    const defaultHeader = screen.getAllByRole("columnheader")[0];
+    expect(defaultHeader.className).toContain("px-4");
+    expect(defaultHeader.className).toContain("whitespace-nowrap");
+  });
+});
+
 describe("US-57: DataTable", () => {
   it("own horizontal scroll: a focusable region named by the caption", () => {
     render(<DataTable caption="Attendance by colleague" columns={columns} rows={rows} getRowKey={r => r.name} />);

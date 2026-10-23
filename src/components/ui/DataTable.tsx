@@ -32,9 +32,17 @@ export interface DataTableProps<Row> {
   emptyMessage?: ReactNode;
   /** Classes for the scroll wrapper (e.g. a max height). */
   className?: string;
+  /**
+   * Compact layout for wide tables that should still fit a desktop width (US-61): tighter cell padding
+   * and headers that may wrap onto several lines. Text size is unchanged; body cells stay on one line
+   * unless their own content opts into wrapping.
+   */
+  dense?: boolean;
 }
 
-const CELL = "px-4 py-3 text-body whitespace-nowrap";
+const CELL = "text-body";
+const PADDING = "px-4 py-3";
+const PADDING_DENSE = "px-2.5 py-2";
 
 export default function DataTable<Row>({
   caption,
@@ -46,7 +54,9 @@ export default function DataTable<Row>({
   stickyFirstColumn = false,
   emptyMessage = "No data",
   className,
+  dense = false,
 }: DataTableProps<Row>) {
+  const pad = dense ? PADDING_DENSE : PADDING;
   const align = (column: DataTableColumn<Row>) => (column.align === "right" ? "text-right" : "text-left");
   const content = (column: DataTableColumn<Row>, row: Row) =>
     column.cell ? column.cell(row) : ((row as Record<string, unknown>)[column.key] as ReactNode);
@@ -79,6 +89,8 @@ export default function DataTable<Row>({
                   scope="col"
                   className={cx(
                     CELL,
+                    pad,
+                    dense ? "align-bottom whitespace-normal" : "whitespace-nowrap",
                     "sticky top-0 border-b border-border bg-cream font-semibold",
                     pinned(i) ? "left-0 z-[var(--z-dropdown)]" : "z-[var(--z-header)]",
                     align(column)
@@ -92,7 +104,7 @@ export default function DataTable<Row>({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className={cx(CELL, "text-center text-text-muted")}>
+                <td colSpan={columns.length} className={cx(CELL, pad, "whitespace-nowrap text-center text-text-muted")}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -105,6 +117,8 @@ export default function DataTable<Row>({
                     // rendering in the 1440 px visual snapshots.
                     const cellClass = cx(
                       CELL,
+                      pad,
+                      "whitespace-nowrap",
                       "bg-surface transition-colors duration-[var(--duration-fast)] group-hover:bg-wheat",
                       r < rows.length - 1 && "border-b border-border",
                       pinned(i) && "sticky left-0 z-[var(--z-nav)]",

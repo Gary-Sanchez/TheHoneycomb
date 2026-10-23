@@ -10,13 +10,19 @@ import {
   isValidPeriod,
   resolvePeriod,
   PeriodFilter,
+  type BeehaviorRow,
 } from "../beehavior";
 import HiveStatusBadge from "./HiveStatusBadge";
 import { averageOverall, formatAverageBase } from "../dashboardMetrics";
 import DashboardPanels from "./DashboardPanels";
 import { pluralize } from "../utils";
-import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, FileDown } from "lucide-react";
+import { Users, FileText, CheckCircle2, Award, ArrowUpRight, Search, SearchX, FileDown, Moon, Egg, Flower2, Hexagon, type LucideIcon } from "lucide-react";
 import OutcomeReportModal from "./OutcomeReportModal";
+import { ACTIVITY_THEME, getActivityTheme } from "../activityTheme";
+import Stat from "./ui/Stat";
+import DataTable, { type DataTableColumn } from "./ui/DataTable";
+import EmptyState from "./ui/EmptyState";
+import Badge from "./ui/Badge";
 
 interface DashboardStatsProps {
   attendees: Attendee[];
@@ -28,6 +34,19 @@ interface DashboardStatsProps {
 }
 
 const EMPTY_PERIOD_MESSAGE = "No events in this period";
+
+// US-61: the Hive Status legend in the tier tokens, with TierBadge's icons (US-58). Same copy as 4.0.
+const TIER_LEGEND: { title: string; meaning: string; icon: LucideIcon; text: string; border: string }[] = [
+  { title: "Dormant (0–25%)", meaning: "Hibernating. Rare sightings. Still getting to know the honeycomb.", icon: Moon, text: "text-tier-dormant", border: "border-tier-dormant-border" },
+  { title: "Hatcher (26–50%)", meaning: "Getting cozy. Halfway to becoming a regular flyer.", icon: Egg, text: "text-tier-hatcher", border: "border-tier-hatcher-border" },
+  { title: "Forager (51–75%)", meaning: "Honey maker. Solid presence, regularly contributing to the buzz.", icon: Flower2, text: "text-tier-forager", border: "border-tier-forager-border" },
+  { title: "Busy Bee (76–100%)", meaning: "Queen's favorite. Elite attendance and top-tier dedication.", icon: Hexagon, text: "text-tier-busy-bee", border: "border-tier-busy-bee-border" },
+];
+
+/** "(attended/total)" after a rate: muted, never below 12 px. */
+const fraction = (presents: number, total: number) => (
+  <span className="ml-1 text-micro font-medium text-text-muted">({presents}/{total})</span>
+);
 
 export default function DashboardStats({
   attendees,
@@ -111,17 +130,96 @@ export default function DashboardStats({
     );
   }, [beehaviorData, beeSearchQuery]);
 
-  // Accent colors for the 4 activities (Sage, Forest, Sand, Moss)
-  const COLORS = ["#8A9A5B", "#2D3E35", "#D4A373", "#CCD5AE"];
-
   const emptyPeriod = (id: string, className = "") => (
-    <p id={id} className={`text-sm text-natural-forest italic font-medium ${className}`}>
+    <p id={id} className={`text-body text-natural-forest italic font-medium ${className}`}>
       {EMPTY_PERIOD_MESSAGE}
     </p>
   );
 
   const dateFieldClass =
-    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
+    "bg-surface border border-input-border rounded-control px-3 py-1.5 text-sm text-natural-forest focus:border-natural-forest aria-[invalid=true]:border-danger";
+
+  // US-61 (BUG-11): the Hub is a DataTable, so it scrolls sideways on its own at 375 / 768 px with the
+  // name column pinned. Activity headers carry their icon (US-58); rates are in the activity's text token.
+  const hubColumns: DataTableColumn<BeehaviorRow>[] = [
+    {
+      key: "name",
+      header: "Caserits",
+      cell: ({ attendee }) => (
+        <span className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="h-8.5 w-8.5 shrink-0 rounded-chip bg-natural-wheat/40 text-natural-forest flex items-center justify-center font-serif font-bold text-xs border border-natural-border/50"
+          >
+            {attendee.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
+          </span>
+          <span className="flex flex-col">
+            <span className="font-bold text-natural-forest text-xs leading-tight">{attendee.name}</span>
+            {/* US-61: the email may wrap so the Hub fits a desktop width */}
+            {attendee.email && <span className="text-micro text-text-muted font-mono font-normal mt-0.5 whitespace-normal break-all">{attendee.email}</span>}
+          </span>
+        </span>
+      ),
+    },
+    ...ACTIVITIES.map((act, idx): DataTableColumn<BeehaviorRow> => {
+      const theme = ACTIVITY_THEME[act];
+      const Icon = theme.icon;
+      return {
+        key: act,
+        header: (
+          <span className="inline-flex items-start gap-1.5">
+            <Icon aria-hidden="true" className={`mt-0.5 h-4 w-4 shrink-0 ${theme.textClass}`} />
+            <span>{act}</span>
+          </span>
+        ),
+        cell: ({ activityStats }) => {
+          const stat = activityStats[idx];
+          return stat.rate === null ? (
+            <span className="font-mono text-text-muted">—</span>
+          ) : (
+            <span
+              className={`font-mono font-bold ${getActivityTheme(stat.activity)?.textClass ?? ""}`}
+              title={`Attended ${stat.presents} of ${stat.total} events`}
+            >
+              {stat.rate}%
+              {fraction(stat.presents, stat.total)}
+            </span>
+          );
+        },
+      };
+    }),
+    {
+      key: "overall",
+      header: "Overall",
+      cell: ({ overallRate, overallPresents, overallTotal }) =>
+        overallRate === null ? (
+          <span className="font-mono text-text-muted">—</span>
+        ) : (
+          <span className="font-mono font-bold text-natural-forest" title={`Attended ${overallPresents} of ${overallTotal} events`}>
+            {overallRate}%
+            {fraction(overallPresents, overallTotal)}
+          </span>
+        ),
+    },
+    {
+      key: "hive-status",
+      header: "Hive Status",
+      // US-42: the shared badge (TierBadge since US-58); no Overall → No data (US-44)
+      cell: ({ overallRate }) => <HiveStatusBadge rate={overallRate} />,
+    },
+    {
+      key: "multi-activity",
+      header: "Multi-Activity",
+      cell: ({ isMulti, participatedCount }) =>
+        isMulti ? (
+          <Badge tone="warning" icon={<span>🍯</span>} className="animate-pulse-subtle">
+            Yes ({participatedCount} Activities)
+          </Badge>
+        ) : (
+          <Badge>Single ({participatedCount})</Badge>
+        ),
+    },
+  ];
 
   return (
     <div className="space-y-8 animate-fade-in" id="dashboard-tab">
@@ -129,7 +227,7 @@ export default function DashboardStats({
       <section
         id="period-selector"
         aria-label="Dashboard period"
-        className="bg-white rounded-[24px] border border-[#E9E5D9] shadow-sm p-5 space-y-3"
+        className="bg-surface rounded-card border border-border shadow-sm p-5 space-y-3"
       >
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1">
@@ -184,7 +282,7 @@ export default function DashboardStats({
             id="generate-outcome-report"
             onClick={() => setReportOpen(true)}
             aria-haspopup="dialog"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-sm transition"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-natural-forest hover:bg-forest-hover text-white font-bold text-sm rounded-control shadow-sm transition"
           >
             <FileDown className="h-4 w-4" aria-hidden="true" />
             Generate Outcome Report
@@ -192,7 +290,7 @@ export default function DashboardStats({
         </div>
 
         {invalidRange && (
-          <p id="period-error" role="alert" className="text-sm font-semibold text-red-800 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+          <p id="period-error" role="alert" className="text-sm font-semibold text-danger bg-danger-bg border border-danger-border rounded-control px-3 py-2">
             The start date must be on or before the end date. The range was not applied.
           </p>
         )}
@@ -208,268 +306,127 @@ export default function DashboardStats({
         />
       )}
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* KPI Row (US-61): 1 → 2 → 4 columns; each KPI is a Stat <dl>, not a heading */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Card 1: Total Attendees */}
-        <div
+        <Stat
           id="kpi-total-attendees"
-          className="bg-white rounded-[32px] p-6 border border-[#E9E5D9] shadow-sm flex items-center space-x-5 hover:border-natural-sage transition duration-300"
-        >
-          <div className="p-4 bg-natural-cream text-natural-sage rounded-2xl border border-natural-border/30">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sage font-bold mb-1">Total Caserits</p>
-            {periodHasNoEvents ? (
-              emptyPeriod("kpi-total-attendees-empty")
-            ) : (
-              <>
-                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">{totalAttendees}</h3>
-                <span className="text-xs text-natural-forest/60 font-medium flex items-center mt-1">
-                  {period ? "Attended in this period" : "Active across all activities"}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+          label="Total Caserits"
+          icon={<Users className="h-6 w-6" />}
+          value={periodHasNoEvents ? emptyPeriod("kpi-total-attendees-empty", "font-sans") : totalAttendees}
+          hint={periodHasNoEvents ? undefined : period ? "Attended in this period" : "Active across all activities"}
+        />
 
         {/* Card 2: Attendance Rate */}
-        <div
+        <Stat
           id="kpi-attendance-rate"
-          className="bg-[#CCD5AE]/30 rounded-[32px] p-6 border border-[#CCD5AE]/50 shadow-sm flex items-center space-x-5 hover:bg-[#CCD5AE]/40 transition duration-300"
-        >
-          <div className="p-4 bg-white/60 text-natural-forest rounded-2xl border border-[#CCD5AE]/40">
-            <CheckCircle2 className="h-6 w-6 text-natural-forest" />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-natural-forest font-bold mb-1">Avg. Attendance Rate</p>
-            <h3 id="kpi-attendance-rate-value" className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-              {avgAttendance.rate === null ? "—" : `${avgAttendance.rate}%`}
-            </h3>
-            {periodHasNoEvents ? (
-              emptyPeriod("kpi-attendance-rate-empty", "mt-1")
+          label="Avg. Attendance Rate"
+          icon={<CheckCircle2 className="h-6 w-6" />}
+          value={<span id="kpi-attendance-rate-value">{avgAttendance.rate === null ? "—" : `${avgAttendance.rate}%`}</span>}
+          hint={
+            periodHasNoEvents ? (
+              emptyPeriod("kpi-attendance-rate-empty")
             ) : (
-              <span id="kpi-attendance-rate-base" className="text-xs text-natural-forest/70 font-medium flex items-center mt-1">
+              <span id="kpi-attendance-rate-base">
                 {avgAttendance.rate === null ? "No colleagues with an Overall yet" : formatAverageBase(avgAttendance.colleagues)}
               </span>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
         {/* Card 3: Multi-Enrollment */}
-        <div
+        <Stat
           id="kpi-multi-enrollment"
-          className="bg-[#FAEDCD]/40 rounded-[32px] p-6 border border-[#D4A373]/30 shadow-sm flex items-center space-x-5 hover:bg-[#FAEDCD]/50 transition duration-300"
-        >
-          <div className="p-4 bg-white/60 text-natural-sand rounded-2xl border border-[#D4A373]/20">
-            <Award className="h-6 w-6 text-natural-sand" />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-natural-sand font-bold mb-1">Multi-Activity Caserits</p>
-            {periodHasNoEvents ? (
-              emptyPeriod("kpi-multi-enrollment-empty")
-            ) : (
-              <>
-                <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">
-                  {multiActivityPercentage}%
-                </h3>
-                <span className="text-xs text-natural-sand font-semibold flex items-center mt-1">
-                  {pluralize(multiActivityCount, "colleague")} in 2+ activities
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+          label="Multi-Activity Caserits"
+          icon={<Award className="h-6 w-6" />}
+          value={periodHasNoEvents ? emptyPeriod("kpi-multi-enrollment-empty", "font-sans") : `${multiActivityPercentage}%`}
+          hint={periodHasNoEvents ? undefined : `${pluralize(multiActivityCount, "colleague")} in 2+ activities`}
+        />
 
-        {/* Card 4: Quick Action */}
-        <div
+        {/* Card 4: Quick Action. A native button (US-61): Enter / Space for free, cream focus ring on forest */}
+        <button
+          type="button"
           id="kpi-quick-parse"
-          className="bg-natural-forest text-natural-cream rounded-[32px] p-6 border border-natural-forest/25 shadow-lg flex flex-col justify-between hover:shadow-xl hover:bg-[#213028] transition-all duration-300 cursor-pointer"
-          role="button"
-          tabIndex={0}
           aria-label="Open Import Forage Logs"
           onClick={() => onNavigate("parser")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onNavigate("parser");
-            }
-          }}
+          className="focus-ring-on-dark bg-natural-forest text-natural-cream rounded-card p-6 border border-natural-forest/25 shadow-lg flex flex-col justify-between text-left hover:shadow-xl hover:bg-forest-hover transition-all duration-300 cursor-pointer"
         >
-          <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-white/10 text-natural-wheat rounded-xl">
-              <FileText className="h-5 w-5" />
-            </div>
-            <ArrowUpRight className="h-5 w-5 text-natural-sand" />
-          </div>
-          <div className="mt-4">
-            <p className="text-[10px] uppercase tracking-widest text-[#CCD5AE] font-bold">Import Forage Logs</p>
-            <h4 className="text-lg font-serif font-bold mt-1 text-white leading-tight">Smart Doc Parser</h4>
-            <p className="text-xs text-natural-wheat/70 mt-1">Upload Excel, .docx, or .txt</p>
-          </div>
-        </div>
+          <span className="flex w-full justify-between items-start">
+            <span className="p-2.5 bg-white/10 text-natural-wheat rounded-xl">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <ArrowUpRight className="h-5 w-5 text-natural-sand" aria-hidden="true" />
+          </span>
+          <span className="mt-4 block">
+            <span className="block text-micro uppercase tracking-widest text-natural-wheat font-bold">Import Forage Logs</span>
+            <span className="block text-lg font-serif font-bold mt-1 text-white leading-tight">Smart Doc Parser</span>
+            <span className="block text-xs text-natural-wheat mt-1">Upload Excel, .docx, or .txt</span>
+          </span>
+        </button>
       </div>
 
       {/* NEW: Caserits Bee-havior Section */}
-      <div id="caserits-bee-havior-section" className="bg-white rounded-[40px] border border-[#E9E5D9] p-6 md:p-8 shadow-sm space-y-6">
+      <div id="caserits-bee-havior-section" className="bg-surface rounded-card border border-border p-6 md:p-8 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h3 className="text-xl font-serif font-bold text-natural-forest flex items-center gap-2">
               <span className="text-2xl" aria-hidden="true">🍯</span> Caserits Bee-havior Hub
             </h3>
-            <p className="text-xs text-natural-sage font-medium mt-1">
+            <p className="text-xs text-text-muted font-medium mt-1">
               Every colleague, sorted alphabetically, with their attendance rate in each of the four activities and their Hive Status.
             </p>
           </div>
-          
+
           {/* Quick Search */}
           <div className="relative max-w-sm w-full">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-natural-sage" aria-hidden="true" />
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-text-muted" aria-hidden="true" />
             <input
               aria-label="Search Caserits"
               type="text"
               placeholder="Search colleagues by name…"
               value={beeSearchQuery}
               onChange={(e) => setBeeSearchQuery(e.target.value)}
-              className="w-full bg-natural-cream/30 border border-natural-border rounded-2xl pl-10 pr-4 py-2 text-xs text-natural-forest placeholder-natural-sage/75 focus:border-natural-sage font-medium"
+              className="w-full bg-surface border border-input-border rounded-control pl-10 pr-4 py-2 text-xs text-natural-forest placeholder:text-text-muted focus:border-natural-forest font-medium"
             />
           </div>
         </div>
 
         {periodHasNoEvents ? (
-          emptyPeriod("beehavior-empty", "p-12 text-center bg-natural-cream/15 rounded-3xl border border-natural-border")
+          emptyPeriod("beehavior-empty", "p-12 text-center bg-natural-cream/15 rounded-card border border-natural-border")
         ) : (
         <>
-        {/* Engagement Tier Toggles / Interactive Legend */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-natural-cream/20 rounded-3xl border border-natural-border/40">
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/60 border border-natural-border/30">
-            <span className="text-2xl pt-1" aria-hidden="true">💤</span>
-            <div>
-              <h5 className="text-xs font-bold text-[#2F4F4F]">Dormant (0–25%)</h5>
-              <p className="text-[10px] text-natural-sage leading-normal font-medium">Hibernating. Rare sightings. Still getting to know the honeycomb.</p>
+        {/* Hive Status legend: tier tokens and TierBadge's icons (US-58) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-natural-cream/20 rounded-card border border-natural-border/40">
+          {TIER_LEGEND.map(({ title, meaning, icon: Icon, text, border }) => (
+            <div key={title} className={`flex items-start gap-2.5 p-3 rounded-2xl bg-surface border ${border}`}>
+              <Icon aria-hidden="true" className={`h-5 w-5 mt-0.5 shrink-0 ${text}`} strokeWidth={2.25} />
+              <div>
+                <h5 className={`text-xs font-bold ${text}`}>{title}</h5>
+                <p className="text-micro text-text-muted leading-normal font-medium">{meaning}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FEFBEA]/60 border border-[#F0E68C]/40">
-            <span className="text-2xl pt-1" aria-hidden="true">🥚</span>
-            <div>
-              <h5 className="text-xs font-bold text-[#6B5800]">Hatcher (26–50%)</h5>
-              <p className="text-[10px] text-natural-sage leading-normal font-medium">Getting cozy. Halfway to becoming a regular flyer.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFF7E6]/60 border border-[#FFA500]/30">
-            <span className="text-2xl pt-1" aria-hidden="true">🌸</span>
-            <div>
-              <h5 className="text-xs font-bold text-[#804C00]">Forager (51–75%)</h5>
-              <p className="text-[10px] text-natural-sage leading-normal font-medium">Honey maker. Solid presence, regularly contributing to the buzz.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#FFFDF0]/60 border border-[#FFD700]/30">
-            <span className="text-2xl pt-1" aria-hidden="true">🐝</span>
-            <div>
-              <h5 className="text-xs font-bold text-[#7A5E00]">Busy Bee (76–100%)</h5>
-              <p className="text-[10px] text-natural-sage leading-normal font-medium">Queen's favorite. Elite attendance and top-tier dedication.</p>
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* The Comprehensive Bee-havior Table */}
-        <div className="border border-natural-border rounded-3xl overflow-hidden shadow-inner max-h-[480px] overflow-y-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-natural-cream/60 border-b border-natural-border text-natural-sage text-[10px] font-bold uppercase tracking-wider sticky top-0 z-10">
-                <th className="p-4 pl-6">Caserits</th>
-                {ACTIVITIES.map(act => (
-                  <th key={act} className="p-4 text-center">{act}</th>
-                ))}
-                <th className="p-4 text-center">Overall</th>
-                <th className="p-4 text-center">Hive Status</th>
-                <th className="p-4 pr-6 text-center">Multi-Activity</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-natural-border/50 text-xs text-natural-forest font-medium">
-              {filteredBeehaviorData.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-12 text-center text-natural-sage italic font-medium bg-natural-cream/15">
-                    {beehaviorData.length === 0 ? "No colleagues yet." : "No colleagues match your search."}
-                  </td>
-                </tr>
-              ) : (
-                filteredBeehaviorData.map(({ attendee, activityStats, overallRate, overallTotal, overallPresents, isMulti, participatedCount }) => {
-                  return (
-                    <tr key={attendee.id} className="hover:bg-natural-cream/15 transition duration-150">
-                      {/* Name Card */}
-                      <td className="p-4 pl-6">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-8.5 w-8.5 rounded-full bg-natural-wheat/40 text-natural-forest flex items-center justify-center font-serif font-bold text-xs border border-natural-border/50">
-                            {attendee.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-natural-forest text-xs leading-tight">{attendee.name}</h4>
-                            {attendee.email && (
-                              <p className="text-[10px] text-natural-sage font-mono mt-0.5">{attendee.email}</p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* 4 Activities column */}
-                      {activityStats.map((stat, idx) => {
-                        const actColor = COLORS[idx % COLORS.length];
-                        return (
-                          <td key={stat.activity} className="p-4 text-center font-mono">
-                            {stat.rate === null ? (
-                              <span className="text-natural-sage/50 text-[11px]">—</span>
-                            ) : (
-                              <span
-                                className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold"
-                                style={{ backgroundColor: `${actColor}15`, color: actColor }}
-                                title={`Attended ${stat.presents} of ${stat.total} events`}
-                              >
-                                {stat.rate}%
-                                <span className="ml-1 text-[10px] font-medium opacity-75">({stat.presents}/{stat.total})</span>
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-
-                      {/* Overall Rate */}
-                      <td className="p-4 text-center font-mono font-bold text-natural-forest">
-                        {overallRate === null ? (
-                          <span className="text-natural-sage/50">—</span>
-                        ) : (
-                          <span title={`Attended ${overallPresents} of ${overallTotal} events`}>
-                            {overallRate}%
-                            <span className="ml-1 text-[10px] font-medium text-natural-sage">({overallPresents}/{overallTotal})</span>
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Hive Status (Tiers) */}
-                      <td className="p-4 text-center">
-                        {/* US-42: the shared badge (textColor for contrast); no Overall → No data (US-44) */}
-                        <HiveStatusBadge rate={overallRate} />
-                      </td>
-
-                      {/* Multi-Activity Column */}
-                      <td className="p-4 pr-6 text-center">
-                        {isMulti ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#FAEDCD] text-[#855B32] border border-[#D4A373]/30 animate-pulse-subtle">
-                            <span aria-hidden="true">🍯</span> Yes ({participatedCount} Activities)
-                          </span>
-                        ) : (
-                          <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
-                            Single ({participatedCount})
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        {/* The Comprehensive Bee-havior Table (US-61: empty directory and empty search are told apart) */}
+        {filteredBeehaviorData.length === 0 ? (
+          beehaviorData.length === 0 ? (
+            <EmptyState id="beehavior-no-colleagues" headingLevel={4} icon={<Users className="h-6 w-6" />} title="No colleagues yet." />
+          ) : (
+            <EmptyState id="beehavior-no-match" headingLevel={4} icon={<SearchX className="h-6 w-6" />} title="No colleagues match your search." />
+          )
+        ) : (
+          <DataTable<BeehaviorRow>
+            caption="Caserits Bee-havior Hub"
+            hideCaption
+            columns={hubColumns}
+            rows={filteredBeehaviorData}
+            getRowKey={row => row.attendee.id}
+            stickyFirstColumn
+            dense
+            className="max-h-120"
+          />
+        )}
         </>
         )}
       </div>
@@ -478,53 +435,55 @@ export default function DashboardStats({
       <div className="space-y-4">
         <h3 className="text-lg font-serif font-bold text-natural-forest">Activities Matrix Profile</h3>
         {periodHasNoEvents ? (
-          emptyPeriod("matrix-empty", "p-8 text-center bg-white rounded-[24px] border border-[#E9E5D9]")
+          emptyPeriod("matrix-empty", "p-8 text-center bg-surface rounded-card border border-border")
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {activityData.map((act, index) => {
-            const barColor = COLORS[index % COLORS.length];
+            const theme = ACTIVITY_THEME[act.name];
+            const Icon = theme.icon;
             const isWeekly = act.name === "Speakeasy";
             return (
               <div
                 key={act.name}
-                className="bg-white rounded-[24px] p-5 border border-[#E9E5D9] shadow-sm hover:border-natural-sage hover:-translate-y-1 transition duration-300 flex flex-col justify-between"
+                className="bg-surface rounded-card p-5 border border-border shadow-sm hover:border-natural-sage hover:-translate-y-1 transition duration-300 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-2">
+                    {/* Activity color as text token on cream (≥ 4.5:1) plus its icon, never color alone */}
                     <span
-                      className="text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider text-white"
-                      style={{ backgroundColor: barColor }}
+                      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-micro font-bold px-2.5 py-1 rounded-chip uppercase tracking-wider bg-cream border border-border ${theme.textClass}`}
                     >
+                      <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                       Activity {index + 1}
                     </span>
-                    <span className="text-xs text-natural-sage font-semibold">Voluntary participation</span>
+                    <span className="text-xs text-text-muted font-semibold text-right">Voluntary participation</span>
                   </div>
                   <h4 className="font-serif font-bold text-natural-forest text-base mt-3 leading-snug line-clamp-1">{act.name}</h4>
-                  <p className="text-xs text-[#8A9A5B] mt-1">{isWeekly ? "Weekly events" : "Biweekly events"}</p>
+                  <p className="text-xs text-text-muted mt-1">{isWeekly ? "Weekly events" : "Biweekly events"}</p>
                 </div>
 
                 <div className="mt-5 space-y-2">
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-natural-forest/70">Events:</span>
+                    <span className="text-text-muted">Events:</span>
                     <span className="font-bold text-natural-forest">{act.events}</span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-natural-forest/70">Avg. colleagues per event:</span>
+                    <span className="text-text-muted">Avg. colleagues per event:</span>
                     <span className="font-bold text-natural-forest" title="Present colleagues per event">
                       {formatAvgAttendees(act.avgPresent)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-natural-forest/70">Attendance rate:</span>
-                    <span style={{ color: barColor }} className="font-bold">
+                    <span className="text-text-muted">Attendance rate:</span>
+                    <span className={`font-bold ${theme.textClass}`}>
                       {act["Attendance Rate (%)"] === null ? "—" : `${act["Attendance Rate (%)"]}%`}
                     </span>
                   </div>
                   {/* Visual Progress bar */}
                   <div className="h-2 bg-natural-cream rounded-full border border-natural-border/30 overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${act["Attendance Rate (%)"] ?? 0}%`, backgroundColor: barColor }}
+                      className={`h-full rounded-full transition-all duration-500 ${theme.bgClass}`}
+                      style={{ width: `${act["Attendance Rate (%)"] ?? 0}%` }}
                     ></div>
                   </div>
                 </div>
