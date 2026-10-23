@@ -41,5 +41,5 @@ describe("US-56: examples page", () => {
       expect(screen.getByRole("button", { name: `${variant} md` })).toBeTruthy();
     }
     expect(screen.getAllByRole("button", { name: "Disabled" })).toHaveLength(5);
-  });
+  }, 20_000); // with the US-57 sections (charts included) ~1.5 s alone in jsdom, several times that in a full parallel run
 });
