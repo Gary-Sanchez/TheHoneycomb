@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { pluralize } from "../utils";
 import { getAttendedActivities } from "../beehavior";
+import { getActivityTheme } from "../activityTheme";
+import { DataTable, Field, PageHeader, SegmentedControl, Select, type DataTableColumn } from "./ui";
 import { Check, Users, Award, ArrowRightLeft, Sparkles } from "lucide-react";
 
 interface CrossReferenceHubProps {
@@ -10,8 +12,28 @@ interface CrossReferenceHubProps {
   onNavigateToAttendee: (attendee: Attendee) => void;
 }
 
+type OverlapFilter = "all" | "single" | "multi" | "super";
+
+/** Native select of the activities (minus `exclude`), with the selected activity's icon and color. */
+function ActivitySelect({ value, onChange, exclude }: { value: string; onChange: (activity: string) => void; exclude: string }) {
+  const theme = getActivityTheme(value);
+  const Icon = theme?.icon;
+  return (
+    <div className="relative">
+      {Icon && <Icon className={`pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 ${theme.textClass}`} aria-hidden="true" />}
+      <Select value={value} onChange={e => onChange(e.target.value)} className="pl-9">
+        {ACTIVITIES.filter(act => act !== exclude).map(act => (
+          <option key={act} value={act}>
+            {act}
+          </option>
+        ))}
+      </Select>
+    </div>
+  );
+}
+
 export default function CrossReferenceHub({ attendees, records, onNavigateToAttendee }: CrossReferenceHubProps) {
-  const [overlapFilter, setOverlapFilter] = useState<"all" | "single" | "multi" | "super">("all");
+  const [overlapFilter, setOverlapFilter] = useState<OverlapFilter>("all");
   
   // Custom Cross-Referencing Overlap Analyzer States
   const [compareAct1, setCompareAct1] = useState<string>(ACTIVITIES[0]);
@@ -105,14 +127,85 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
     return insights;
   }, [attendees, stats, attendeeActivitiesMap]);
 
+  // US-63: the matrix as a DataTable. Each activity column shows its icon and color next to the name;
+  // attendance reads "Attended" / "Not attended" to assistive tech and never depends on color alone.
+  const columns: DataTableColumn<Attendee>[] = [
+    {
+      key: "name",
+      header: "Colleague Name",
+      cell: att => {
+        const numActivities = (attendeeActivitiesMap[att.id] || []).length;
+        return (
+          <div className="flex items-center space-x-2">
+            <span>{att.name}</span>
+            {numActivities >= 3 ? (
+              <span className="text-micro uppercase font-bold tracking-widest bg-natural-forest text-natural-cream border border-natural-forest/30 px-1.5 py-0.5 rounded">
+                Super Active
+              </span>
+            ) : numActivities >= 2 ? (
+              <span className="text-micro uppercase font-bold tracking-widest bg-natural-wheat text-sand-text border border-natural-border/60 px-1.5 py-0.5 rounded">
+                Multi-Activity
+              </span>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    ...ACTIVITIES.map((act): DataTableColumn<Attendee> => {
+      const theme = getActivityTheme(act);
+      const Icon = theme?.icon;
+      return {
+        key: act,
+        header: (
+          <span className={`inline-flex items-center gap-1.5 ${theme?.textClass ?? ""}`}>
+            {Icon && <Icon className="size-4 shrink-0" aria-hidden="true" />}
+            <span>{act}</span>
+          </span>
+        ),
+        cell: att =>
+          (attendeeActivitiesMap[att.id] || []).includes(act) ? (
+            <div className="flex justify-center">
+              <div className={`h-6 w-6 rounded-full bg-natural-cream border border-natural-border flex items-center justify-center font-bold ${theme?.textClass ?? "text-sage-text"}`}>
+                <Check className="h-4 w-4 stroke-[3.5]" aria-hidden="true" />
+                <span className="sr-only">Attended</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <span className="text-text-muted font-bold" aria-hidden="true">—</span>
+              <span className="sr-only">Not attended</span>
+            </div>
+          ),
+      };
+    }),
+    {
+      key: "total",
+      header: "Total Activities",
+      cell: att => {
+        const numActivities = (attendeeActivitiesMap[att.id] || []).length;
+        return (
+          <div className="flex justify-center">
+            <span className={`inline-block h-7 w-7 rounded-full leading-7 text-center text-xs font-bold ${
+              numActivities >= 3 ? "bg-natural-forest text-white" :
+              numActivities >= 2 ? "bg-sand-text text-white" : "bg-natural-cream text-sage-text border border-natural-border/40"
+            }`}>
+              {numActivities}
+            </span>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-8 animate-fade-in" id="cross-ref-tab">
-      
+      <PageHeader title="Overlap Cross-Referencer" />
+
       {/* Top row: Multi-activity Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         {/* Single Activity */}
-        <div className="bg-white rounded-[32px] p-6 border border-[#E9E5D9] shadow-sm flex items-center space-x-5 hover:border-natural-sage transition duration-300">
+        <div className="bg-white rounded-panel p-6 border border-natural-border shadow-sm flex items-center space-x-5 hover:border-natural-sage transition duration-300">
           <div className="p-4 bg-natural-cream text-natural-sage rounded-2xl border border-natural-border/40">
             <Users className="h-6 w-6" />
           </div>
@@ -124,7 +217,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
         </div>
 
         {/* Multi Activity (2+) */}
-        <div className="bg-white rounded-[32px] p-6 border border-[#E9E5D9] shadow-sm flex items-center space-x-5 hover:border-natural-sand transition duration-300">
+        <div className="bg-white rounded-panel p-6 border border-natural-border shadow-sm flex items-center space-x-5 hover:border-natural-sand transition duration-300">
           <div className="p-4 bg-natural-wheat text-natural-sand rounded-2xl border border-natural-border/30">
             <ArrowRightLeft className="h-6 w-6" />
           </div>
@@ -136,14 +229,14 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
         </div>
 
         {/* Super Active (3+) */}
-        <div className="bg-white rounded-[32px] p-6 border border-[#E9E5D9] shadow-sm flex items-center space-x-5 hover:border-natural-forest transition duration-300">
-          <div className="p-4 bg-[#CCD5AE]/40 text-natural-forest rounded-2xl border border-[#CCD5AE]/60">
+        <div className="bg-white rounded-panel p-6 border border-natural-border shadow-sm flex items-center space-x-5 hover:border-natural-forest transition duration-300">
+          <div className="p-4 bg-moss/40 text-natural-forest rounded-2xl border border-moss/60">
             <Award className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-[#8A9A5B] font-bold mb-1">Super Active</p>
+            <p className="text-xs uppercase tracking-wider text-sage-text font-bold mb-1">Super Active</p>
             <h3 className="text-4xl font-serif font-bold text-natural-forest tracking-tight">{stats.super}</h3>
-            <span className="text-xs text-[#8A9A5B] font-semibold">Active in 3+ activities</span>
+            <span className="text-xs text-sage-text font-semibold">Active in 3+ activities</span>
           </div>
         </div>
 
@@ -153,60 +246,34 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Interactive Compare Tool Card */}
-        <div className="lg:col-span-2 bg-gradient-to-br from-[#2D3E35] to-[#1E2923] text-natural-cream rounded-[32px] p-6 shadow-md border border-[#E9E5D9]/25 flex flex-col justify-between focus-ring-on-dark">
+        <div className="lg:col-span-2 bg-surface text-natural-forest rounded-panel p-6 shadow-md border border-natural-border flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-[#CCD5AE]" />
-              <h3 className="text-lg font-serif font-bold text-white">Compare Two Activities</h3>
+              <Sparkles className="h-5 w-5 text-sage-text" aria-hidden="true" />
+              <h3 className="text-lg font-serif font-bold text-natural-forest">Compare Two Activities</h3>
             </div>
-            <p className="text-xs text-natural-wheat/80 leading-relaxed">
+            <p className="text-xs text-text-muted leading-relaxed">
               Select two activities to see the colleagues who attended both. Useful for spotting overlaps when planning the activity calendar.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="space-y-1">
-                <label htmlFor="compare-activity-1" className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">First Activity</label>
-                <select
-                  id="compare-activity-1"
-                  value={compareAct1}
-                  onChange={(e) => setCompareAct1(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white"
-                >
-                  {ACTIVITIES.map(act => (
-                    <option key={act} value={act} className="text-natural-forest font-medium">
-                      {act}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="compare-activity-2" className="text-[10px] uppercase font-bold text-[#CCD5AE] tracking-wider">Second Activity</label>
-                <select
-                  id="compare-activity-2"
-                  value={compareAct2}
-                  onChange={(e) => setCompareAct2(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2.5 text-xs text-white"
-                >
-                  {ACTIVITIES.map(act => (
-                    <option key={act} value={act} className="text-natural-forest font-medium">
-                      {act}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* An activity picked in one selector is not offered in the other */}
+              <Field label="First Activity" id="compare-activity-1">
+                <ActivitySelect value={compareAct1} onChange={setCompareAct1} exclude={compareAct2} />
+              </Field>
+              <Field label="Second Activity" id="compare-activity-2">
+                <ActivitySelect value={compareAct2} onChange={setCompareAct2} exclude={compareAct1} />
+              </Field>
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
-            <h4 className="text-xs font-bold text-[#CCD5AE] uppercase tracking-widest">
+          <div className="mt-6 pt-6 border-t border-natural-border space-y-4">
+            <h4 className="text-xs font-bold text-sage-text uppercase tracking-widest">
               Shared Colleague Cohort ({intersectingAttendees.length})
             </h4>
 
-            {compareAct1 === compareAct2 ? (
-              <p className="text-xs text-natural-wheat/65 italic">Select two different activities to compare.</p>
-            ) : intersectingAttendees.length === 0 ? (
-              <p className="text-xs text-natural-wheat/65 italic">No colleagues attended both activities yet.</p>
+            {intersectingAttendees.length === 0 ? (
+              <p className="text-xs text-text-muted italic">No colleagues attended both activities yet.</p>
             ) : (
               <div className="flex flex-wrap gap-2 max-h-[128px] overflow-y-auto p-1 -m-1">
                 {intersectingAttendees.map(att => (
@@ -214,9 +281,9 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
                     key={att.id}
                     type="button"
                     onClick={() => onNavigateToAttendee(att)}
-                    className="bg-white/10 hover:bg-white/20 border border-white/20 text-[#FDFBF7] rounded-xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition"
+                    className="bg-cream hover:bg-wheat border border-natural-border text-natural-forest rounded-xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition"
                   >
-                    <Check className="h-3.5 w-3.5 text-[#CCD5AE] stroke-[3]" />
+                    <Check className="h-3.5 w-3.5 text-sage-text stroke-[3]" aria-hidden="true" />
                     <span>{att.name}</span>
                   </button>
                 ))}
@@ -226,7 +293,7 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
         </div>
 
         {/* Automatic Overlap Insights Sidebar */}
-        <div className="bg-natural-cream/30 border border-natural-border rounded-[32px] p-6 flex flex-col justify-between">
+        <div className="bg-natural-cream/30 border border-natural-border rounded-panel p-6 flex flex-col justify-between">
           <div className="space-y-4">
             <h4 className="text-xs font-bold text-natural-sage uppercase tracking-widest">
               Automated Activity Insights
@@ -248,129 +315,36 @@ export default function CrossReferenceHub({ attendees, records, onNavigateToAtte
       <div className="space-y-4">
         
         {/* Title and Filter Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-serif font-bold text-natural-forest">Participation Matrix Directory</h3>
-            <p className="text-xs text-natural-sage font-medium">Total cross-referenced colleague participation breakdown</p>
+            <p className="text-xs text-sage-text font-medium">Total cross-referenced colleague participation breakdown</p>
           </div>
 
-          {/* Filtering buttons */}
-          <div className="flex bg-natural-wheat/40 border border-natural-border/40 p-1 rounded-xl text-xs font-semibold text-natural-forest self-start">
-            <button
-              type="button"
-              onClick={() => setOverlapFilter("all")}
-              className={`px-3 py-2 rounded-lg transition duration-150 ${
-                overlapFilter === "all" ? "bg-white text-natural-forest shadow-sm border border-natural-border/40" : "hover:text-natural-forest text-natural-sage"
-              }`}
-            >
-              All ({attendees.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOverlapFilter("single")}
-              className={`px-3 py-2 rounded-lg transition duration-150 ${
-                overlapFilter === "single" ? "bg-white text-natural-forest shadow-sm border border-natural-border/40" : "hover:text-natural-forest text-natural-sage"
-              }`}
-            >
-              Single ({stats.single})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOverlapFilter("multi")}
-              className={`px-3 py-2 rounded-lg transition duration-150 ${
-                overlapFilter === "multi" ? "bg-white text-natural-forest shadow-sm border border-natural-border/40" : "hover:text-natural-forest text-natural-sage"
-              }`}
-            >
-              Multi-Activity (2+) ({stats.multi})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOverlapFilter("super")}
-              className={`px-3 py-2 rounded-lg transition duration-150 ${
-                overlapFilter === "super" ? "bg-white text-natural-forest shadow-sm border border-natural-border/40" : "hover:text-natural-forest text-natural-sage"
-              }`}
-            >
-              Super Active ({stats.super})
-            </button>
-          </div>
+          <SegmentedControl
+            label="Filter by number of activities"
+            className="flex-wrap"
+            value={overlapFilter}
+            onValueChange={value => setOverlapFilter(value as OverlapFilter)}
+            options={[
+              { value: "all", label: `All (${attendees.length})` },
+              { value: "single", label: `Single (${stats.single})` },
+              { value: "multi", label: `Multi-Activity (2+) (${stats.multi})` },
+              { value: "super", label: `Super Active (${stats.super})` },
+            ]}
+          />
         </div>
 
         {/* Matrix Table */}
-        <div className="bg-white rounded-[32px] border border-natural-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-natural-cream/40 border-b border-natural-border text-natural-sage text-xs font-bold uppercase">
-                  <th className="p-4 pl-6">Colleague Name</th>
-                  {ACTIVITIES.map(act => (
-                    <th key={act} className="p-4 text-center max-w-[150px] truncate">
-                      {act}
-                    </th>
-                  ))}
-                  <th className="p-4 text-center">Total Activities</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-natural-border/60 text-sm text-natural-forest">
-                {filteredAttendees.map(att => {
-                  const numActivities = (attendeeActivitiesMap[att.id] || []).length;
-                  return (
-                    <tr key={att.id} className="hover:bg-natural-cream/10 transition">
-                      
-                      {/* Name with Overlap Badge */}
-                      <td className="p-4 pl-6 font-bold text-natural-forest">
-                        <div className="flex items-center space-x-2">
-                          <span>{att.name}</span>
-                          {numActivities >= 3 ? (
-                            <span className="text-[9px] uppercase font-bold tracking-widest bg-natural-forest text-natural-cream border border-natural-forest/30 px-1.5 py-0.5 rounded">
-                              Super Active
-                            </span>
-                          ) : numActivities >= 2 ? (
-                            <span className="text-[9px] uppercase font-bold tracking-widest bg-natural-wheat text-natural-sand border border-natural-border/60 px-1.5 py-0.5 rounded">
-                              Multi-Activity
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-
-                      {/* Columns for the 4 Activities */}
-                      {ACTIVITIES.map(act => {
-                        const isParticipating = (attendeeActivitiesMap[att.id] || []).includes(act);
-                        return (
-                          <td key={act} className="p-4 text-center">
-                            <div className="flex justify-center">
-                              {isParticipating ? (
-                                <div className="h-6 w-6 rounded-full bg-natural-cream border border-natural-border text-natural-sage flex items-center justify-center font-bold">
-                                  <Check className="h-4 w-4 stroke-[3.5]" aria-hidden="true" />
-                                  <span className="sr-only">Attended</span>
-                                </div>
-                              ) : (
-                                <>
-                                  <span className="text-natural-wheat font-bold" aria-hidden="true">—</span>
-                                  <span className="sr-only">Not attended</span>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        );
-                      })}
-
-                      {/* Number of activities badges */}
-                      <td className="p-4 text-center font-bold">
-                        <span className={`inline-block h-7 w-7 rounded-full leading-7 text-center text-xs font-bold ${
-                          numActivities >= 3 ? "bg-natural-forest text-white" :
-                          numActivities >= 2 ? "bg-natural-sand text-white" : "bg-natural-cream text-natural-sage border border-natural-border/40"
-                        }`}>
-                          {numActivities}
-                        </span>
-                      </td>
-
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataTable
+          caption="Participation Matrix Directory"
+          hideCaption
+          columns={columns}
+          rows={filteredAttendees}
+          getRowKey={att => att.id}
+          stickyFirstColumn
+          emptyMessage="No colleagues to show"
+        />
 
       </div>
 
