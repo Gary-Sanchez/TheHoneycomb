@@ -103,27 +103,41 @@ el chequeo de 3:1; sí el texto sobre su fondo.
 
 ### Actividades (`activity-*`)
 
-El relleno es el color que hoy usa el Dashboard para cada actividad (`COLORS` de
-`DashboardStats.tsx`); `-text` es la variante legible como texto. La paleta nueva que cumple 3:1
-contra blanco y se distingue con deuteranopia (PRD §2.8, D-3) llega con la migración de las
-pantallas; hasta entonces los rellenos de Music Room y Writing Hood no cumplen 3:1 (por eso no
-entran en el chequeo) y siempre van acompañados del nombre.
+Definidas una sola vez en [`src/activityTheme.ts`](../src/activityTheme.ts) (US-58): por actividad, su
+token de relleno, su token de texto, las clases Tailwind equivalentes y su ícono Lucide. El color
+nunca va solo: donde una actividad se identifique por color, va con su ícono (o su nombre).
 
-| Token | Valor | Uso | Contraste |
-|---|---|---|---|
-| `--color-activity-speakeasy` | `var(--color-sage)` = `#8A9A5B` | Relleno Speakeasy | 3.06 sobre `surface` |
-| `--color-activity-speakeasy-text` | `var(--color-sage-text)` = `#5F6F3A` | Texto Speakeasy | 5.50 sobre `surface` · 5.32 sobre `cream` |
-| `--color-activity-reading-club` | `var(--color-forest)` = `#2D3E35` | Relleno Reading Club | 11.34 sobre `surface` |
-| `--color-activity-reading-club-text` | `var(--color-forest)` = `#2D3E35` | Texto Reading Club | 11.34 sobre `surface` · 10.97 sobre `cream` |
-| `--color-activity-music-room` | `var(--color-sand)` = `#D4A373` | Relleno Music Room | 2.26 sobre `surface` (pendiente §2.8) |
-| `--color-activity-music-room-text` | `var(--color-sand-text)` = `#8A5A2B` | Texto Music Room | 5.87 sobre `surface` · 5.68 sobre `cream` |
-| `--color-activity-writing-hood` | `var(--color-moss)` = `#CCD5AE` | Relleno Writing Hood | 1.53 sobre `surface` (pendiente §2.8) |
-| `--color-activity-writing-hood-text` | `#556B2F` | Texto Writing Hood | 5.95 sobre `surface` · 5.76 sobre `cream` |
+Los rellenos cumplen 3:1 contra blanco (WCAG 1.4.11) y se distinguen con deuteranopia: se separan
+por luminosidad y por el eje azul–amarillo, no sólo por rojo–verde. `src/designTokens.test.ts`
+simula deuteranopia (Machado et al. 2009, severidad 1.0, sobre sRGB lineal) y exige ΔE (CIE76) ≥ 20
+entre cada par; el mínimo actual es 31.1 (Speakeasy / Music Room).
+
+| Token | Valor | Ícono | Uso | Contraste |
+|---|---|---|---|---|
+| `--color-activity-speakeasy` | `#4A7A3C` | `MessagesSquare` | Relleno Speakeasy | 5.07 sobre `surface` |
+| `--color-activity-speakeasy-text` | `var(--color-activity-speakeasy)` | | Texto Speakeasy | 5.07 sobre `surface` · 4.91 sobre `cream` |
+| `--color-activity-reading-club` | `#2D3E35` | `BookOpen` | Relleno Reading Club | 11.34 sobre `surface` |
+| `--color-activity-reading-club-text` | `var(--color-forest)` = `#2D3E35` | | Texto Reading Club | 11.34 sobre `surface` · 10.97 sobre `cream` |
+| `--color-activity-music-room` | `#C68030` | `Music` | Relleno Music Room | 3.22 sobre `surface` (sólo relleno, no texto) |
+| `--color-activity-music-room-text` | `var(--color-sand-text)` = `#8A5A2B` | | Texto Music Room | 5.87 sobre `surface` · 5.68 sobre `cream` |
+| `--color-activity-writing-hood` | `#7A5C9E` | `PenLine` | Relleno Writing Hood | 5.45 sobre `surface` |
+| `--color-activity-writing-hood-text` | `var(--color-activity-writing-hood)` | | Texto Writing Hood | 5.45 sobre `surface` · 5.27 sobre `cream` |
+
+ΔE bajo deuteranopia entre pares: Speakeasy–Reading Club 32.3 · Speakeasy–Music Room 31.1 ·
+Speakeasy–Writing Hood 57.2 · Reading Club–Music Room 63.0 · Reading Club–Writing Hood 39.3 ·
+Music Room–Writing Hood 85.5.
+
+Los rellenos son hex propios (antes eran alias de sage / forest / sand / moss): los tokens de marca
+no cambian, porque el resto de la UI los usa. Las pantallas adoptan el módulo al migrar (US-59..US-66).
 
 ### Gráficos (`chart-*`)
 
-Para que recharts los lea como variables CSS cuando los paneles migren a `ChartFrame` (§2.8). Hoy
-los gráficos siguen con sus constantes.
+recharts los lee con [`src/chartTheme.ts`](../src/chartTheme.ts) (US-58): `getChartTheme()` resuelve
+cada `--color-chart-*` con `getComputedStyle` sobre `:root` y devuelve colores planos (`series1..4`,
+`series`, `activity[<actividad>]`, `primary`, `grid`, `axis`, `axisMuted`, `tooltipBg`,
+`tooltipText`, `tooltipAccent`). Sin DOM (tests, servidor) o con la variable vacía usa
+`CHART_FALLBACK`, los mismos valores literales; `src/chartTheme.test.ts` verifica que coincidan con
+`index.css`. Los paneles lo adoptan al migrar; hoy los gráficos siguen con sus constantes.
 
 | Token | Valor | Uso | Contraste |
 |---|---|---|---|

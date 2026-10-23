@@ -184,6 +184,11 @@ Don't revert either of these — they protect coaching notes and stop LAN device
   key off this, not the real current date.
 - Hive Status engagement tiers by attendance rate: Dormant (0–25%), Hatcher (26–50%),
   Forager (51–75%), Busy Bee (76–100%).
+- **Domain visuals (US-58)**: one source each — `src/activityTheme.ts` (activity → `--color-activity-*`
+  token + Lucide icon; color never alone), `src/components/TierBadge.tsx` (Hive Status badge;
+  `HiveStatusBadge` re-exports it), `src/format.ts` (`formatDate` → `Jun 24, 2026`, `formatPercent`
+  0–1 → `76%`; `formatDisplayDate` in `utils.ts` is an alias) and `src/chartTheme.ts`
+  (`getChartTheme()` reads `--color-chart-*` for recharts). Token catalog: `docs/DESIGN-TOKENS.md`.
 - Import flow (see [`US-03 Importar Registros de Asisten.txt`](../US-03%20Importar%20Registros%20de%20Asisten.txt)
   for the full user story/QA scenarios): accepts `.xlsx .xls .docx .doc .txt .csv`; strips
   meeting metadata and configured host names; normalizes valid names to Title Case; lets the user

@@ -356,8 +356,9 @@ describe("US-44: No data instead of Dormant", () => {
     expect(getHiveStatus(80).label).toBe("Busy Bee");
   });
 
-  it("No data has no icon and a grey style distinct from every tier", () => {
-    expect(NO_DATA_TIER.icon).toBe("");
+  it("No data has its own key (TierBadge draws no icon for it) and a grey style distinct from every tier", () => {
+    expect(NO_DATA_TIER.key).toBe("no-data");
+    expect([0, 26, 51, 76].map(rate => getHiveTier(rate).key)).toEqual(["dormant", "hatcher", "forager", "busy-bee"]);
     for (const rate of [0, 26, 51, 76]) expect(getHiveTier(rate).color).not.toBe(NO_DATA_TIER.color);
   });
 });

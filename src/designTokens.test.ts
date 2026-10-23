@@ -131,6 +131,70 @@ describe("US-54: token contrast (PRD 4.1 §2.3)", () => {
   });
 });
 
+// US-58: deuteranopia simulation — Machado, Oliveira & Fernandes (2009), severity 1.0, applied to
+// linearized sRGB; the result is compared in CIE L*a*b* (D65) with CIE76 ΔE.
+const DEUTERANOPIA = [
+  [0.367322, 0.860646, -0.227968],
+  [0.280085, 0.672501, 0.047413],
+  [-0.01182, 0.04294, 0.968881],
+];
+
+function linearRgb(color: string): number[] {
+  return [1, 3, 5].map(i => {
+    const c = parseInt(color.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+}
+
+function toLab([r, g, b]: number[]): number[] {
+  const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
+  const y = 0.2126729 * r + 0.7151522 * g + 0.072175 * b;
+  const z = (0.0193339 * r + 0.119192 * g + 0.9503041 * b) / 1.08883;
+  const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+
+function deuteranopeLab(color: string): number[] {
+  const rgb = linearRgb(color);
+  return toLab(DEUTERANOPIA.map(row => Math.min(1, Math.max(0, row[0] * rgb[0] + row[1] * rgb[1] + row[2] * rgb[2]))));
+}
+
+const deltaE = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+const ACTIVITY_FILLS = ["speakeasy", "reading-club", "music-room", "writing-hood"].map(a => `--color-activity-${a}`);
+
+// ΔE 20 is well beyond "clearly different at a glance" (≈ 10 for adjacent chart swatches), so the
+// four series stay apart for a deuteranope even on small legend dots. Today's minimum is ≈ 31.
+const MIN_DEUTERANOPIA_DELTA_E = 20;
+
+describe("US-58: activity palette (PRD 4.1 §2.8)", () => {
+  it.each(ACTIVITY_FILLS)("fill %s is at least 3:1 on surface", fill => {
+    const ratio = contrast(hex(fill), hex("--color-surface"));
+    expect(ratio, `${fill} (${hex(fill)}) on surface is ${ratio.toFixed(2)}:1, needs 3:1`).toBeGreaterThanOrEqual(3);
+  });
+
+  it("the 4 fills stay distinguishable under deuteranopia", () => {
+    for (let i = 0; i < ACTIVITY_FILLS.length; i++) {
+      for (let j = i + 1; j < ACTIVITY_FILLS.length; j++) {
+        const [a, b] = [ACTIVITY_FILLS[i], ACTIVITY_FILLS[j]];
+        const d = deltaE(deuteranopeLab(hex(a)), deuteranopeLab(hex(b)));
+        expect(d, `${a} vs ${b}: ΔE ${d.toFixed(1)} under deuteranopia`).toBeGreaterThanOrEqual(MIN_DEUTERANOPIA_DELTA_E);
+      }
+    }
+  });
+
+  it("the deuteranopia simulation behaves as expected", () => {
+    // Pure red and pure green collapse onto the same yellowish hue; black and white are unchanged.
+    expect(deltaE(deuteranopeLab("#FF0000"), deuteranopeLab("#00FF00"))).toBeLessThan(deltaE(toLab(linearRgb("#FF0000")), toLab(linearRgb("#00FF00"))) / 2);
+    expect(deuteranopeLab("#000000")[0]).toBeCloseTo(0, 5);
+    expect(deuteranopeLab("#FFFFFF")[0]).toBeCloseTo(100, 0);
+  });
+
+  it("chart-1..4 are the activity fills, in ACTIVITIES order", () => {
+    ACTIVITY_FILLS.forEach((fill, i) => expect(hex(`--color-chart-${i + 1}`)).toBe(hex(fill)));
+  });
+});
+
 describe("US-54: token catalog (PRD 4.1 §2.1)", () => {
   it("declares every token group of the PRD", () => {
     const required = [
