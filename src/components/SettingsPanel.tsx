@@ -1,6 +1,7 @@
 import { useState, FormEvent } from "react";
-import { Eye, EyeOff, AlertTriangle, Loader2, ShieldCheck, Lock, LogOut } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, Lock, LogOut } from "lucide-react";
 import { AuthStatus } from "../types";
+import { Alert, Button, Field, IconButton, Input, PageHeader } from "./ui";
 
 interface SettingsPanelProps {
   className?: string;
@@ -53,103 +54,82 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
     await onAuthChange();
   };
 
+  const errorId = "admin-access-error";
+  const fieldError = error ? { invalid: true, "aria-describedby": errorId } : {};
+
   return (
     <div className="space-y-4" id="admin-access">
-      <div>
-        <h2 className="text-2xl font-serif font-bold text-natural-forest flex items-center gap-2">
-          <Lock className="h-6 w-6 text-natural-sage" />
-          Admin Access
-        </h2>
-        <p className="text-sm text-natural-sage mt-1 font-medium">
-          Anyone can view attendance data. Adding, editing, importing, or deleting data requires an admin session.
-        </p>
-      </div>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Lock className="size-6 text-sage-text" aria-hidden="true" />
+            Admin Access
+          </span>
+        }
+        description="Anyone can view attendance data. Adding, editing, importing, or deleting data requires an admin session."
+      />
 
       {auth.authenticated ? (
-        <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 rounded-[24px] p-6 flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-moss/60 bg-moss/20 p-6">
           <div className="flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-natural-sage shrink-0" />
-            <p className="text-sm font-bold text-natural-forest">Signed in as admin. Editing is enabled.</p>
+            <ShieldCheck className="size-5 shrink-0 text-sage-text" aria-hidden="true" />
+            <p className="text-body font-bold text-forest">Signed in as admin. Editing is enabled.</p>
           </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 px-4 py-2 border border-natural-border text-natural-forest hover:bg-natural-cream text-xs font-bold rounded-xl transition"
-          >
-            <LogOut className="h-3.5 w-3.5" />
+          <Button variant="secondary" size="sm" icon={<LogOut className="size-3.5" />} onClick={handleSignOut}>
             Sign Out
-          </button>
+          </Button>
         </div>
       ) : isSetup && !auth.setupAllowed ? (
-        <div className="bg-natural-sand/10 border border-natural-sand/30 text-natural-sand px-4 py-3 rounded-xl text-sm flex items-start gap-2.5">
-          <AlertTriangle className="h-5 w-5 text-natural-sand shrink-0 mt-0.5" />
-          <span>No admin password is configured yet. It can only be created from the machine running the server (localhost).</span>
-        </div>
+        <Alert tone="warning">
+          No admin password is configured yet. It can only be created from the machine running the server (localhost).
+        </Alert>
       ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="bg-natural-cream/20 border border-natural-border p-6 rounded-[24px] space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-card border border-border bg-cream/20 p-6">
           {isSetup && (
-            <p className="text-sm font-bold text-natural-forest">
+            <p className="text-body font-bold text-forest">
               No admin password is set yet. Create one to enable editing (minimum 8 characters).
             </p>
           )}
-          <div className="space-y-2">
-            <label htmlFor="admin-password" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
-              {isSetup ? "New Admin Password" : "Admin Password"}
-            </label>
+          <Field label={isSetup ? "New Admin Password" : "Admin Password"} id="admin-password">
             <div className="relative">
-              <input
-                id="admin-password"
+              <Input
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: { target: { value: string } }) => setPassword(e.target.value)}
                 autoComplete={isSetup ? "new-password" : "current-password"}
-                className="w-full bg-white border border-natural-border rounded-xl pl-4 pr-11 py-3 text-sm text-natural-forest focus:border-natural-sage transition duration-150"
+                className="pr-12"
+                {...fieldError}
               />
-              <button
-                type="button"
+              <IconButton
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-natural-sage hover:text-natural-forest transition"
+                className="absolute right-0.5 top-1/2 -translate-y-1/2"
                 aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+                icon={showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              />
             </div>
-          </div>
+          </Field>
           {isSetup && (
-            <div className="space-y-2">
-              <label htmlFor="admin-password-confirm" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">
-                Confirm Password
-              </label>
-              <input
-                id="admin-password-confirm"
+            <Field label="Confirm Password" id="admin-password-confirm">
+              <Input
                 type={showPassword ? "text" : "password"}
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e: { target: { value: string } }) => setConfirmPassword(e.target.value)}
                 autoComplete="new-password"
-                className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:border-natural-sage transition duration-150"
+                {...fieldError}
               />
-            </div>
+            </Field>
           )}
 
           {error && (
-            <div className="bg-natural-sand/10 border border-natural-sand/30 text-natural-sand px-4 py-3 rounded-xl text-sm flex items-start gap-2.5">
-              <AlertTriangle className="h-5 w-5 text-natural-sand shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
+            <Alert tone="danger" id={errorId}>
+              {error}
+            </Alert>
           )}
 
           <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={!password || submitting}
-              className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] disabled:opacity-50 disabled:cursor-not-allowed text-white font-serif font-bold px-6 py-2.5 rounded-xl text-sm transition duration-150 shadow-sm"
-            >
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              <span>{isSetup ? "Create Admin Password" : "Sign In"}</span>
-            </button>
+            <Button type="submit" loading={submitting} disabled={!password}>
+              {isSetup ? "Create Admin Password" : "Sign In"}
+            </Button>
           </div>
         </form>
       )}
@@ -160,12 +140,12 @@ function AdminAccessSection({ auth, onAuthChange }: { auth: AuthStatus; onAuthCh
 export default function SettingsPanel({ className, auth, onAuthChange }: SettingsPanelProps) {
   return (
     <div
-      className={`bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-8 animate-fade-in ${className ?? ""}`}
+      className={`bg-surface rounded-panel border border-border p-6 md:p-8 shadow-sm space-y-8 animate-fade-in ${className ?? ""}`}
       id="settings-panel"
     >
       <AdminAccessSection auth={auth} onAuthChange={onAuthChange} />
       {/* US-49: app version (package.json, inlined at build time). Kept apart from AdminAccessSection. */}
-      <p id="app-version" className="text-xs font-medium text-natural-sage border-t border-natural-border pt-4">
+      <p id="app-version" className="text-xs font-medium text-sage-text border-t border-border pt-4">
         The Honeycomb v{__APP_VERSION__}
       </p>
     </div>
