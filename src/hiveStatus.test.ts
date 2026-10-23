@@ -29,8 +29,10 @@ describe("US-42: one Hive Status scale", () => {
   });
 
   it("QA-03: the old scale's labels are gone from the app", () => {
-    const dir = join(__dirname, "components");
-    const sources = readdirSync(dir).map(f => readFileSync(join(dir, f), "utf8")).join("\n");
+    // Files only, subfolders included (components/ui/ since US-56).
+    const files = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]));
+    const sources = files(join(__dirname, "components")).map(f => readFileSync(f, "utf8")).join("\n");
     for (const old of ["Excellent Performance", "Good Standing", "Needs Support"]) expect(sources).not.toContain(old);
   });
 

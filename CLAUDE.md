@@ -130,6 +130,11 @@ Full record in [`docs/US-13-npm-audit.md`](docs/US-13-npm-audit.md). Keep these 
   `DashboardStats`, `DocumentParser`, `ProgressReportModal`, `SettingsPanel` (Admin Access only)
   — map roughly 1:1 to the tabs in the doc (Manual Check-In, Caserits & Progress, Overlap
   Cross-Referencer, Dashboard, Import Forage Logs, Progress Report modal).
+  Base components (US-56) live in `src/components/ui/` (`Button`, `IconButton`, `Field` + controls,
+  `Card`/`Panel`, `Badge`/`StatusBadge`/`ActivityBadge`; barrel `index.ts`), tokens only — catalog in
+  [`docs/UI-COMPONENTS.md`](docs/UI-COMPONENTS.md). Dev-only examples page:
+  `http://localhost:3000/examples.html` (`examples.html`, never built: keep `vite.config.ts` free of
+  `build.rollupOptions.input`).
 - **Content-Security-Policy (US-14)**: the strict production CSP lives in `index.html`; in dev,
   `cspDevServerPlugin` (`vite.config.ts`) swaps in a relaxed one (inline script for React Fast
   Refresh, HMR websocket). Any new external origin (CDN, fonts, images) must be added to **both**.
