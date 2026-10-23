@@ -39,7 +39,8 @@ describe("US-42: one Hive Status scale", () => {
   it("the Hub, Caserits & Progress and the Progress Report all render the shared badge", () => {
     const dir = join(__dirname, "components");
     for (const file of ["DashboardStats.tsx", "AttendeeDirectory.tsx", "ProgressReportModal.tsx"]) {
-      expect(readFileSync(join(dir, file), "utf8"), file).toContain("<HiveStatusBadge");
+      // US-64: the Progress Report renders TierBadge directly (HiveStatusBadge is its alias)
+      expect(readFileSync(join(dir, file), "utf8"), file).toMatch(/<(HiveStatusBadge|TierBadge)/);
     }
   });
 });

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, RefObject } from "react";
-import { X, Download } from "lucide-react";
+import { useState, RefObject } from "react";
+import { Download } from "lucide-react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { ALL_TIME, PeriodFilter, formatPeriodLabel, isValidPeriod, resolvePeriod } from "../beehavior";
 import {
@@ -13,6 +13,11 @@ import {
   parseTopN,
   reportFilename,
 } from "../outcomeReport";
+import { Alert, Button, DateInput, Dialog, Input, Select } from "./ui";
+
+// US-64: same content and behavior as the 4.0 modal, now on the shared Dialog (US-57), which brings
+// the focus handling this file used to hand-roll (focus in, Escape, Tab wrap, scroll lock, focus
+// back to the Generate Outcome Report button through returnFocusRef).
 
 interface OutcomeReportModalProps {
   attendees: Attendee[];
@@ -24,7 +29,7 @@ interface OutcomeReportModalProps {
   returnFocusRef: RefObject<HTMLButtonElement | null>;
 }
 
-const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+type ChangeEvent = { target: { value: string } };
 
 // Text file built in the browser and saved through a temporary <a download> (no server route)
 function downloadText(filename: string, text: string) {
@@ -46,7 +51,6 @@ export default function OutcomeReportModal({
   onClose,
   returnFocusRef,
 }: OutcomeReportModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() =>
     resolvePeriod(initialPeriod) ? initialPeriod : ALL_TIME
   );
@@ -55,44 +59,6 @@ export default function OutcomeReportModal({
   );
   const [overallTop, setOverallTop] = useState("");
   const [tiers, setTiers] = useState<ReportTier[]>([]);
-
-  // Accessible dialog: focus in on open, Escape closes, Tab stays inside, background doesn't scroll,
-  // and focus goes back to the trigger on close.
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    const returnTo = returnFocusRef.current;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (e.key !== "Tab" || !dialog) return;
-      const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prevOverflow;
-      returnTo?.focus();
-    };
-  }, [returnFocusRef]);
 
   const invalidRange =
     periodFilter.mode === "custom" &&
@@ -123,27 +89,27 @@ export default function OutcomeReportModal({
   const toggleTier = (tier: ReportTier) =>
     setTiers(prev => (prev.includes(tier) ? prev.filter(t => t !== tier) : [...prev, tier]));
 
-  const fieldClass =
-    "bg-white border border-natural-border rounded-xl px-3 py-1.5 text-sm text-natural-forest focus:border-natural-forest aria-[invalid=true]:border-red-700";
   const nInput = (id: string, label: string, value: string, onChange: (v: string) => void) => {
     const invalid = parseTopN(value) === null;
     return (
       <div key={id} className="flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-semibold text-natural-forest">{label}</label>
+        <label htmlFor={id} className="text-body font-semibold text-forest">{label}</label>
         {/* Text, not type="number": a number input reports "" for a bad entry like "5e", which
             parseTopN would read as 0 (left out) instead of invalid. */}
-        <input
-          id={id}
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          placeholder="0"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          aria-invalid={invalid}
-          aria-describedby={invalid ? `${id}-error` : undefined}
-          className={`${fieldClass} w-20 text-right`}
-        />
+        <div className="w-20">
+          <Input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            placeholder="0"
+            value={value}
+            onChange={(e: ChangeEvent) => onChange(e.target.value)}
+            aria-invalid={invalid}
+            aria-describedby={invalid ? `${id}-error` : undefined}
+            className="text-right"
+          />
+        </div>
         {invalid && (
           <span id={`${id}-error`} className="sr-only">Enter a whole number from 0 to {MAX_TOP_N}.</span>
         )}
@@ -152,172 +118,137 @@ export default function OutcomeReportModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-[#2D3E35]/45 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
-      id="outcome-report-overlay"
-      onMouseDown={e => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        id="outcome-report-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="outcome-report-title"
-        aria-describedby="outcome-report-desc"
-        className="bg-[#FDFBF7] rounded-[32px] border border-natural-border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slide-up"
-      >
-        <div className="p-6 border-b border-natural-border flex justify-between items-start gap-4 bg-natural-cream/40">
-          <div>
-            <h2 id="outcome-report-title" className="font-serif font-bold text-natural-forest text-xl leading-tight">
-              Outcome Report
-            </h2>
-            <p id="outcome-report-desc" className="text-sm text-natural-forest mt-1">
-              Choose a period and one or more blocks, then download the report as a .txt file.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close Outcome Report"
-            className="p-2 text-natural-forest hover:bg-natural-cream rounded-xl transition"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Period (same options as the Dashboard, US-35) */}
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-bold text-natural-forest mb-2">Period</legend>
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="report-period-mode" className="text-sm font-semibold text-natural-forest">Range</label>
-                <select
-                  id="report-period-mode"
-                  value={periodFilter.mode}
-                  onChange={e => setPeriodFilter({ ...periodFilter, mode: e.target.value as PeriodFilter["mode"] })}
-                  className={fieldClass}
-                >
-                  <option value="all">All time</option>
-                  <option value="custom">Custom range</option>
-                </select>
-              </div>
-              {periodFilter.mode === "custom" && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor="report-period-start" className="text-sm font-semibold text-natural-forest">Start date</label>
-                    <input
-                      id="report-period-start"
-                      type="date"
-                      value={periodFilter.start}
-                      onChange={e => setPeriodFilter({ ...periodFilter, start: e.target.value })}
-                      aria-invalid={invalidRange}
-                      aria-describedby={invalidRange ? "report-period-error" : undefined}
-                      className={fieldClass}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor="report-period-end" className="text-sm font-semibold text-natural-forest">End date</label>
-                    <input
-                      id="report-period-end"
-                      type="date"
-                      value={periodFilter.end}
-                      onChange={e => setPeriodFilter({ ...periodFilter, end: e.target.value })}
-                      aria-invalid={invalidRange}
-                      aria-describedby={invalidRange ? "report-period-error" : undefined}
-                      className={fieldClass}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            <p className="text-sm font-semibold text-natural-forest">
-              Report period: {period ? formatPeriodLabel(period) : periodFilter.mode === "all" ? "All time" : "—"}
-            </p>
-            {invalidRange && (
-              <p id="report-period-error" role="alert" className="text-sm font-semibold text-red-800 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                The start date must be on or before the end date.
-              </p>
-            )}
-            {incompleteRange && (
-              <p className="text-sm text-natural-forest">Pick a start and an end date.</p>
-            )}
-          </fieldset>
-
-          {/* Top per activity */}
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-bold text-natural-forest mb-1">Top per activity</legend>
-            <p className="text-xs text-natural-forest">How many colleagues to rank in each activity (0 to {MAX_TOP_N}; 0 or empty leaves it out).</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-              {ACTIVITIES.map((activity, i) =>
-                nInput(`report-top-activity-${i}`, activity, activityTops[activity], v =>
-                  setActivityTops(prev => ({ ...prev, [activity]: v }))
-                )
-              )}
-            </div>
-          </fieldset>
-
-          {/* Top overall */}
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-bold text-natural-forest mb-1">Top overall</legend>
-            <p className="text-xs text-natural-forest">Ranks colleagues by their Overall across all activities.</p>
-            <div className="sm:w-1/2 sm:pr-3">{nInput("report-top-overall", "Colleagues", overallTop, setOverallTop)}</div>
-          </fieldset>
-
-          {/* Hive Status */}
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-bold text-natural-forest mb-1">Hive Status</legend>
-            <p className="text-xs text-natural-forest">Lists every colleague in the chosen tiers for the period.</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {REPORT_TIERS.map(tier => (
-                <label key={tier} className="inline-flex items-center gap-2 text-sm font-semibold text-natural-forest cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={tiers.includes(tier)}
-                    onChange={() => toggleTier(tier)}
-                    className="h-4 w-4 accent-[#2D3E35]"
-                  />
-                  {tier}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {invalidN && (
-            <p role="alert" className="text-sm font-semibold text-red-800 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-              Each number must be a whole number from 0 to {MAX_TOP_N}.
-            </p>
-          )}
-          {noBlock && !invalidN && (
-            <p id="report-no-block" className="text-sm text-natural-forest">
-              Choose at least one block: a ranking above 0 or a Hive Status tier.
-            </p>
-          )}
-        </div>
-
-        <div className="p-4 bg-natural-cream/40 border-t border-natural-border flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 bg-white border border-natural-border text-natural-forest font-bold text-sm rounded-xl transition hover:bg-natural-cream"
-          >
+    <Dialog
+      open
+      onClose={onClose}
+      id="outcome-report-modal"
+      size="lg"
+      className="sm:max-w-2xl"
+      returnFocusRef={returnFocusRef}
+      closeLabel="Close Outcome Report"
+      title="Outcome Report"
+      description="Choose a period and one or more blocks, then download the report as a .txt file."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             id="download-outcome-report"
             onClick={handleDownload}
             disabled={!canDownload}
             aria-describedby={noBlock && !invalidN ? "report-no-block" : undefined}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-natural-forest hover:bg-[#213028] text-white font-bold text-sm rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+            icon={<Download className="size-4" />}
           >
-            <Download className="h-4 w-4" aria-hidden="true" />
             Download Report
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {/* Period (same options as the Dashboard, US-35) */}
+        <fieldset className="space-y-3">
+          <legend className="mb-2 text-body font-bold text-forest">Period</legend>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="report-period-mode" className="text-body font-semibold text-forest">Range</label>
+              <Select
+                id="report-period-mode"
+                value={periodFilter.mode}
+                onChange={(e: ChangeEvent) => setPeriodFilter({ ...periodFilter, mode: e.target.value as PeriodFilter["mode"] })}
+              >
+                <option value="all">All time</option>
+                <option value="custom">Custom range</option>
+              </Select>
+            </div>
+            {periodFilter.mode === "custom" && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="report-period-start" className="text-body font-semibold text-forest">Start date</label>
+                  <DateInput
+                    id="report-period-start"
+                    value={periodFilter.start}
+                    onChange={(e: ChangeEvent) => setPeriodFilter({ ...periodFilter, start: e.target.value })}
+                    aria-invalid={invalidRange}
+                    aria-describedby={invalidRange ? "report-period-error" : undefined}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="report-period-end" className="text-body font-semibold text-forest">End date</label>
+                  <DateInput
+                    id="report-period-end"
+                    value={periodFilter.end}
+                    onChange={(e: ChangeEvent) => setPeriodFilter({ ...periodFilter, end: e.target.value })}
+                    aria-invalid={invalidRange}
+                    aria-describedby={invalidRange ? "report-period-error" : undefined}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <p className="text-body font-semibold text-forest">
+            Report period: {period ? formatPeriodLabel(period) : periodFilter.mode === "all" ? "All time" : "—"}
+          </p>
+          {invalidRange && (
+            <Alert tone="danger" id="report-period-error">
+              The start date must be on or before the end date.
+            </Alert>
+          )}
+          {incompleteRange && (
+            <p className="text-body text-forest">Pick a start and an end date.</p>
+          )}
+        </fieldset>
+
+        {/* Top per activity */}
+        <fieldset className="space-y-2">
+          <legend className="mb-1 text-body font-bold text-forest">Top per activity</legend>
+          <p className="text-micro text-forest">How many colleagues to rank in each activity (0 to {MAX_TOP_N}; 0 or empty leaves it out).</p>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+            {ACTIVITIES.map((activity, i) =>
+              nInput(`report-top-activity-${i}`, activity, activityTops[activity], v =>
+                setActivityTops(prev => ({ ...prev, [activity]: v }))
+              )
+            )}
+          </div>
+        </fieldset>
+
+        {/* Top overall */}
+        <fieldset className="space-y-2">
+          <legend className="mb-1 text-body font-bold text-forest">Top overall</legend>
+          <p className="text-micro text-forest">Ranks colleagues by their Overall across all activities.</p>
+          <div className="sm:w-1/2 sm:pr-3">{nInput("report-top-overall", "Colleagues", overallTop, setOverallTop)}</div>
+        </fieldset>
+
+        {/* Hive Status */}
+        <fieldset className="space-y-2">
+          <legend className="mb-1 text-body font-bold text-forest">Hive Status</legend>
+          <p className="text-micro text-forest">Lists every colleague in the chosen tiers for the period.</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {REPORT_TIERS.map(tier => (
+              <label key={tier} className="inline-flex cursor-pointer items-center gap-2 text-body font-semibold text-forest">
+                <input
+                  type="checkbox"
+                  checked={tiers.includes(tier)}
+                  onChange={() => toggleTier(tier)}
+                  className="size-4 accent-forest"
+                />
+                {tier}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {invalidN && (
+          <Alert tone="danger">
+            Each number must be a whole number from 0 to {MAX_TOP_N}.
+          </Alert>
+        )}
+        {noBlock && !invalidN && (
+          <p id="report-no-block" className="text-body text-forest">
+            Choose at least one block: a ranking above 0 or a Hive Status tier.
+          </p>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }

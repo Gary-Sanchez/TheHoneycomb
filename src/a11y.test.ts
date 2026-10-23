@@ -8,7 +8,7 @@ const source = (...parts: string[]) => readFileSync(join(__dirname, ...parts), "
 
 describe("US-47: accessible names and live regions", () => {
   it("icon-only buttons keep their accessible names", () => {
-    expect(source("components", "ProgressReportModal.tsx")).toContain('aria-label="Close progress report"');
+    expect(source("components", "ProgressReportModal.tsx")).toContain('closeLabel="Close progress report"');
     expect(source("components", "AttendeeDirectory.tsx")).toContain("aria-label={`Delete ${att.name}`}");
     expect(source("components", "DocumentParser.tsx")).toContain("aria-label={`Remove ${rec.name}`}");
   });
