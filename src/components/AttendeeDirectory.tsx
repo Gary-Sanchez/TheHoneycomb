@@ -1,11 +1,12 @@
-import { useState, useMemo, FormEvent } from "react";
+import { useState, useMemo, useRef, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES } from "../types";
 import { Search, UserPlus, FileBarChart2, X, Mail, Calendar, Trash2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
 import { formatDisplayDate, pluralize, sortByName } from "../utils";
 import { computeBeehavior } from "../beehavior";
-import HiveStatusBadge from "./HiveStatusBadge";
+import TierBadge from "./TierBadge";
+import { Badge, Button, ConfirmDialog, DataTable, Field, IconButton, Input, Select, type DataTableColumn } from "./ui";
 
 interface AttendeeDirectoryProps {
   attendees: Attendee[];
@@ -16,6 +17,20 @@ interface AttendeeDirectoryProps {
   onRemoveAttendee: (id: string) => void;
   canEdit: boolean;
   onSignIn?: () => void;
+}
+
+type AttendeeStat = { total: number; present: number; rate: number | null; overallPresents: number; overallTotal: number };
+const NO_STAT: AttendeeStat = { total: 0, present: 0, rate: null, overallPresents: 0, overallTotal: 0 };
+
+// US-62: two initials — first and last word of the name; a single word gives its first two letters
+export function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  const letters =
+    words.length === 1
+      ? Array.from(words[0]).slice(0, 2)
+      : [Array.from(words[0])[0], Array.from(words[words.length - 1])[0]];
+  return letters.join("").toLocaleUpperCase();
 }
 
 export default function AttendeeDirectory({
@@ -30,15 +45,17 @@ export default function AttendeeDirectory({
 }: AttendeeDirectoryProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedActivityFilter, setSelectedActivityFilter] = useState<string>("All");
-  
+
   // Registration Form Toggle & State
   const [showRegForm, setShowRegForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newEnrolled, setNewEnrolled] = useState<string[]>([]);
 
-  // Deletion confirmation state
+  // Deletion confirmation state. US-62: the confirmation is a ConfirmDialog; the trash button that
+  // opened it gets the focus back when it closes (Escape / Cancel).
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   // Compute individual attendance rates
   // US-39: `rate` is the colleague's Overall from the Bee-havior Hub (All time) — attended events in
@@ -47,9 +64,7 @@ export default function AttendeeDirectory({
   // colleague's own records for "No attendance yet"; the "(x of N events)" beside the rate uses the
   // same Overall fraction as the tooltip, so both denominators match.
   const attendeeStats = useMemo(() => {
-    const stats: Record<string, {
-      total: number; present: number; rate: number | null; overallPresents: number; overallTotal: number;
-    }> = {};
+    const stats: Record<string, AttendeeStat> = {};
 
     const overallById = new Map(computeBeehavior(attendees, records, null).map(row => [row.attendee.id, row]));
 
@@ -74,12 +89,12 @@ export default function AttendeeDirectory({
   // after any search, filter, registration, import or check-in
   const filteredAttendees = useMemo(() => {
     return sortByName(attendees).filter(att => {
-      const matchesSearch = att.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchesSearch = att.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             (att.email && att.email.toLowerCase().includes(searchQuery.toLowerCase()));
-      
-      const matchesActivity = selectedActivityFilter === "All" || 
+
+      const matchesActivity = selectedActivityFilter === "All" ||
                                records.some(r => r.attendeeId === att.id && r.activity === selectedActivityFilter);
-      
+
       return matchesSearch && matchesActivity;
     });
   }, [attendees, records, searchQuery, selectedActivityFilter]);
@@ -105,268 +120,224 @@ export default function AttendeeDirectory({
     });
   };
 
-  // US-42: the percentage no longer carries its own color scale — the Hive Status badge does
-  const attendanceBadgeClass = "bg-natural-cream text-natural-forest border border-natural-border/60";
+  const deletingAttendee = canEdit && deletingId ? attendees.find(a => a.id === deletingId) : undefined;
+
+  // US-62: the table is a DataTable (it scrolls horizontally on its own; the name column stays pinned)
+  const columns: DataTableColumn<Attendee>[] = [
+    {
+      key: "name",
+      header: "Caserits",
+      cell: att => (
+        <div className="flex items-center gap-3">
+          <div
+            aria-hidden="true"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-wheat font-serif text-body font-bold text-forest"
+          >
+            {initials(att.name)}
+          </div>
+          <div>
+            <p className="font-bold leading-tight text-forest">{att.name}</p>
+            {att.email && (
+              <p className="mt-0.5 flex items-center gap-1 text-micro font-medium text-text-muted">
+                <Mail className="size-3" aria-hidden="true" />
+                {att.email}
+              </p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "rate",
+      header: "Attendance Rate",
+      cell: att => {
+        const stat = attendeeStats[att.id] || NO_STAT;
+        return (
+          <div className="flex items-center gap-2">
+            {/* US-42: the percentage carries no color scale — the Hive Status badge does */}
+            <Badge title={stat.rate === null ? undefined : `Attended ${stat.overallPresents} of ${stat.overallTotal} events`}>
+              {stat.total === 0 ? "No attendance yet" : stat.rate === null ? "—" : `${stat.rate}%`}
+            </Badge>
+            {stat.rate !== null && (
+              <span className="font-mono text-micro font-medium text-text-muted">
+                ({stat.overallPresents} of {pluralize(stat.overallTotal, "event")})
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Hive Status",
+      // US-42: same Hive Status as the Bee-havior Hub (All time)
+      cell: att => <TierBadge rate={(attendeeStats[att.id] || NO_STAT).rate} />,
+    },
+    {
+      key: "joined",
+      header: "Date Joined",
+      cell: att => (
+        <span className="flex items-center gap-1.5 font-mono text-micro font-medium text-text-muted">
+          <Calendar className="size-3.5" aria-hidden="true" />
+          {formatDisplayDate(att.joinedDate)}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      cell: att => (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" icon={<FileBarChart2 className="size-3.5" />} onClick={() => onViewReport(att)}>
+            Progress Report
+          </Button>
+          <IconButton
+            icon={<Trash2 className="size-4" />}
+            onClick={(e: { currentTarget: HTMLButtonElement }) => {
+              deleteTriggerRef.current = e.currentTarget;
+              setDeletingId(att.id);
+            }}
+            disabled={!canEdit}
+            title="Delete Colleague"
+            aria-label={`Delete ${att.name}`}
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-8 animate-fade-in" id="attendee-directory-tab">
       {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
 
       {/* Search and Action Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white rounded-[24px] border border-natural-border p-6 shadow-sm">
-        <div className="flex flex-1 flex-col sm:flex-row gap-3 max-w-2xl">
+      <div className="flex flex-col justify-between gap-4 rounded-panel border border-border bg-surface p-6 shadow-sm md:flex-row md:items-end">
+        <div className="flex max-w-2xl flex-1 flex-col gap-3 sm:flex-row">
           {/* Search bar */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-natural-sage" aria-hidden="true" />
-            <input
-              aria-label="Search colleagues"
-              type="text"
-              placeholder="Search colleagues by name or email…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-natural-cream/20 border border-natural-border rounded-xl pl-11 pr-4 py-2.5 text-sm text-natural-forest placeholder-natural-sage/70 focus:border-natural-sage transition duration-150"
-            />
-          </div>
+          <Field label="Search colleagues" className="flex-1">
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+              <Input
+                type="text"
+                placeholder="Search colleagues by name or email…"
+                value={searchQuery}
+                onChange={(e: { target: { value: string } }) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-11"
+              />
+              {searchQuery && (
+                <IconButton
+                  aria-label="Clear search"
+                  icon={<X className="size-4" />}
+                  onClick={() => setSearchQuery("")}
+                  className="absolute top-0.5 right-0.5"
+                />
+              )}
+            </div>
+          </Field>
 
           {/* Activity Filter Dropdown */}
-          <select
-            aria-label="Filter by activity"
-            value={selectedActivityFilter}
-            onChange={(e) => setSelectedActivityFilter(e.target.value)}
-            className="bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-2.5 text-sm text-natural-forest font-medium focus:border-natural-sage transition duration-150"
-          >
-            <option value="All">All Activities</option>
-            {ACTIVITIES.map(act => (
-              <option key={act} value={act}>
-                {act}
-              </option>
-            ))}
-          </select>
+          <Field label="Filter by activity">
+            <Select value={selectedActivityFilter} onChange={(e: { target: { value: string } }) => setSelectedActivityFilter(e.target.value)}>
+              <option value="All">All Activities</option>
+              {ACTIVITIES.map(act => (
+                <option key={act} value={act}>
+                  {act}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
 
         {/* Manual Add Button */}
-        <button
-          type="button"
-          onClick={() => setShowRegForm(!showRegForm)}
-          disabled={!canEdit}
-          className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-semibold px-5 py-3 rounded-xl text-sm transition duration-150 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Add Colleague</span>
-        </button>
+        <Button icon={<UserPlus className="size-4" />} onClick={() => setShowRegForm(!showRegForm)} disabled={!canEdit}>
+          Add Colleague
+        </Button>
       </div>
 
       {/* Register Form Modal Box */}
       {showRegForm && canEdit && (
-        <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-6 animate-slide-down">
-          <div className="flex justify-between items-center border-b border-natural-border pb-4">
-            <h3 className="font-serif font-bold text-natural-forest text-lg flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-natural-sage" />
+        <div className="space-y-6 rounded-panel border border-border bg-surface p-8 shadow-sm animate-slide-down">
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <h3 className="flex items-center gap-2 font-serif text-h3 font-bold text-forest">
+              <UserPlus className="size-5 text-text-muted" aria-hidden="true" />
               Add Colleague
             </h3>
-            <button
-              type="button"
-              onClick={() => setShowRegForm(false)}
-              aria-label="Cancel"
-              className="text-natural-sage hover:text-natural-forest"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <IconButton aria-label="Cancel" icon={<X className="size-5" />} onClick={() => setShowRegForm(false)} />
           </div>
 
           <form onSubmit={handleRegister} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="add-colleague-name" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Full Name</label>
-                <input
-                  id="add-colleague-name"
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <Field label="Full Name" id="add-colleague-name">
+                <Input
                   type="text"
                   required
                   placeholder="e.g. Elena Rostova"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:border-natural-sage transition"
+                  onChange={(e: { target: { value: string } }) => setNewName(e.target.value)}
                 />
-              </div>
+              </Field>
 
-              <div className="space-y-2">
-                <label htmlFor="add-colleague-email" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Email Address (Optional)</label>
-                <input
-                  id="add-colleague-email"
+              <Field label="Email Address (Optional)" id="add-colleague-email">
+                <Input
                   type="email"
                   placeholder="e.g. elena@example.com"
                   value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full bg-natural-cream/20 border border-natural-border rounded-xl px-4 py-3 text-sm text-natural-forest focus:border-natural-sage transition"
+                  onChange={(e: { target: { value: string } }) => setNewEmail(e.target.value)}
                 />
-              </div>
+              </Field>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-natural-border pt-6">
-              <button
-                type="button"
-                onClick={() => setShowRegForm(false)}
-                className="px-6 py-2.5 border border-natural-border text-natural-forest/70 hover:bg-natural-cream text-sm font-semibold rounded-xl transition"
-              >
+            <div className="flex justify-end gap-3 border-t border-border pt-6">
+              <Button variant="secondary" onClick={() => setShowRegForm(false)}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2.5 bg-natural-forest hover:bg-[#213028] text-white text-sm font-bold rounded-xl transition shadow-sm"
-              >
-                Add Colleague
-              </button>
+              </Button>
+              <Button type="submit">Add Colleague</Button>
             </div>
           </form>
         </div>
       )}
 
       {/* Directory Table */}
-      <div className="bg-white rounded-[32px] border border-natural-border shadow-sm overflow-hidden">
-        {filteredAttendees.length === 0 ? (
-          <div className="text-center py-16 space-y-3">
-            <p className="text-natural-sage font-medium">{attendees.length === 0 ? "No colleagues yet." : "No colleagues match your search."}</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedActivityFilter("All");
-              }}
-              className="text-xs font-bold text-natural-forest hover:underline"
-            >
-              Clear Filters
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-natural-cream/40 border-b border-natural-border text-natural-sage text-xs font-bold uppercase">
-                  <th className="p-4 pl-6">Caserits</th>
-                  <th className="p-4">Attendance Rate</th>
-                  <th className="p-4">Hive Status</th>
-                  <th className="p-4">Date Joined</th>
-                  <th className="p-4 pr-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-natural-border/60 text-sm text-natural-forest">
-                {filteredAttendees.map(att => {
-                  const stat = attendeeStats[att.id] || { total: 0, present: 0, rate: null, overallPresents: 0, overallTotal: 0 };
+      {filteredAttendees.length === 0 ? (
+        <div className="space-y-3 rounded-panel border border-border bg-surface py-16 text-center shadow-sm">
+          <p className="font-medium text-text-muted">{attendees.length === 0 ? "No colleagues yet." : "No colleagues match your search."}</p>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => {
+              setSearchQuery("");
+              setSelectedActivityFilter("All");
+            }}
+          >
+            Clear Filters
+          </Button>
+        </div>
+      ) : (
+        <DataTable
+          caption="Caserits"
+          hideCaption
+          columns={columns}
+          rows={filteredAttendees}
+          getRowKey={att => att.id}
+          stickyFirstColumn
+        />
+      )}
 
-                  return (
-                    <tr key={att.id} className="hover:bg-natural-cream/10 transition">
-                      {/* Name Card */}
-                      <td className="p-4 pl-6">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-10 w-10 rounded-full bg-natural-wheat/60 text-natural-forest flex items-center justify-center font-serif font-bold text-sm border border-natural-border/60">
-                            {att.name.split(" ").map(n => n[0]).join("")}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-natural-forest text-sm leading-tight">{att.name}</h4>
-                            {att.email && (
-                              <p className="text-xs text-natural-sage flex items-center gap-1 mt-0.5 font-medium">
-                                <Mail className="h-3 w-3" />
-                                {att.email}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Attendance Stats badge */}
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
-                          <span
-                            className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${attendanceBadgeClass}`}
-                            title={stat.rate === null ? undefined : `Attended ${stat.overallPresents} of ${stat.overallTotal} events`}
-                          >
-                            {stat.total === 0 ? "No attendance yet" : stat.rate === null ? "—" : `${stat.rate}%`}
-                          </span>
-                          {stat.rate !== null && (
-                            <span className="text-xs text-natural-sage font-mono font-medium">
-                              ({stat.overallPresents} of {pluralize(stat.overallTotal, "event")})
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* US-42: same Hive Status as the Bee-havior Hub (All time) */}
-                      <td className="p-4">
-                        <HiveStatusBadge rate={stat.rate} />
-                      </td>
-
-                      {/* Joined Date */}
-                      <td className="p-4 text-xs font-mono text-natural-sage font-medium">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-natural-sage/75" />
-                          {formatDisplayDate(att.joinedDate)}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="p-4 pr-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onViewReport(att)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-natural-wheat hover:bg-natural-wheat/80 text-natural-forest font-serif font-bold text-xs rounded-xl border border-natural-border/30 transition shadow-sm"
-                          >
-                            <FileBarChart2 className="h-3.5 w-3.5" />
-                            <span>Progress Report</span>
-                          </button>
-
-                          {deletingId === att.id && canEdit ? (
-                            // US-46: the confirmation names the colleague and says what else is deleted
-                            <div
-                              role="group"
-                              aria-label={`Confirm deleting ${att.name}`}
-                              className="flex flex-col items-end gap-1.5 max-w-[260px] text-left animate-fade-in"
-                            >
-                              <p className="text-xs font-medium text-red-800">
-                                Delete {att.name}? Their attendance records and coaching notes will also be deleted.
-                              </p>
-                              <div className="inline-flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onRemoveAttendee(att.id);
-                                  setDeletingId(null);
-                                }}
-                                className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition"
-                              >
-                                Delete
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeletingId(null)}
-                                className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition"
-                              >
-                                Cancel
-                              </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setDeletingId(att.id)}
-                              disabled={!canEdit}
-                              className="p-2 text-natural-sand/75 hover:text-red-600 hover:bg-red-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-natural-sand/75"
-                              title="Delete Colleague"
-                              aria-label={`Delete ${att.name}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* US-46: the confirmation names the colleague and says what else is deleted */}
+      <ConfirmDialog
+        open={!!deletingAttendee}
+        onCancel={() => setDeletingId(null)}
+        onConfirm={() => {
+          if (deletingAttendee) onRemoveAttendee(deletingAttendee.id);
+          setDeletingId(null);
+        }}
+        title="Delete Colleague"
+        objectName={deletingAttendee ? `Delete ${deletingAttendee.name}?` : ""}
+        consequences="Their attendance records and coaching notes will also be deleted."
+        confirmLabel="Delete"
+        returnFocusRef={deleteTriggerRef}
+      />
     </div>
   );
 }

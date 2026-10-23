@@ -1,4 +1,4 @@
-import { useId, useRef, type ReactNode } from "react";
+import { useId, useRef, type ReactNode, type RefObject } from "react";
 import Button from "./Button";
 import Dialog from "./Dialog";
 
@@ -22,6 +22,8 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Shows the spinner on the confirm button while the action runs. */
   loading?: boolean;
+  /** Where focus goes on close (default: the element focused when it opened). */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export default function ConfirmDialog({
@@ -34,6 +36,7 @@ export default function ConfirmDialog({
   confirmLabel,
   cancelLabel = "Cancel",
   loading = false,
+  returnFocusRef,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const bodyId = useId();
@@ -44,6 +47,7 @@ export default function ConfirmDialog({
       title={title}
       size="sm"
       initialFocusRef={cancelRef}
+      returnFocusRef={returnFocusRef}
       aria-describedby={bodyId}
       footer={
         <>
