@@ -1,9 +1,11 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Attendee, AttendanceRecord, ACTIVITIES, ActivityType, ManualCheckInResult } from "../types";
 import { REFERENCE_DATE, formatDisplayDate } from "../utils";
-import { Calendar, Check, X, UserPlus, AlertCircle, Sparkles } from "lucide-react";
+import { ACTIVITY_THEME } from "../activityTheme";
+import { Calendar, Check, X, UserPlus, AlertCircle } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
+import { Button, Card, DateInput, EmptyState, Field, IconButton, Input, PageHeader, Panel, SegmentedControl, Select, useToast } from "./ui";
 
 interface AttendanceLoggerProps {
   attendees: Attendee[];
@@ -15,6 +17,37 @@ interface AttendanceLoggerProps {
   onSignIn?: () => void;
 }
 
+type AttendanceStatus = "present" | "absent";
+
+// US-60: the Present / Absent options shared by every row (icons are decorative).
+const STATUS_OPTIONS = [
+  {
+    value: "present",
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <Check className="size-4" aria-hidden="true" />
+        Present
+      </span>
+    ),
+  },
+  {
+    value: "absent",
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <X className="size-4" aria-hidden="true" />
+        Absent
+      </span>
+    ),
+  },
+];
+
+const MARK_ALL_OPTIONS = [
+  { value: "present", label: "All Present" },
+  { value: "absent", label: "All Absent" },
+];
+
+const INLINE_NAME_ID = "manual-checkin-name";
+
 export default function AttendanceLogger({
   attendees,
   records,
@@ -24,19 +57,19 @@ export default function AttendanceLogger({
   canEdit,
   onSignIn,
 }: AttendanceLoggerProps) {
+  const toast = useToast();
   const todayStr = REFERENCE_DATE; // Preset date reflecting system time
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [selectedActivity, setSelectedActivity] = useState<ActivityType>(ACTIVITIES[0]);
 
   // Track present/absent statuses for enrolled attendees
   // Key: attendeeId, Value: "present" | "absent" | undefined
-  const [statuses, setStatuses] = useState<Record<string, "present" | "absent">>({});
+  const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>({});
 
   // Quick Add Attendee States
   const [quickName, setQuickName] = useState("");
   const [quickEmail, setQuickEmail] = useState("");
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
 
   // All employees are eligible for check-in since participation is voluntary
   const enrolledAttendees = useMemo(() => {
@@ -45,10 +78,18 @@ export default function AttendanceLogger({
 
   // Inline quick-introduce state
   const [inlineName, setInlineName] = useState("");
+  // US-60: "Add & Check In" with an empty name says so next to the field instead of doing nothing
+  const [inlineError, setInlineError] = useState("");
 
   const handleInlineSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!canEdit || !inlineName.trim() || !selectedDate) return;
+    if (!canEdit) return;
+    if (!inlineName.trim()) {
+      setInlineError("Enter the colleague's name.");
+      document.getElementById(INLINE_NAME_ID)?.focus();
+      return;
+    }
+    if (!selectedDate) return;
 
     // US-20: persist right away as a Present record in this date+activity session
     const { attendee, isNew, joinedExistingSession, alreadyInSession } = onManualCheckIn(
@@ -65,7 +106,8 @@ export default function AttendanceLogger({
     });
 
     setInlineName("");
-    
+    setInlineError("");
+
     // Blast confetti!
     confetti({
       particleCount: 50,
@@ -79,10 +121,9 @@ export default function AttendanceLogger({
       : joinedExistingSession
         ? "joined the existing event"
         : "new event created";
-    setSuccessMsg(
+    toast.success(
       `${isNew ? "Added and checked in" : "Checked in"} ${attendee.name} for ${selectedActivity} on ${formatDisplayDate(selectedDate)} (${sessionNote}).`
     );
-    setTimeout(() => setSuccessMsg(""), 4000);
   };
 
   // Check if there are already records logged for this date and activity
@@ -97,7 +138,7 @@ export default function AttendanceLogger({
   );
 
   // Set default status (Present) for anyone not configured in statuses
-  const getStatus = (attendeeId: string) => {
+  const getStatus = (attendeeId: string): AttendanceStatus => {
     if (statuses[attendeeId]) {
       return statuses[attendeeId];
     }
@@ -109,15 +150,24 @@ export default function AttendanceLogger({
     return "present"; // Default new logs to present
   };
 
-  const handleToggleStatus = (attendeeId: string, status: "present" | "absent") => {
+  // All Present / All Absent shows as selected only when every colleague has that status
+  const markAllValue = (() => {
+    if (enrolledAttendees.length === 0) return undefined;
+    const all = enrolledAttendees.map(att => getStatus(att.id));
+    if (all.every(s => s === "present")) return "present";
+    if (all.every(s => s === "absent")) return "absent";
+    return undefined;
+  })();
+
+  const handleToggleStatus = (attendeeId: string, status: AttendanceStatus) => {
     setStatuses(prev => ({
       ...prev,
       [attendeeId]: status,
     }));
   };
 
-  const handleMarkAll = (status: "present" | "absent") => {
-    const nextStatuses: Record<string, "present" | "absent"> = {};
+  const handleMarkAll = (status: AttendanceStatus) => {
+    const nextStatuses: Record<string, AttendanceStatus> = {};
     enrolledAttendees.forEach(att => {
       nextStatuses[att.id] = status;
     });
@@ -130,7 +180,7 @@ export default function AttendanceLogger({
 
     // Add attendee with empty enrolled list since they are all colleagues of the company
     const newAtt = onAddAttendee(quickName.trim(), quickEmail.trim(), []);
-    
+
     // Default their status to present in the form state
     setStatuses(prev => ({
       ...prev,
@@ -141,7 +191,7 @@ export default function AttendanceLogger({
     setQuickName("");
     setQuickEmail("");
     setShowQuickAdd(false);
-    
+
     // Blast confetti!
     confetti({
       particleCount: 80,
@@ -150,8 +200,7 @@ export default function AttendanceLogger({
       disableForReducedMotion: true
     });
 
-    setSuccessMsg(`Added ${newAtt.name} to the directory.`);
-    setTimeout(() => setSuccessMsg(""), 4000);
+    toast.success(`Added ${newAtt.name} to the directory.`);
   };
 
   const handleSave = () => {
@@ -174,306 +223,253 @@ export default function AttendanceLogger({
       disableForReducedMotion: true
     });
 
-    setSuccessMsg(`Attendance saved for ${selectedActivity} on ${formatDisplayDate(selectedDate)}.`);
+    toast.success(`Attendance saved for ${selectedActivity} on ${formatDisplayDate(selectedDate)}.`);
     setStatuses({}); // Clear status buffer
-    setTimeout(() => setSuccessMsg(""), 4000);
   };
 
-  return (
-    <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-8 animate-fade-in" id="attendance-logger-tab">
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-natural-border pb-6">
-        <div>
-          <h2 className="text-2xl font-serif font-bold text-natural-forest">Log Event Attendance</h2>
-          <p className="text-sm text-natural-sage font-medium">Select a date and activity to check in colleagues.</p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Quick Mark All Buttons */}
-          {enrolledAttendees.length > 0 && (
-            <div className="flex items-center bg-natural-wheat/40 border border-natural-border/40 rounded-xl p-1 text-xs font-semibold text-natural-forest">
-              <button
-                type="button"
-                onClick={() => handleMarkAll("present")}
-                disabled={!canEdit}
-                className="px-3 py-1.5 rounded-lg hover:bg-white hover:text-natural-sage transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                All Present
-              </button>
-              <button
-                type="button"
-                onClick={() => handleMarkAll("absent")}
-                disabled={!canEdit}
-                className="px-3 py-1.5 rounded-lg hover:bg-white hover:text-natural-sand transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                All Absent
-              </button>
-            </div>
-          )}
+  const activityTheme = ACTIVITY_THEME[selectedActivity];
+  const ActivityIcon = activityTheme.icon;
 
-          {/* Quick Add Button */}
-          <button
-            type="button"
-            onClick={() => setShowQuickAdd(!showQuickAdd)}
-            disabled={!canEdit}
-            className="flex items-center gap-1.5 bg-natural-wheat border border-natural-border/40 hover:bg-natural-wheat/80 text-natural-forest font-semibold px-4 py-2 rounded-xl text-sm transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <UserPlus className="h-4 w-4 text-natural-sage" />
-            <span>Add Colleague</span>
-          </button>
-        </div>
-      </div>
+  return (
+    <Panel className="space-y-6 animate-fade-in" id="attendance-logger-tab">
+      {/* Header section */}
+      <PageHeader
+        title="Log Event Attendance"
+        description="Select a date and activity to check in colleagues."
+        actions={
+          <>
+            {/* Quick Mark All */}
+            {enrolledAttendees.length > 0 && (
+              <SegmentedControl
+                label="Mark every colleague"
+                options={MARK_ALL_OPTIONS}
+                value={markAllValue}
+                onValueChange={(value: string) => handleMarkAll(value as AttendanceStatus)}
+                disabled={!canEdit}
+              />
+            )}
+
+            {/* Quick Add Button */}
+            <Button
+              variant="secondary"
+              icon={<UserPlus className="size-4" />}
+              onClick={() => setShowQuickAdd(!showQuickAdd)}
+              aria-expanded={showQuickAdd}
+              disabled={!canEdit}
+            >
+              Add Colleague
+            </Button>
+          </>
+        }
+      />
 
       {!canEdit && <ReadOnlyNotice onSignIn={onSignIn} />}
 
-      {/* Success/Notification messages */}
-      {successMsg && (
-        <div role="status" className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-4 py-3 rounded-xl text-sm flex items-center space-x-2 animate-bounce-subtle">
-          <Sparkles className="h-4 w-4 text-natural-sage shrink-0" aria-hidden="true" />
-          <span className="font-medium">{successMsg}</span>
-        </div>
-      )}
-
       {/* Configuration Inputs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-natural-cream/60 p-6 rounded-[24px] border border-natural-border">
-        <div className="space-y-2">
-          <label htmlFor="checkin-date" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80 flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5 text-natural-sage" aria-hidden="true" />
-            Event Date
-          </label>
-          <input
+      <Card>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Field
             id="checkin-date"
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              setSelectedDate(e.target.value);
-              setStatuses({});
-            }}
-            className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-natural-forest font-medium focus:border-natural-sage transition duration-150"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="checkin-activity" className="text-xs font-bold uppercase tracking-wider text-natural-forest/80">Activity</label>
-          <select
-            id="checkin-activity"
-            value={selectedActivity}
-            onChange={(e) => {
-              setSelectedActivity(e.target.value as ActivityType);
-              setStatuses({});
-            }}
-            className="w-full bg-white border border-natural-border rounded-xl px-4 py-3 text-natural-forest font-medium focus:border-natural-sage transition duration-150"
+            label={
+              <span className="inline-flex items-center gap-1.5">
+                <Calendar className="size-4 text-forest" aria-hidden="true" />
+                Event Date
+              </span>
+            }
           >
-            {ACTIVITIES.map(act => (
-              <option key={act} value={act}>
-                {act}
-              </option>
-            ))}
-          </select>
+            <DateInput
+              value={selectedDate}
+              onChange={(e: { target: { value: string } }) => {
+                setSelectedDate(e.target.value);
+                setStatuses({});
+              }}
+            />
+          </Field>
+
+          <Field
+            id="checkin-activity"
+            label={
+              <span className="inline-flex items-center gap-1.5">
+                <ActivityIcon className={`size-4 ${activityTheme.textClass}`} aria-hidden="true" />
+                Activity
+              </span>
+            }
+          >
+            <Select
+              value={selectedActivity}
+              onChange={(e: { target: { value: string } }) => {
+                setSelectedActivity(e.target.value as ActivityType);
+                setStatuses({});
+              }}
+            >
+              {ACTIVITIES.map(act => (
+                <option key={act} value={act}>
+                  {act}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
-      </div>
+      </Card>
 
       {/* Inline Introduce New Colleague */}
-      <form onSubmit={handleInlineSubmit} className="bg-natural-wheat/20 border border-[#CCD5AE]/40 p-5 rounded-[24px] space-y-3 shadow-sm">
-        <fieldset disabled={!canEdit} className="contents">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-natural-forest flex items-center gap-1.5">
-          <UserPlus className="h-4 w-4 text-natural-sage" />
-          Add and Check In a Colleague
-        </h3>
-        <p className="text-xs text-natural-sage font-medium">
-          Type a colleague's name to add them (or find them in the directory) and save them as <strong>Present</strong> in the event for the selected date and activity.
-        </p>
-        <div id="manual-session-target" className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-bold text-natural-forest bg-white border border-natural-border rounded-lg px-2.5 py-1">
-            {selectedActivity} · {selectedDate ? formatDisplayDate(selectedDate) : "No date selected"}
+      <Card
+        title={
+          <span className="inline-flex items-center gap-2">
+            <UserPlus className="size-5 text-forest" aria-hidden="true" />
+            Add and Check In a Colleague
           </span>
-          <span className="font-semibold text-natural-sage">
-            {existingRecords.length > 0
-              ? `Joins the existing event (${sessionPresent.length} present)`
-              : "A new event will be created"}
-          </span>
-        </div>
-        {sessionPresent.length > 0 && (
-          <div id="manual-session-members" className="flex flex-wrap gap-1.5">
-            {sessionPresent.map(r => (
-              <span
-                key={r.id}
-                className="text-[11px] font-semibold bg-[#CCD5AE]/30 border border-[#CCD5AE]/60 text-natural-forest px-2 py-0.5 rounded-full"
-              >
-                {r.attendeeName}
+        }
+      >
+        <form onSubmit={handleInlineSubmit}>
+          <fieldset disabled={!canEdit} className="min-w-0 space-y-3">
+            <p className="text-body text-text-muted">
+              Type a colleague's name to add them (or find them in the directory) and save them as <strong className="text-forest">Present</strong> in the event for the selected date and activity.
+            </p>
+            <div id="manual-session-target" className="flex flex-wrap items-center gap-2 text-body">
+              <span className="inline-flex items-center gap-1.5 rounded-control border border-border bg-cream px-2.5 py-1 font-semibold text-forest">
+                <ActivityIcon className={`size-4 shrink-0 ${activityTheme.textClass}`} aria-hidden="true" />
+                <span className={`size-2 shrink-0 rounded-chip ${activityTheme.bgClass}`} aria-hidden="true" />
+                {selectedActivity} · {selectedDate ? formatDisplayDate(selectedDate) : "No date selected"}
               </span>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-3">
-          <input
-            type="text"
-            aria-label="Colleague name"
-            placeholder="Enter the colleague's full name…"
-            value={inlineName}
-            onChange={(e) => setInlineName(e.target.value)}
-            className="flex-1 bg-white border border-natural-border rounded-xl px-4 py-2.5 text-natural-forest text-sm focus:border-natural-sage font-medium placeholder-natural-sage/50"
-          />
-          <button
-            type="submit"
-            className="bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-6 py-2.5 rounded-xl text-xs transition duration-150 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Add & Check In
-          </button>
-        </div>
-        </fieldset>
-      </form>
-
-      {/* Quick Add Form Modal/Section */}
-      {showQuickAdd && (
-        <form onSubmit={handleQuickAddSubmit} className="bg-natural-wheat/10 border border-natural-border p-6 rounded-[24px] space-y-4 animate-slide-down">
-          <div className="flex justify-between items-center">
-            <h3 className="font-serif font-bold text-natural-forest flex items-center gap-2">
-              <UserPlus className="h-4 w-4 text-natural-sage" />
-              Add Colleague
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowQuickAdd(false)}
-              aria-label="Cancel"
-              className="text-natural-sage hover:text-natural-forest"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label htmlFor="quick-add-name" className="text-xs font-bold text-natural-forest/70">Full Name</label>
-              <input
-                id="quick-add-name"
-                type="text"
-                required
-                placeholder="e.g. Jean Dupont"
-                value={quickName}
-                onChange={(e) => setQuickName(e.target.value)}
-                className="w-full bg-white border border-natural-border/85 rounded-xl px-3 py-2 text-natural-forest text-sm focus:border-natural-sage"
-              />
+              <span className="font-semibold text-sage-text">
+                {existingRecords.length > 0
+                  ? `Joins the existing event (${sessionPresent.length} present)`
+                  : "A new event will be created"}
+              </span>
             </div>
-            
-            <div className="space-y-1">
-              <label htmlFor="quick-add-email" className="text-xs font-bold text-natural-forest/70">Email Address (Optional)</label>
-              <input
-                id="quick-add-email"
-                type="email"
-                placeholder="e.g. jean@example.com"
-                value={quickEmail}
-                onChange={(e) => setQuickEmail(e.target.value)}
-                className="w-full bg-white border border-natural-border/85 rounded-xl px-3 py-2 text-natural-forest text-sm focus:border-natural-sage"
-              />
+            {sessionPresent.length > 0 && (
+              <div id="manual-session-members" className="flex flex-wrap gap-1.5">
+                {sessionPresent.map(r => (
+                  <span
+                    key={r.id}
+                    className="rounded-chip border border-moss bg-moss/30 px-2 py-0.5 text-micro font-semibold text-forest"
+                  >
+                    {r.attendeeName}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              {/* The name keeps its accessible label without adding visible text (the placeholder shows the hint) */}
+              <Field id={INLINE_NAME_ID} label="Colleague name" error={inlineError || undefined} className="flex-1 [&>label]:sr-only">
+                <Input
+                  type="text"
+                  placeholder="Enter the colleague's full name…"
+                  value={inlineName}
+                  onChange={(e: { target: { value: string } }) => {
+                    setInlineName(e.target.value);
+                    if (inlineError) setInlineError("");
+                  }}
+                />
+              </Field>
+              <Button type="submit" className="font-serif">
+                Add & Check In
+              </Button>
             </div>
-          </div>
-          
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowQuickAdd(false)}
-              className="px-4 py-2 text-xs font-bold text-natural-forest/60 hover:text-natural-forest hover:bg-natural-cream rounded-xl transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold rounded-xl transition"
-            >
-              Add Colleague
-            </button>
-          </div>
+          </fieldset>
         </form>
+      </Card>
+
+      {/* Quick Add Form */}
+      {showQuickAdd && (
+        <Card
+          className="animate-slide-down"
+          title={
+            <span className="inline-flex items-center gap-2 font-serif">
+              <UserPlus className="size-5 text-forest" aria-hidden="true" />
+              Add Colleague
+            </span>
+          }
+          actions={<IconButton aria-label="Cancel" icon={<X className="size-4" />} onClick={() => setShowQuickAdd(false)} />}
+        >
+          <form onSubmit={handleQuickAddSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field id="quick-add-name" label="Full Name">
+                <Input
+                  type="text"
+                  required
+                  placeholder="e.g. Jean Dupont"
+                  value={quickName}
+                  onChange={(e: { target: { value: string } }) => setQuickName(e.target.value)}
+                />
+              </Field>
+
+              <Field id="quick-add-email" label="Email Address (Optional)">
+                <Input
+                  type="email"
+                  placeholder="e.g. jean@example.com"
+                  value={quickEmail}
+                  onChange={(e: { target: { value: string } }) => setQuickEmail(e.target.value)}
+                />
+              </Field>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button variant="ghost" onClick={() => setShowQuickAdd(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Add Colleague</Button>
+            </div>
+          </form>
+        </Card>
       )}
 
       {/* Roster / Attendee Checklist */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-serif font-bold text-natural-forest">
-            Active Attendance List ({enrolledAttendees.length})
-          </h3>
-          {existingRecords.length > 0 && (
-            <span className="text-xs font-semibold bg-[#FAEDCD]/40 text-natural-sand border border-[#D4A373]/30 px-3 py-1 rounded-full flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 text-natural-sand" />
-              Existing attendance records for this event will be updated
-            </span>
-          )}
-        </div>
+      <Card title={`Active Attendance List (${enrolledAttendees.length})`}>
+        {existingRecords.length > 0 && (
+          <p className="mb-4 inline-flex items-start gap-1.5 rounded-control border border-warning-border bg-warning-bg px-3 py-1 text-body font-semibold text-warning">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            Existing attendance records for this event will be updated
+          </p>
+        )}
 
         {enrolledAttendees.length === 0 ? (
-          <div className="text-center py-12 border-2 border-dashed border-natural-border rounded-[24px] bg-natural-cream/30 space-y-3">
-            <p className="text-natural-sage font-medium">No colleagues are currently registered in the database.</p>
-            <button
-              type="button"
-              onClick={() => setShowQuickAdd(true)}
-              disabled={!canEdit}
-              className="inline-flex items-center gap-1 bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <UserPlus className="h-3.5 w-3.5" /> Add First Colleague
-            </button>
-          </div>
+          <EmptyState
+            headingLevel={4}
+            title="No colleagues are currently registered in the database."
+            action={
+              <Button icon={<UserPlus className="size-4" />} onClick={() => setShowQuickAdd(true)} disabled={!canEdit}>
+                Add First Colleague
+              </Button>
+            }
+          />
         ) : (
-          <div className="border border-natural-border rounded-[24px] overflow-hidden divide-y divide-natural-border/60 shadow-inner bg-natural-cream/10 max-h-[500px] overflow-y-auto">
-            {enrolledAttendees.map(att => {
-              const currentStatus = getStatus(att.id);
-              return (
-                <div key={att.id} className="flex items-center justify-between p-4 bg-white hover:bg-natural-cream/30 transition">
-                  <div>
-                    <h4 className="font-bold text-natural-forest text-sm leading-tight">{att.name}</h4>
-                    <p className="text-xs text-natural-sage font-mono mt-0.5">{att.email || "No email registered"}</p>
-                  </div>
+          <>
+            {/* The list grows with the page: no scroll box of its own */}
+            <ul className="divide-y divide-border">
+              {enrolledAttendees.map(att => {
+                const currentStatus = getStatus(att.id);
+                return (
+                  <li key={att.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-body font-bold text-forest">{att.name}</p>
+                      <p className="mt-0.5 font-mono text-micro break-all text-text-muted">{att.email || "No email registered"}</p>
+                    </div>
 
-                  {/* Attendance Controls */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStatus(att.id, "present")}
+                    {/* Attendance Controls */}
+                    <SegmentedControl
+                      label={`Attendance for ${att.name}`}
+                      options={STATUS_OPTIONS}
+                      value={currentStatus}
+                      onValueChange={(value: string) => handleToggleStatus(att.id, value as AttendanceStatus)}
                       disabled={!canEdit}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        currentStatus === "present"
-                          ? "bg-natural-sage text-white shadow-sm shadow-natural-sage/10"
-                          : "bg-natural-cream text-natural-forest/60 border border-natural-border/40 hover:bg-natural-wheat"
-                      }`}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Present</span>
-                    </button>
+                      className="self-start sm:self-auto"
+                    />
+                  </li>
+                );
+              })}
+            </ul>
 
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStatus(att.id, "absent")}
-                      disabled={!canEdit}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        currentStatus === "absent"
-                          ? "bg-natural-sand text-white shadow-sm"
-                          : "bg-natural-cream text-natural-forest/60 border border-natural-border/40 hover:bg-natural-wheat"
-                      }`}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                      <span>Absent</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+            {/* Save Button */}
+            <div className="mt-2 flex justify-end border-t border-border pt-4">
+              <Button className="font-serif" onClick={handleSave} disabled={!canEdit}>
+                Save Attendance Records
+              </Button>
+            </div>
+          </>
         )}
-      </div>
-
-      {/* Save Button */}
-      {enrolledAttendees.length > 0 && (
-        <div className="flex justify-end pt-4 border-t border-natural-border">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canEdit}
-            className="bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-8 py-3 rounded-xl text-sm shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-          >
-            Save Attendance Records
-          </button>
-        </div>
-      )}
-    </div>
+      </Card>
+    </Panel>
   );
 }
