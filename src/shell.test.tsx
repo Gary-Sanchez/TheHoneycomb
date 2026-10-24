@@ -197,10 +197,13 @@ describe("US-59: the initial load can fail (BUG-09)", () => {
     renderApp();
     expect(await screen.findByText("The Honeycomb can't open its data file. Restart The Honeycomb.")).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
+    // QA #74: the error screen shows no tab, so the window title doesn't name one
+    expect(document.title).toBe("The Honeycomb");
 
     fail = false;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("navigation", { name: "Main" })).toBeTruthy();
+    expect(document.title).toBe("Dashboard · The Honeycomb");
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/data")).toHaveLength(2);
   });
 

@@ -111,24 +111,31 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [activeTab]);
 
-  // US-59: the window title names the open tab
+  // US-59: the window title names the open tab (the load error screen shows no tab, QA #74)
   const activeTabName = MAIN_TABS.find(tab => tab.id === activeTab)?.name ?? MAIN_TABS[0].name;
   useEffect(() => {
-    document.title = `${activeTabName} · The Honeycomb`;
-  }, [activeTabName]);
+    document.title = loadError ? "The Honeycomb" : `${activeTabName} · The Honeycomb`;
+  }, [activeTabName, loadError]);
 
   // BUG-10: the sticky nav sits right below the header, whose height changes with the width
-  // (it wraps on phones): measure it into --header-height instead of a fixed top-[73px]
+  // (it wraps on phones): measure it into --header-height instead of a fixed top-[73px]. The nav
+  // is measured too (--nav-height): together they are the scroll-padding-top of index.css, so the
+  // skip link (or any focus) never leaves its target under the sticky bars (QA #74, WCAG 2.4.11).
   const showShell = !isLoading && !loadError;
   useLayoutEffect(() => {
     const header = headerRef.current;
+    const nav = document.getElementById("nav-tabs");
     if (!showShell || !header) return;
     const root = document.documentElement;
-    const update = () => root.style.setProperty("--header-height", `${header.getBoundingClientRect().height}px`);
+    const update = () => {
+      root.style.setProperty("--header-height", `${header.getBoundingClientRect().height}px`);
+      if (nav) root.style.setProperty("--nav-height", `${nav.getBoundingClientRect().height}px`);
+    };
     update();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(update);
     observer.observe(header);
+    if (nav) observer.observe(nav);
     return () => observer.disconnect();
   }, [showShell]);
 

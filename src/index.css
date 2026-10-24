@@ -278,6 +278,12 @@
   );
 }
 
+/* US-59 (QA #74, WCAG 2.4.11): whatever the browser scrolls into view (the skip link's target, a
+   focused field) stops below the sticky header + nav, whose heights App.tsx measures. */
+html {
+  scroll-padding-top: calc(var(--header-height, 0px) + var(--nav-height, 0px));
+}
+
 /* Respect the OS "reduce motion" setting. Loading spinners keep turning so progress stays visible. */
 @media (prefers-reduced-motion: reduce) {
   *:not(.animate-spin),

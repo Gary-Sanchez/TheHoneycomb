@@ -44,17 +44,25 @@ test.describe("app shell (US-59)", () => {
     await expect(nav().getByRole("tab")).toHaveText(TABS.map(tab => tab.name));
   });
 
-  test("Skip to content is the first Tab stop and moves focus to the tab content", async () => {
-    await app.setSize(DESKTOP.width, DESKTOP.height);
-    await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "The Honeycomb" })).toBeVisible();
-    await page.keyboard.press("Tab");
-    const skip = page.getByRole("link", { name: "Skip to content" });
-    await expect(skip).toBeFocused();
-    await expect(skip).toBeVisible();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#main-content")).toBeFocused();
-  });
+  for (const size of [DESKTOP, PHONE]) {
+    test(`${size.width} px: Skip to content is the first Tab stop and moves focus to the tab content, not under the nav`, async () => {
+      await app.setSize(size.width, size.height);
+      await app.openTab("Dashboard");
+      await page.reload();
+      await expect(page.getByRole("heading", { level: 1, name: "The Honeycomb" })).toBeVisible();
+      await page.keyboard.press("Tab");
+      const skip = page.getByRole("link", { name: "Skip to content" });
+      await expect(skip).toBeFocused();
+      await expect(skip).toBeVisible();
+      await page.keyboard.press("Enter");
+      await expect(page.locator("#main-content")).toBeFocused();
+
+      // QA #74 (WCAG 2.4.11): the focused content starts at or below the sticky nav, never under it
+      const mainTop = await page.locator("#main-content").evaluate(el => el.getBoundingClientRect().top);
+      const navBottom = await page.locator("#nav-tabs").evaluate(el => el.getBoundingClientRect().bottom);
+      expect(mainTop).toBeGreaterThanOrEqual(navBottom - 1);
+    });
+  }
 
   for (const size of [TABLET, PHONE]) {
     test(`${size.width} px: no page horizontal scroll and the nav stays visible below the header`, async () => {
