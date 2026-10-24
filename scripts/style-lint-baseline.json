@@ -1,8 +1,8 @@
 {
   "$comment": "US-53: techo por regla del lint de estilos (scripts/lint-styles.mjs). Solo baja, nunca sube; valores iniciales = docs/SNAPSHOT-4.0.md sección 1. Ver docs/STYLE-LINT.md.",
-  "hex": 56,
-  "textPx": 14,
-  "rounded": 29,
+  "hex": 45,
+  "textPx": 13,
+  "rounded": 23,
   "rawColor": 32,
   "animate": 0
 }

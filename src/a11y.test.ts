@@ -14,9 +14,13 @@ describe("US-47: accessible names and live regions", () => {
   });
 
   it("loading messages and the Manual Check-In success notice are announced (role=status)", () => {
-    for (const file of [["App.tsx"], ["components", "AttendanceLogger.tsx"], ["components", "DocumentParser.tsx"]]) {
+    for (const file of [["App.tsx"], ["components", "DocumentParser.tsx"]]) {
       expect(source(...file)).toContain('role="status"');
     }
+    // US-60: Manual Check-In announces its success through the global toast region (role="status")
+    const logger = source("components", "AttendanceLogger.tsx");
+    expect(logger).toContain("useToast()");
+    expect(logger).toContain("toast.success(");
   });
 
   it("the tab nav is labelled Main", () => {
