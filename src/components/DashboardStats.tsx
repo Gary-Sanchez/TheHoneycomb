@@ -147,14 +147,16 @@ export default function DashboardStats({
       header: "Caserits",
       cell: ({ attendee }) => (
         <span className="flex items-center gap-3">
+          {/* Below sm the pinned column drops the initials and lets the name wrap, so the scrolled
+              columns keep room for their badges (QA #73) */}
           <span
             aria-hidden="true"
-            className="h-8.5 w-8.5 shrink-0 rounded-chip bg-natural-wheat/40 text-natural-forest flex items-center justify-center font-serif font-bold text-xs border border-natural-border/50"
+            className="h-8.5 w-8.5 shrink-0 rounded-chip bg-natural-wheat/40 text-natural-forest hidden sm:flex items-center justify-center font-serif font-bold text-xs border border-natural-border/50"
           >
             {attendee.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
           </span>
           <span className="flex flex-col">
-            <span className="font-bold text-natural-forest text-xs leading-tight">{attendee.name}</span>
+            <span className="font-bold text-natural-forest text-xs leading-tight whitespace-normal sm:whitespace-nowrap">{attendee.name}</span>
             {/* US-61: the email may wrap so the Hub fits a desktop width */}
             {attendee.email && <span className="text-micro text-text-muted font-mono font-normal mt-0.5 whitespace-normal break-all">{attendee.email}</span>}
           </span>
