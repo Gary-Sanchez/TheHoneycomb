@@ -7,19 +7,9 @@ import {
   computeAttendanceTrends,
   computeEngagement,
 } from "../dashboardMetrics";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts";
 import { ChevronDown } from "lucide-react";
+import ChartFrame, { NO_DATA } from "./ui/ChartFrame";
+import { getChartTheme } from "../chartTheme";
 
 // US-36: the Dashboard's metric panels (accordion). Every rate comes from the Hub's event-based maths.
 
@@ -35,31 +25,13 @@ interface DashboardPanelsProps {
 
 type PanelId = "trends" | "comparison" | "engagement";
 
-const NO_DATA = "No data";
-const FOREST = "#2D3E35";
-const PERCENT_TICKS = [0, 25, 50, 75, 100];
 const formatRate = (rate: number | null) => (rate === null ? NO_DATA : `${rate}%`);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-// Every chart sets accessibilityLayer={false}: Recharts 3 otherwise makes its <svg> a nameless
-// tabindex=0 role="application" stop inside our role="img" wrapper, which already describes the data.
-
-const tooltipProps = {
-  contentStyle: { backgroundColor: FOREST, borderRadius: "12px", border: "1px solid #E9E5D9", color: "#FDFBF7" },
-  itemStyle: { color: "#FAEDCD" },
-  labelStyle: { fontWeight: "bold" },
-};
-
-const percentAxis = (
-  <YAxis
-    domain={[0, 100]}
-    ticks={PERCENT_TICKS}
-    tickFormatter={(v: number) => `${v}%`}
-    tickLine={false}
-    axisLine={false}
-    tick={{ fill: FOREST, fontSize: 12 }}
-  />
-);
+// US-61: every chart is a ChartFrame (role="img" with its aria-label, no Recharts accessibility
+// layer, tooltip / axis / grid from the chart tokens) with colors from getChartTheme(). The frame's
+// title stays sr-only (the panel header or the h4 already says it), the aria-labels are the ones
+// these panels announced in 4.0, and hideTable: each panel keeps its own, richer table below.
 
 function Panel({
   id,
@@ -77,7 +49,7 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-[24px] border border-[#E9E5D9] shadow-sm" id={`panel-${id}`}>
+    <section className="bg-surface rounded-card border border-border shadow-sm" id={`panel-${id}`}>
       <h3>
         {/* A native <button> already toggles on Enter and Space */}
         <button
@@ -86,7 +58,7 @@ function Panel({
           aria-expanded={open}
           aria-controls={`panel-${id}-content`}
           onClick={onToggle}
-          className="w-full flex items-center justify-between gap-4 p-5 text-left rounded-[24px] hover:bg-natural-cream/30 transition"
+          className="w-full flex items-center justify-between gap-4 p-5 text-left rounded-card hover:bg-natural-cream/30 transition"
         >
           <span>
             <span className="block text-lg font-serif font-bold text-natural-forest">{title}</span>
@@ -109,6 +81,16 @@ function Panel({
         {open && children}
       </div>
     </section>
+  );
+}
+
+// US-61: a panel table scrolls sideways inside its own box (never the page, e.g. at 375 px). The box is
+// a focusable region named by an existing heading, so keyboard users can scroll it too.
+function TableScroll({ labelledBy, children }: { labelledBy: string; children: ReactNode }) {
+  return (
+    <div role="region" aria-labelledby={labelledBy} tabIndex={0} className="overflow-x-auto focus-ring-inset border border-natural-border rounded-2xl">
+      {children}
+    </div>
   );
 }
 
@@ -170,6 +152,8 @@ export default function DashboardPanels({
   const engagementLabel =
     "Colleagues per Hive Status: " + engagement.tiers.map(t => `${t.label} ${t.count}`).join(", ");
 
+  const chartColor = getChartTheme().primary;
+
   return (
     <div className="space-y-4" id="dashboard-panels">
       <Panel id="trends" title="Attendance Trends" summary={trendsSummary} open={open.trends} onToggle={() => toggle("trends")}>
@@ -196,30 +180,18 @@ export default function DashboardPanels({
               ))}
             </div>
 
-            <div className="h-[280px]" role="img" aria-label={trendsLabel}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart accessibilityLayer={false} data={trends} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
-                  {percentAxis}
-                  <Tooltip {...tooltipProps} formatter={(v) => (v === null || v === undefined ? NO_DATA : `${v}%`)} />
-                  <Legend wrapperStyle={{ fontSize: 12, color: FOREST }} />
-                  {/* null (no events) leaves a gap: "No data", never drawn as 0% */}
-                  <Line
-                    type="monotone"
-                    dataKey="rate"
-                    name="Attendance rate (%)"
-                    stroke={FOREST}
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {/* null (no events) leaves a gap: "No data", never drawn as 0% */}
+            <ChartFrame
+              title="Attendance Trends"
+              hideTitle
+              ariaLabel={trendsLabel}
+              data={trends.map(p => ({ label: p.label, rate: p.rate }))}
+              series={[{ key: "rate", name: "Attendance rate (%)", color: chartColor }]}
+              heightClass="h-70"
+              hideTable
+            />
 
-            <div className="overflow-x-auto border border-natural-border rounded-2xl">
+            <TableScroll labelledBy="panel-trends-header">
               <table className="w-full border-collapse" id="trends-table">
                 <thead className="bg-natural-cream/50 border-b border-natural-border">
                   <tr>
@@ -240,7 +212,7 @@ export default function DashboardPanels({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           </>
         )}
       </Panel>
@@ -256,26 +228,18 @@ export default function DashboardPanels({
           empty
         ) : (
           <>
-            <div className="h-[260px]" role="img" aria-label={comparisonLabel}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart accessibilityLayer={false} data={comparison} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                  <XAxis dataKey="activity" tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
-                  {percentAxis}
-                  <Tooltip {...tooltipProps} formatter={(v) => (v === null || v === undefined ? NO_DATA : `${v}%`)} />
-                  <Legend wrapperStyle={{ fontSize: 12, color: FOREST }} />
-                  <Bar
-                    dataKey="avgRate"
-                    name="Avg. attendance rate of enrolled colleagues (%)"
-                    fill={FOREST}
-                    radius={[6, 6, 0, 0]}
-                    isAnimationActive={false}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartFrame
+              title="Cross-Activity Comparisons"
+              hideTitle
+              ariaLabel={comparisonLabel}
+              kind="bar"
+              data={comparison.map(c => ({ label: c.activity, avgRate: c.avgRate }))}
+              series={[{ key: "avgRate", name: "Avg. attendance rate of enrolled colleagues (%)", color: chartColor }]}
+              heightClass="h-65"
+              hideTable
+            />
 
-            <div className="overflow-x-auto border border-natural-border rounded-2xl">
+            <TableScroll labelledBy="panel-comparison-header">
               <table className="w-full border-collapse" id="comparison-table">
                 <thead className="bg-natural-cream/50 border-b border-natural-border">
                   <tr>
@@ -298,7 +262,7 @@ export default function DashboardPanels({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           </>
         )}
       </Panel>
@@ -316,18 +280,17 @@ export default function DashboardPanels({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-3">
               <h4 className="text-sm font-bold text-natural-forest">Colleagues per Hive Status</h4>
-              <div className="h-[220px]" role="img" aria-label={engagementLabel}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart accessibilityLayer={false} data={engagement.tiers} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E9E5D9" />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: FOREST, fontSize: 12 }} />
-                    <Tooltip {...tooltipProps} />
-                    <Legend wrapperStyle={{ fontSize: 12, color: FOREST }} />
-                    <Bar dataKey="count" name="Colleagues" fill={FOREST} radius={[6, 6, 0, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartFrame
+                title="Colleagues per Hive Status"
+                hideTitle
+                ariaLabel={engagementLabel}
+                kind="bar"
+                valueFormat="count"
+                data={engagement.tiers.map(t => ({ label: t.label, count: t.count }))}
+                series={[{ key: "count", name: "Colleagues", color: chartColor }]}
+                heightClass="h-55"
+                hideTable
+              />
               <ul className="grid grid-cols-2 gap-2" id="engagement-tiers">
                 {engagement.tiers.map(t => (
                   <li key={t.label} className="flex justify-between rounded-xl border border-natural-border px-3 py-2 text-sm">
@@ -345,8 +308,8 @@ export default function DashboardPanels({
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-natural-forest">New colleagues (first attendance in this period)</h4>
-              <div className="overflow-x-auto border border-natural-border rounded-2xl">
+              <h4 id="engagement-new-heading" className="text-sm font-bold text-natural-forest">New colleagues (first attendance in this period)</h4>
+              <TableScroll labelledBy="engagement-new-heading">
                 <table className="w-full border-collapse" id="engagement-new">
                   <thead className="bg-natural-cream/50 border-b border-natural-border">
                     <tr>
@@ -363,7 +326,7 @@ export default function DashboardPanels({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
             </div>
           </div>
         )}

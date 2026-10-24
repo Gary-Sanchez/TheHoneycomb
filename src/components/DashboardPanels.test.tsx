@@ -132,6 +132,19 @@ describe("US-36: DashboardPanels accordion", () => {
     expect(within(newSpeakeasy()).getByText("0")).toBeTruthy();
   });
 
+  it("US-61: each panel table scrolls inside its own focusable, named region (never the page)", () => {
+    render(renderPanels(null));
+    fireEvent.click(header("Cross-Activity Comparisons"));
+    fireEvent.click(header("Engagement"));
+    for (const id of ["trends-table", "comparison-table", "engagement-new"]) {
+      const box = document.getElementById(id)!.parentElement!;
+      expect(box.getAttribute("role"), id).toBe("region");
+      expect(box.getAttribute("tabindex"), id).toBe("0");
+      expect(box.className, id).toContain("overflow-x-auto");
+      expect(document.getElementById(box.getAttribute("aria-labelledby")!)?.textContent, id).toBeTruthy();
+    }
+  });
+
   it("QA-07: a month without events is No data, never 0%", () => {
     render(renderPanels(null));
 

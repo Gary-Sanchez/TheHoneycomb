@@ -39,9 +39,18 @@ export interface ChartSeries {
   color?: string;
 }
 
+/** What the values are: percentages (0–100 axis with "%", the default) or plain counts (US-61). */
+export type ChartValueFormat = "percent" | "count";
+
 export interface ChartFrameProps {
   /** Visible title (figcaption), also the start of the aria-label and the table caption. */
   title: string;
+  /** Keeps the title for assistive tech only (sr-only), when a visible heading already says it. */
+  hideTitle?: boolean;
+  /** Overrides the generated aria-label (e.g. a screen that already announces its data its own way). */
+  ariaLabel?: string;
+  /** "percent" (default): Y axis 0–100 with "%". "count": integer axis from 0, values without unit. */
+  valueFormat?: ChartValueFormat;
   data: ChartDatum[];
   series: ChartSeries[];
   kind?: "line" | "bar";
@@ -82,7 +91,8 @@ const TOOLTIP_PROPS = {
 };
 
 const isMissing = (v: unknown): v is null | undefined => v === null || v === undefined;
-export const formatChartValue = (v: unknown) => (isMissing(v) ? NO_DATA : `${typeof v === "number" ? Math.round(v) : v}%`);
+export const formatChartValue = (v: unknown, format: ChartValueFormat = "percent") =>
+  isMissing(v) ? NO_DATA : `${typeof v === "number" ? Math.round(v) : v}${format === "percent" ? "%" : ""}`;
 
 /**
  * Bar mode: an empty slot would look like 0 %, so a missing value is labeled "No data", written
@@ -114,21 +124,24 @@ function BarOrNoData({ missing, ...props }: BarShapeProps & { missing: boolean }
 
 /** Tooltip value: read from the datum itself (bar mode plots a missing value at 0), so a gap says "No data". */
 export const tooltipFormatter =
-  (series: ChartSeries[]) =>
+  (series: ChartSeries[], format: ChartValueFormat = "percent") =>
   (value: unknown, name: unknown, item?: { payload?: ChartDatum }) => {
     const key = series.find(s => s.name === name)?.key;
-    return formatChartValue(key && item?.payload ? item.payload[key] : value);
+    return formatChartValue(key && item?.payload ? item.payload[key] : value, format);
   };
 
 /** "Title. Series: Jan 80%, Feb No data. Other: …" — what the role="img" wrapper announces. */
-export function chartAriaLabel(title: string, data: ChartDatum[], series: ChartSeries[]): string {
+export function chartAriaLabel(title: string, data: ChartDatum[], series: ChartSeries[], format: ChartValueFormat = "percent"): string {
   if (data.length === 0) return `${title}. ${NO_DATA}.`;
-  const parts = series.map(s => `${s.name}: ${data.map(d => `${d.label} ${formatChartValue(d[s.key])}`).join(", ")}`);
+  const parts = series.map(s => `${s.name}: ${data.map(d => `${d.label} ${formatChartValue(d[s.key], format)}`).join(", ")}`);
   return `${title}. ${parts.join(". ")}.`;
 }
 
 export default function ChartFrame({
   title,
+  hideTitle = false,
+  ariaLabel,
+  valueFormat = "percent",
   data,
   series,
   kind = "line",
@@ -141,29 +154,33 @@ export default function ChartFrame({
   const color = (s: ChartSeries, i: number) => s.color ?? SERIES_COLORS[i % SERIES_COLORS.length];
   const columns: DataTableColumn<ChartDatum>[] = [
     { key: "label", header: labelHeader },
-    ...series.map(s => ({ key: s.key, header: s.name, align: "right" as const, cell: (d: ChartDatum) => formatChartValue(d[s.key]) })),
+    ...series.map(s => ({ key: s.key, header: s.name, align: "right" as const, cell: (d: ChartDatum) => formatChartValue(d[s.key], valueFormat) })),
   ];
   const margin = { top: 10, right: 16, left: 0, bottom: 0 };
   const shared = (
     <>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-chart-grid)" />
       <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS_TICK} />
-      <YAxis domain={[0, 100]} ticks={PERCENT_TICKS} tickFormatter={(v: number) => `${v}%`} tickLine={false} axisLine={false} tick={AXIS_TICK} />
+      {valueFormat === "percent" ? (
+        <YAxis domain={[0, 100]} ticks={PERCENT_TICKS} tickFormatter={(v: number) => `${v}%`} tickLine={false} axisLine={false} tick={AXIS_TICK} />
+      ) : (
+        <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={AXIS_TICK} />
+      )}
       {/* filterNull={false}: Recharts drops null entries from the tooltip by default, so the formatter
           would never get to say "No data" for a missing month. The value is read from the datum
           itself, since bar mode plots missing values at 0. */}
-      <Tooltip {...TOOLTIP_PROPS} filterNull={false} formatter={tooltipFormatter(series)} />
+      <Tooltip {...TOOLTIP_PROPS} filterNull={false} formatter={tooltipFormatter(series, valueFormat)} />
       <Legend wrapperStyle={{ fontSize: CHART_TEXT_SIZE, color: "var(--color-chart-axis)" }} />
     </>
   );
 
   return (
     <figure className={cx("flex flex-col gap-4", className)}>
-      <figcaption className="text-h3 font-semibold text-forest">{title}</figcaption>
+      <figcaption className={hideTitle ? "sr-only" : "text-h3 font-semibold text-forest"}>{title}</figcaption>
       {controls}
       {/* accessibilityLayer={false}: Recharts 3 would otherwise make its <svg> a nameless tabindex=0
           role="application" inside this role="img", which already describes the data */}
-      <div className={heightClass} role="img" aria-label={chartAriaLabel(title, data, series)}>
+      <div className={heightClass} role="img" aria-label={ariaLabel ?? chartAriaLabel(title, data, series, valueFormat)}>
         <ResponsiveContainer width="100%" height="100%">
           {kind === "bar" ? (
             <BarChart accessibilityLayer={false} data={data} margin={margin}>

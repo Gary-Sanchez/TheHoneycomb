@@ -36,5 +36,6 @@ export {
   type ChartDatum,
   type ChartSeries,
   type ChartFrameProps,
+  type ChartValueFormat,
 } from "./ChartFrame";
 export { rovingIndex } from "./roving";
