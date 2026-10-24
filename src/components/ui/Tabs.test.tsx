@@ -99,6 +99,70 @@ describe("US-57: Tabs", () => {
   });
 });
 
+describe("US-59: Tabs in the app shell", () => {
+  it("renderList / renderPanels wrap the list and the panels separately", () => {
+    render(
+      <Tabs
+        label="Sections"
+        tabs={TABS}
+        renderList={list => <nav aria-label="Main">{list}</nav>}
+        renderPanels={panels => <main>{panels}</main>}
+      />
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(nav.querySelector("[role=tablist]")).not.toBeNull();
+    expect(nav.querySelector("[role=tabpanel]")).toBeNull();
+    expect(screen.getByRole("main").querySelectorAll("[role=tabpanel]")).toHaveLength(TABS.length);
+  });
+
+  it("no visible native scrollbar; Inter on every tab", () => {
+    render(<Tabs label="Sections" tabs={TABS} />);
+    expect(screen.getByRole("tablist").className.split(" ")).toContain("scrollbar-none");
+    for (const t of screen.getAllByRole("tab")) expect(t.className.split(" ")).toContain("font-sans");
+  });
+
+  // jsdom has no layout: give the tablist a fixed box and a scroll position
+  const fakeLayout = (list: HTMLElement, { scrollWidth, clientWidth, scrollLeft = 0 }: { scrollWidth: number; clientWidth: number; scrollLeft?: number }) => {
+    Object.defineProperty(list, "scrollWidth", { configurable: true, value: scrollWidth });
+    Object.defineProperty(list, "clientWidth", { configurable: true, value: clientWidth });
+    list.scrollLeft = scrollLeft;
+  };
+
+  it("shows a decorative 'more tabs' cue on the edges that have more to scroll", () => {
+    render(<Tabs label="Sections" tabs={TABS} />);
+    const list = screen.getByRole("tablist");
+    const wrapper = list.parentElement!;
+    expect(wrapper.hasAttribute("data-overflow-end")).toBe(false);
+
+    fakeLayout(list, { scrollWidth: 600, clientWidth: 300 });
+    fireEvent.scroll(list);
+    expect(wrapper.hasAttribute("data-overflow-end")).toBe(true);
+    expect(wrapper.hasAttribute("data-overflow-start")).toBe(false);
+    expect(list.className).toContain("[--fade-end:3rem]");
+    const cues = wrapper.querySelectorAll("svg[aria-hidden=true]");
+    expect(cues).toHaveLength(1);
+
+    fakeLayout(list, { scrollWidth: 600, clientWidth: 300, scrollLeft: 300 });
+    fireEvent.scroll(list);
+    expect(wrapper.hasAttribute("data-overflow-start")).toBe(true);
+    expect(wrapper.hasAttribute("data-overflow-end")).toBe(false);
+  });
+
+  it("centers the selected tab in a scrolling list", () => {
+    render(<Tabs label="Sections" tabs={TABS} />);
+    const list = screen.getByRole("tablist");
+    fakeLayout(list, { scrollWidth: 600, clientWidth: 300 });
+    const scrollTo = vi.fn();
+    list.scrollTo = scrollTo as unknown as typeof list.scrollTo;
+    const target = tab("Import Forage Logs");
+    Object.defineProperty(target, "offsetLeft", { configurable: true, value: 400 });
+    Object.defineProperty(target, "offsetWidth", { configurable: true, value: 100 });
+    fireEvent.click(target);
+    // 400 - (300 - 100) / 2
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 300 });
+  });
+});
+
 describe("US-57: SegmentedControl", () => {
   const OPTIONS = [
     { value: "month", label: "Month" },

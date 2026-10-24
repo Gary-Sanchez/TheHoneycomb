@@ -88,7 +88,7 @@ test.describe("desktop app smoke test", () => {
 
     await window
       .getByRole("navigation", { name: "Main" })
-      .getByRole("button", { name: "Settings" })
+      .getByRole("tab", { name: "Settings" })
       .click();
     await expect(window.locator("#app-version")).toHaveText(`The Honeycomb v${version}`);
   });

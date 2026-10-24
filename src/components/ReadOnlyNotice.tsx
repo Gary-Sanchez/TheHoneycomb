@@ -1,28 +1,26 @@
 import { Lock } from "lucide-react";
+import { Button } from "./ui";
 
 interface ReadOnlyNoticeProps {
   onSignIn?: () => void;
 }
 
-// Shown on tabs with mutating actions when there's no admin session (US-11).
+// Shown on tabs with mutating actions when there's no admin session (US-11). US-59: design tokens
+// only, and always right below the tab's h2 (each tab renders it after its header).
 export default function ReadOnlyNotice({ onSignIn }: ReadOnlyNoticeProps) {
   return (
     <div
-      className="bg-natural-wheat/30 border border-natural-border text-natural-forest px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-3"
+      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-control border border-border bg-wheat/30 px-4 py-3 text-body text-forest"
       id="read-only-notice"
     >
       <span className="flex items-center gap-2 font-medium">
-        <Lock className="h-4 w-4 text-natural-sage shrink-0" />
+        <Lock className="size-4 shrink-0 text-sage" aria-hidden="true" />
         Read-only mode. Sign in as admin in Settings to make changes.
       </span>
       {onSignIn && (
-        <button
-          type="button"
-          onClick={onSignIn}
-          className="text-xs font-bold text-natural-forest hover:underline whitespace-nowrap"
-        >
+        <Button variant="link" size="sm" onClick={onSignIn}>
           Sign In
-        </button>
+        </Button>
       )}
     </div>
   );
