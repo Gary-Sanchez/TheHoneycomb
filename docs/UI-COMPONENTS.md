@@ -10,7 +10,7 @@ import { Button, IconButton, Field, Input, Select, Textarea, DateInput, Card, Pa
 import { Dialog, ConfirmDialog, ToastProvider, useToast, Alert, Tabs, SegmentedControl, DataTable, EmptyState, PageHeader, Stat, ChartFrame } from "./ui";
 ```
 
-Ninguna pantalla los usa todavía (la migración llega con US-59..66).
+La migración de las pantallas llega con US-59..66; **Import Forage Logs** (`DocumentParser`, US-66) ya los usa: `DataTable` en la vista previa, `ConfirmDialog` para Discard, `Field` + `DateInput` / `Select` en las fechas y el selector de actividad, `IconButton`, `Button`, `StatusBadge` y `ActivityBadge`.
 
 ## Página de ejemplos (solo desarrollo)
 
@@ -39,13 +39,13 @@ variantes, tamaños y estados. Entrada: [`examples.html`](../examples.html) →
 |---|---|---|
 | `Button` | `variant`: `primary` · `secondary` · `ghost` · `danger` · `link`; `size`: `sm` (h-9) · `md` (h-11, default) · `lg` (h-12); `loading`; `icon` | `type="button"` por defecto. Nombre = el texto. `loading` → spinner `aria-hidden`, `aria-busy="true"` y deshabilitado, el nombre no cambia. `link` no tiene alto fijo (va dentro del texto) |
 | `IconButton` | `aria-label` (**obligatorio por tipo**), `icon`, `variant` (sin `link`), `loading` | 40 px (`size-10`). Sin `aria-label`, `tsc` falla (`@ts-expect-error` en `IconButton.test.tsx`) |
-| `Field` | `label`, `help`, `error`, `required`, `id` | `label[for]` → control; `aria-describedby` = ayuda + error; `aria-invalid="true"` con error; `aria-required="true"` si `required` (el `*` es `aria-hidden`). El `id` va en `Field`, no en el control |
+| `Field` | `label`, `help`, `error`, `required`, `id`, `hideLabel` | `label[for]` → control; `aria-describedby` = ayuda + error; `aria-invalid="true"` con error; `aria-required="true"` si `required` (el `*` es `aria-hidden`). El `id` va en `Field`, no en el control. `hideLabel` (US-66) deja el `<label>` solo para lectores de pantalla (`sr-only`), p. ej. en una fila de tabla cuyo encabezado ya dice qué es el control; como los controles son `w-full`, acotá el ancho con `className` del `Field` |
 | `Input` · `DateInput` · `Select` · `Textarea` | props nativas; `invalid` para uso suelto | h-11, `border-input-border` (3.42:1), borde `danger` si `aria-invalid`. `Textarea` crece desde `min-h-24`; `Select` es nativo con chevron decorativo. Fuera de un `Field` aceptan `id` / `aria-*` propios |
 | `Panel` | `title` (→ `h2`), `actions` | `rounded-panel`. El contenedor de pestaña. Con `title` es un `<section>` nombrado por su encabezado |
 | `Card` | `title` (→ `h3`), `actions` | `rounded-card`, `p-6`, `shadow-sm`. Va dentro de un `Panel`: **un solo nivel**, nunca Card dentro de Card |
 | `Badge` | `tone`: `neutral` · `danger` · `warning` · `success` · `info`; `size`: `sm` · `md`; `icon` | `<span>` no interactivo; el texto es la etiqueta |
 | `StatusBadge` | `tone` (obligatorio): `danger` · `warning` · `success` · `info`; `size` | `text-<tone> bg-<tone>-bg border-<tone>-border` + ícono `aria-hidden`, así el estado no depende solo del color |
-| `ActivityBadge` | `activity: ActivityType`; `size` | Texto = nombre de la actividad en `text-activity-*-text` sobre `bg-surface`; borde y punto en el color de relleno (decorativos). Sin ícono (US-58) |
+| `ActivityBadge` | `activity: ActivityType`; `size` | Texto = nombre de la actividad en `text-activity-*-text` sobre `bg-surface`; borde y punto en el color de relleno, más el ícono de la actividad (`ACTIVITY_THEME[activity].icon`, US-58; agregado en US-66). Punto e ícono son decorativos (`aria-hidden`): el nombre identifica la actividad |
 
 ### Diálogos, mensajes, navegación, tablas y gráficos (US-57)
 

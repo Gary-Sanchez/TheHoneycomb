@@ -3,10 +3,15 @@ import { findSameEventFileIds } from "../sameEvent";
 import { Attendee, AttendanceRecord, ParsedRecord, ParsedFileGroup, ActivitySource, ImportFingerprint, ImportOutcome, ACTIVITIES } from "../types";
 import { isInvalidName, nameKey, REFERENCE_DATE, duplicateImportMessage, alreadyLoadedMessage, formatImportedAt, formatDisplayDate, pluralize } from "../utils";
 import { isBlacklistedName } from "../blacklist";
-import { Check, ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
+import { ChevronDown, UploadCloud, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, Play, Sparkles, HelpCircle, Loader2, Trash2, Calendar, Copy, Clock, ShieldOff, Files } from "lucide-react";
 import confetti from "canvas-confetti";
 import ReadOnlyNotice from "./ReadOnlyNotice";
-import { MAX_CSV_BATCH_FILES, checkCsvBatch } from "../uploadLimits";
+import { MAX_CSV_BATCH_FILES, checkCsvBatch, uploadLimitsSummary } from "../uploadLimits";
+import { batchColleagues, existingAttendeeId } from "../batchColleagues";
+import { isActivity } from "../activityTheme";
+import { ActivityBadge, Badge, Button, ConfirmDialog, DataTable, DateInput, Field, IconButton, Select, StatusBadge, type DataTableColumn } from "./ui";
+
+type PreviewRow = { rec: ParsedRecord; index: number };
 
 interface DocumentParserProps {
   attendees: Attendee[];
@@ -87,6 +92,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // Logs added and logs turned from absent to present by the last confirmed import
   const [importResult, setImportResult] = useState<{ added: number; updated: number; newColleagues: number } | null>(null);
   const [importing, setImporting] = useState(false);
+  // US-66: Discard asks in a ConfirmDialog (was window.confirm)
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [batchDate, setBatchDate] = useState<string>(REFERENCE_DATE);
   // US-18: the parser found no valid session date in the file, so the user must pick one
   const [dateRequired, setDateRequired] = useState(false);
@@ -413,11 +420,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   // Import the approved records into the master list
   const handleImportApproved = async () => {
     if (!canEdit || hasMissingDates || hasMissingActivity || importing) return;
-    const newAttendeesToCreate: Omit<Attendee, "id">[] = [];
     const newRecordsToSave: Omit<AttendanceRecord, "id">[] = [];
-
-    // Keep track of names we will create so we don't duplicate within the same batch
-    const createdNamesInBatch = new Set<string>();
 
     // US-27: files of the same date are one event, so a colleague listed in several of them is
     // logged once per date+activity ("present" wins over "absent").
@@ -439,34 +442,20 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       if (current === undefined || rec.date < current) earliestDate.set(key, rec.date);
     });
 
+    // US-66: the same split the summary bar shows (batchColleagues): one new colleague per name not
+    // in the directory, created once even if the batch lists them several times
+    const newAttendeesToCreate: Omit<Attendee, "id">[] = [
+      ...batchColleagues([...consolidated.values()], attendees).newColleagues.values(),
+    ].map(rec => ({
+      name: rec.name,
+      enrolledActivities: [rec.activity],
+      joinedDate: earliestDate.get(nameKey(rec.name.trim())) ?? rec.date,
+    }));
+
     consolidated.forEach(rec => {
-      let attendeeId = rec.matchedAttendeeId;
-
-      if (!attendeeId) {
-        // Check if we've already designated this colleague for creation in this batch
-        const trimmedName = rec.name.trim();
-        const existingInMaster = attendees.find(
-          a => a.name.toLowerCase() === trimmedName.toLowerCase()
-        );
-
-        if (existingInMaster) {
-          attendeeId = existingInMaster.id;
-        } else {
-          // Check if already in batch
-          if (!createdNamesInBatch.has(trimmedName.toLowerCase())) {
-            newAttendeesToCreate.push({
-              name: rec.name,
-              enrolledActivities: [rec.activity],
-              joinedDate: earliestDate.get(nameKey(trimmedName)) ?? rec.date,
-            });
-            createdNamesInBatch.add(trimmedName.toLowerCase());
-          }
-        }
-      }
-
       // Record logs
       newRecordsToSave.push({
-        attendeeId: attendeeId || "", // Will be wired up by App.tsx during state updates
+        attendeeId: existingAttendeeId(rec, attendees) || "", // New colleagues: wired up by App.tsx during state updates
         attendeeName: rec.name,
         activity: rec.activity,
         date: rec.date,
@@ -520,17 +509,18 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     setFiles([]);
   };
 
-  // US-46: Discard asks first when there are rows under review, and clears the selection too
-  const handleDiscard = () => {
-    if (
-      parsedRecords.length > 0 &&
-      !window.confirm(`Discard this preview? ${pluralize(parsedRecords.length, "attendance record")} will not be imported.`)
-    ) {
-      return;
-    }
+  const discardPreview = () => {
+    setConfirmDiscard(false);
     resetPreview();
     setFiles([]);
     setErrorMsg("");
+  };
+
+  // US-46: Discard asks first when there are rows under review, and clears the selection too.
+  // US-66: in a ConfirmDialog that says how many files and colleagues are dropped; Cancel keeps the batch.
+  const handleDiscard = () => {
+    if (parsedRecords.length > 0) setConfirmDiscard(true);
+    else discardPreview();
   };
 
   const handleDeleteRecord = (indexToDelete: number) => {
@@ -555,96 +545,86 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
     });
   };
 
-  const renderRecordsTable = (rows: { rec: ParsedRecord; index: number }[]) => (
-    <div className="border border-natural-border rounded-[24px] overflow-hidden shadow-inner">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="bg-natural-cream/40 text-natural-sage text-xs font-bold uppercase border-b border-natural-border">
-            <th className="p-4">Colleague Name</th>
-            <th className="p-4">Assigned Activity</th>
-            <th className="p-4">Date</th>
-            <th className="p-4">Status</th>
-            <th className="p-4">Roster Status</th>
-            <th className="p-4 text-center">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-natural-border/60 text-sm text-natural-forest">
-          {rows.map(({ rec, index: i }) => {
-            const isNew = !rec.matchedAttendeeId;
-            return (
-              <tr key={i} className="hover:bg-natural-cream/10 transition">
-                <td className="p-4 font-bold text-natural-forest">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span>{rec.name}</span>
-                    {rec.needsReview && (
-                      <span
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-300"
-                        title={rec.reviewReason}
-                      >
-                        <AlertTriangle className="h-3 w-3" />
-                        Needs Review
-                      </span>
-                    )}
-                  </div>
-                  {rec.needsReview && rec.reviewReason && (
-                    <p className="text-[11px] font-medium text-amber-700 mt-1">{rec.reviewReason}</p>
-                  )}
-                </td>
-                <td className="p-4">
-                  <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-natural-cream text-natural-forest border border-natural-border/30">
-                    {rec.activity}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <input
-                    type="date"
-                    aria-label={`Event date for ${rec.name}`}
-                    value={rec.date}
-                    onChange={(e) => handleUpdateDate(i, e.target.value)}
-                    className="bg-white border border-natural-border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium focus:border-natural-sage font-mono"
-                  />
-                </td>
-                <td className="p-4">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                      rec.status === "present"
-                        ? "bg-[#CCD5AE]/40 text-natural-forest border border-[#CCD5AE]/80"
-                        : "bg-natural-sand/15 text-natural-sand border border-natural-sand/35"
-                    }`}
-                  >
-                    {rec.status === "present" ? "Present" : "Absent"}
-                  </span>
-                </td>
-                <td className="p-4">
-                  {isNew ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-natural-wheat text-natural-forest px-2 py-1 rounded-md border border-natural-border/60">
-                      <Sparkles className="h-3 w-3 text-natural-sand" />
-                      New Colleague
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-white text-natural-forest px-2 py-1 rounded-md border border-natural-border/60">
-                      <Check className="h-3 w-3 text-natural-sage" />
-                      Existing Colleague
-                    </span>
-                  )}
-                </td>
-                <td className="p-4 text-center">
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteRecord(i)}
-                    className="p-1.5 text-natural-sand/70 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                    title="Remove Row"
-                    aria-label={`Remove ${rec.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+  // US-66 (BUG-11): the preview is a DataTable — it scrolls sideways inside its own region at 375 /
+  // 768 px (the page never does) with the colleague's name pinned as the row header
+  const recordColumns: DataTableColumn<PreviewRow>[] = [
+    {
+      key: "name",
+      header: "Colleague Name",
+      cell: ({ rec }) => (
+        // Wraps (the pinned column stays narrow on a phone) instead of the table's nowrap
+        <div className="w-36 sm:w-56 whitespace-normal">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{rec.name}</span>
+            {rec.needsReview && (
+              <StatusBadge tone="warning" title={rec.reviewReason}>
+                Needs Review
+              </StatusBadge>
+            )}
+          </div>
+          {rec.needsReview && rec.reviewReason && (
+            <p className="text-micro font-medium text-warning mt-1">{rec.reviewReason}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "activity",
+      header: "Assigned Activity",
+      cell: ({ rec }) =>
+        isActivity(rec.activity) ? <ActivityBadge activity={rec.activity} /> : rec.activity ? <Badge>{rec.activity}</Badge> : null,
+    },
+    {
+      key: "date",
+      header: "Date",
+      cell: ({ rec, index }) => (
+        <Field label={`Event date for ${rec.name}`} hideLabel className="w-40">
+          <DateInput value={rec.date} onChange={(e: ChangeEvent<HTMLInputElement>) => handleUpdateDate(index, e.target.value)} />
+        </Field>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: ({ rec }) =>
+        rec.status === "present" ? <Badge tone="success">Present</Badge> : <Badge>Absent</Badge>,
+    },
+    {
+      key: "roster",
+      header: "Roster Status",
+      // US-66: one badge family for both (StatusBadge), as the summary bar counts them
+      cell: ({ rec }) =>
+        rec.matchedAttendeeId ? (
+          <StatusBadge tone="success">Existing Colleague</StatusBadge>
+        ) : (
+          <StatusBadge tone="info">New Colleague</StatusBadge>
+        ),
+    },
+    {
+      key: "action",
+      header: "Action",
+      align: "right",
+      cell: ({ rec, index }) => (
+        <IconButton
+          variant="ghost"
+          icon={<Trash2 className="size-4" />}
+          onClick={() => handleDeleteRecord(index)}
+          title="Remove Row"
+          aria-label={`Remove ${rec.name}`}
+        />
+      ),
+    },
+  ];
+
+  const renderRecordsTable = (rows: PreviewRow[], caption: string) => (
+    <DataTable
+      caption={caption}
+      hideCaption
+      columns={recordColumns}
+      rows={rows}
+      getRowKey={({ index }) => String(index)}
+      stickyFirstColumn
+    />
   );
 
   // US-25/US-27: one card per uploaded .csv with its summary, followed by that file's records
@@ -678,7 +658,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 aria-expanded={!isCollapsed}
                 aria-controls={`file-group-${group.id}-rows`}
                 disabled={isBlocked || rows.length === 0}
-                className="flex items-center gap-2 min-w-0 rounded-lg text-left disabled:cursor-default"
+                className="flex items-center gap-2 min-w-0 max-w-full rounded-lg text-left disabled:cursor-default"
               >
                 <ChevronDown
                   aria-hidden="true"
@@ -691,47 +671,47 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               </button>
             </h4>
             {!isBlocked && (
-              <label className="flex items-center gap-2 text-xs font-semibold text-natural-forest">
-                <Calendar className="h-4 w-4 text-natural-sage" aria-hidden="true" />
-                Event Date
-                <input
-                  type="date"
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-natural-sage" aria-hidden="true" />
+                    Event Date
+                  </span>
+                }
+                className="w-full sm:w-48 shrink-0"
+              >
+                <DateInput
                   value={groupDate}
-                  onChange={(e) => handleUpdateGroupDate(group.id, e.target.value)}
-                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium font-mono ${
-                    groupDate ? "border-natural-border" : "border-natural-sand"
-                  }`}
+                  invalid={!groupDate}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleUpdateGroupDate(group.id, e.target.value)}
                 />
-              </label>
+              </Field>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
             {!isBlocked &&
               (group.activity ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#CCD5AE]/30 border border-[#CCD5AE]/80 text-natural-forest" data-testid="file-activity">
-                  {group.activity}
+                // US-66: the activity in its color and with its icon (US-58)
+                <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="file-activity">
+                  {isActivity(group.activity) ? <ActivityBadge activity={group.activity} /> : <Badge>{group.activity}</Badge>}
                   {group.activitySource && (
-                    <span className="font-medium text-natural-sage">
+                    <span className="font-medium text-sage-text">
                       · {group.activitySource === "selected manually" ? group.activitySource : `from ${group.activitySource}`}
                     </span>
                   )}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-700" role="alert">
-                  <AlertTriangle className="h-3 w-3" />
+                <StatusBadge tone="warning" role="alert">
                   Activity Not Detected
-                </span>
+                </StatusBadge>
               ))}
             {!isBlocked && (
-              <label className="inline-flex items-center gap-1.5 text-natural-forest">
-                <select
-                  aria-label={`Activity for ${group.filename}`}
+              <Field label={`Activity for ${group.filename}`} hideLabel className="w-full sm:w-48">
+                <Select
                   value={group.activity}
-                  onChange={(e) => handleSelectGroupActivity(group.id, e.target.value)}
-                  className={`bg-white border rounded-lg px-2 py-1 text-natural-forest text-xs font-medium ${
-                    group.activity ? "border-natural-border" : "border-amber-400"
-                  }`}
+                  invalid={!group.activity}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => handleSelectGroupActivity(group.id, e.target.value)}
                 >
                   {!group.activity && <option value="">Select activity…</option>}
                   {ACTIVITIES.map(act => (
@@ -739,8 +719,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                       {act}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Field>
             )}
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-natural-border/60 text-natural-forest">
               {pluralize(rows.length, "colleague")}
@@ -757,8 +737,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 {pluralize(excludedCount, "colleague")} excluded (under 10 minutes)
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-700" role="note">
-                <AlertTriangle className="h-3 w-3" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warning-bg border border-warning-border text-warning" role="note">
+                <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
                 Duration filter not applied: this file has no duration column
               </span>
             )}
@@ -778,10 +758,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 Already loaded in {group.alreadyLoaded.activity} on {formatDisplayDate(group.alreadyLoaded.date)} (blocked)
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#CCD5AE]/30 border border-[#CCD5AE]/80 text-natural-forest">
-                <CheckCircle className="h-3 w-3" />
-                Not a Duplicate
-              </span>
+              <StatusBadge tone="success">Not a Duplicate</StatusBadge>
             )}
             {group.durationFilterApplied && excludedCount > 0 && (
               <button
@@ -814,7 +791,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
         {!isBlocked && rows.length > 0 && (
           <div id={`file-group-${group.id}-rows`} hidden={isCollapsed}>
-            {!isCollapsed && renderRecordsTable(rows)}
+            {!isCollapsed && renderRecordsTable(rows, `Attendance records in ${group.filename}`)}
           </div>
         )}
       </div>
@@ -822,9 +799,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
   };
 
   const fileCount = fileGroups.filter(g => !isBlockedGroup(g)).length;
+  // US-66: what the summary bar and the Discard dialog count (same split the import creates)
+  const { newColleagues, existingColleagueIds } = batchColleagues(parsedRecords, attendees);
+  const newColleagueCount = newColleagues.size;
+  const existingColleagueCount = existingColleagueIds.size;
+  const batchSummary = `${pluralize(fileCount, "file")} · ${pluralize(newColleagueCount, "new colleague")} · ${pluralize(existingColleagueCount, "existing colleague")}`;
 
   return (
-    <div className="bg-white rounded-[32px] border border-natural-border p-8 shadow-sm space-y-8 animate-fade-in" id="smart-parser-tab">
+    <div className="bg-white rounded-panel border border-natural-border p-4 sm:p-8 shadow-sm space-y-8 animate-fade-in min-w-0" id="smart-parser-tab">
       {/* Header */}
       <div className="border-b border-natural-border pb-6">
         <h2 className="text-2xl font-serif font-bold text-natural-forest flex items-center gap-2">
@@ -841,7 +823,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       {/* US-38: the import result is announced to screen readers */}
       <div aria-live="polite" aria-atomic="true">
       {importResult !== null && (importResult.added > 0 || importResult.updated > 0) && (
-        <div className="bg-[#CCD5AE]/20 border border-[#CCD5AE]/60 text-natural-forest px-6 py-4 rounded-xl flex items-center gap-4 animate-bounce-subtle">
+        <div className="bg-natural-moss/20 border border-natural-moss/60 text-natural-forest px-6 py-4 rounded-xl flex items-center gap-4 animate-bounce-subtle">
           <CheckCircle className="h-8 w-8 text-natural-sage shrink-0" />
           <div>
             <h4 className="font-serif font-bold text-natural-forest text-base">Import Complete</h4>
@@ -856,8 +838,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {/* US-33: an import that changed nothing is not a success — those colleagues were already logged */}
       {importResult !== null && importResult.added === 0 && importResult.updated === 0 && (
-        <div className="bg-amber-50 border border-amber-300 text-amber-800 px-6 py-4 rounded-xl flex items-center gap-4">
-          <AlertTriangle className="h-8 w-8 text-amber-600 shrink-0" />
+        <div className="bg-warning-bg border border-warning-border text-warning px-6 py-4 rounded-xl flex items-center gap-4">
+          <AlertTriangle className="h-8 w-8 text-warning shrink-0" />
           <div>
             <h4 className="font-serif font-bold text-base">No New Attendance Records</h4>
             <p className="text-sm mt-0.5 font-medium">
@@ -878,7 +860,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
       {/* Main Drag & Drop Zone */}
       {!loading && !hasPreview && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-4 min-w-0">
             <div
               onDragEnter={handleDrag}
               onDragOver={handleDrag}
@@ -895,7 +877,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 }
               }}
               aria-disabled={!canEdit}
-              className={`border-2 border-dashed rounded-[24px] p-10 text-center transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] ${
+              className={`border-2 border-dashed rounded-card p-6 sm:p-10 text-center transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] ${
                 !canEdit
                   ? "border-natural-border opacity-50 cursor-not-allowed"
                   : dragActive
@@ -917,14 +899,14 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               </div>
 
               {files.length === 1 ? (
-                <div className="space-y-1">
-                  <p className="font-serif font-bold text-natural-forest text-base">{files[0].name}</p>
+                <div className="space-y-1 min-w-0 max-w-full">
+                  <p className="font-serif font-bold text-natural-forest text-base break-words">{files[0].name}</p>
                   <p className="text-xs text-natural-sage font-semibold">
                     {(files[0].size / 1024).toFixed(1)} KB • Ready to import
                   </p>
                 </div>
               ) : files.length > 1 ? (
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0 max-w-full">
                   <p className="font-serif font-bold text-natural-forest text-base">{files.length} .csv files selected</p>
                   <p className="text-xs text-natural-sage font-semibold max-w-md mx-auto break-words">
                     {files.map(f => f.name).join(", ")} • Ready to import
@@ -938,6 +920,10 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                   <p className="text-sm text-natural-sage max-w-sm mx-auto font-medium">
                     Supports Excel spreadsheets, Word documents, and plain-text CSVs. Select up to {MAX_CSV_BATCH_FILES} .csv files at once.
                   </p>
+                  {/* US-66: the batch limits, visible before choosing files (built from uploadLimits.ts) */}
+                  <p className="text-micro text-sage-text max-w-sm mx-auto font-semibold" data-testid="upload-limits">
+                    {uploadLimitsSummary()}
+                  </p>
                   <span className="inline-block mt-4 text-xs font-bold text-natural-forest bg-natural-wheat border border-natural-border/40 px-3.5 py-1.5 rounded-lg hover:bg-natural-wheat/80 transition shadow-sm">
                     Browse Files
                   </span>
@@ -947,21 +933,21 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
             {files.length > 0 && (
               <div className="flex justify-end pt-2">
-                <button
-                  type="button"
+                <Button
+                  size="lg"
                   onClick={handleParse}
                   disabled={!canEdit}
-                  className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-6 py-3 rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  icon={<Play className="h-4 w-4 fill-current" />}
+                  className="font-serif font-bold shadow-md"
                 >
-                  <Play className="h-4 w-4 fill-white" />
-                  <span>Extract the Buzz</span>
-                </button>
+                  Extract the Buzz
+                </Button>
               </div>
             )}
           </div>
 
           {/* Guide / How-To Panel */}
-          <div className="bg-natural-cream/30 rounded-[32px] p-6 border border-natural-border flex flex-col justify-between">
+          <div className="bg-natural-cream/30 rounded-panel p-6 border border-natural-border flex flex-col justify-between min-w-0">
             <div className="space-y-4">
               <h4 className="font-bold text-natural-forest text-xs uppercase tracking-wider flex items-center gap-1.5">
                 <HelpCircle className="h-4 w-4 text-natural-sage" />
@@ -993,8 +979,8 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
               </ul>
 
               <div className="bg-white p-4 rounded-xl border border-natural-border/60 mt-4">
-                <p className="text-[10px] font-bold text-natural-sage uppercase tracking-widest">Example Document:</p>
-                <p className="text-[11px] text-natural-forest font-mono mt-1 whitespace-pre leading-normal font-medium">
+                <p className="text-micro font-bold text-natural-sage uppercase tracking-widest">Example Document:</p>
+                <p className="text-micro text-natural-forest font-mono mt-1 whitespace-pre leading-normal font-medium">
                   Date: June 15, 2026<br/>
                   Activity: Music Room<br/>
                   - Elena Rostova (Present)<br/>
@@ -1008,7 +994,7 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {/* Loading Animation Card */}
       {loading && (
-        <div role="status" className="border border-natural-border rounded-[24px] p-12 text-center bg-natural-cream/20 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+        <div role="status" className="border border-natural-border rounded-card p-12 text-center bg-natural-cream/20 space-y-6 flex flex-col items-center justify-center min-h-[300px]">
           <Loader2 className="h-10 w-10 text-natural-sage animate-spin" aria-hidden="true" />
           <div className="space-y-1.5">
             <h4 className="font-serif font-bold text-natural-forest text-lg">Reading File…</h4>
@@ -1021,53 +1007,24 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
 
       {/* Parsing Preview Pane */}
       {hasPreview && (
-        <div className="space-y-6 animate-fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-natural-border pb-4">
-            <div>
-              <h3 className="font-serif font-bold text-natural-forest text-lg">Review Extracted Records</h3>
-              <p className="text-xs text-natural-sage font-medium">
-                {isMultiFile
-                  ? `Found ${pluralize(parsedRecords.length, "attendance record")} across ${pluralize(fileCount, "file")}. New colleagues will be added to the directory.`
-                  : `Found ${pluralize(parsedRecords.length, "attendance record")}. New colleagues will be added to the directory.`}
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleDiscard}
-                className="px-4 py-2 border border-natural-border text-natural-forest/70 hover:bg-natural-cream text-sm font-semibold rounded-xl transition"
-              >
-                Discard
-              </button>
-
-              <button
-                type="button"
-                onClick={handleImportApproved}
-                disabled={!canEdit || hasMissingDates || hasMissingActivity || importing || parsedRecords.length === 0}
-                title={
-                  hasMissingDates
-                    ? "Select an event date in Batch Edit Event Date first."
-                    : hasMissingActivity
-                    ? "Select an activity for every file marked Activity Not Detected first"
-                    : undefined
-                }
-                className="flex items-center gap-2 bg-natural-forest hover:bg-[#213028] text-white font-serif font-bold px-5 py-2 rounded-xl text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                <span>Confirm & Import Caserits</span>
-              </button>
-            </div>
+        <div className="space-y-6 animate-fade-in min-w-0">
+          <div className="border-b border-natural-border pb-4">
+            <h3 className="font-serif font-bold text-natural-forest text-lg">Review Extracted Records</h3>
+            <p className="text-xs text-natural-sage font-medium">
+              {isMultiFile
+                ? `Found ${pluralize(parsedRecords.length, "attendance record")} across ${pluralize(fileCount, "file")}. New colleagues will be added to the directory.`
+                : `Found ${pluralize(parsedRecords.length, "attendance record")}. New colleagues will be added to the directory.`}
+            </p>
           </div>
 
           {/* Batch Edit Date Section */}
           <div
             id="batch-edit-session-date"
             className={`p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-              hasMissingDates ? "bg-natural-sand/10 border-2 border-natural-sand/60" : "bg-natural-wheat/15 border border-[#CCD5AE]/30"
+              hasMissingDates ? "bg-natural-sand/10 border-2 border-natural-sand/60" : "bg-natural-wheat/15 border border-natural-moss/30"
             }`}
           >
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <h4 className="text-xs font-bold uppercase tracking-wider text-natural-forest flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-natural-sage" />
                 Batch Edit Event Date
@@ -1088,49 +1045,74 @@ export default function DocumentParser({ attendees, onImportData, canEdit, onSig
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="date"
-                aria-label="Event date for all files"
-                value={batchDate}
-                onChange={(e) => setBatchDate(e.target.value)}
-                className="bg-white border border-natural-border rounded-xl px-3 py-2 text-natural-forest text-xs font-medium focus:border-natural-sage"
-              />
-              <button
-                type="button"
-                onClick={() => handleBatchUpdateDate(batchDate)}
-                disabled={!batchDate}
-                className="disabled:opacity-50 disabled:cursor-not-allowed bg-natural-forest hover:bg-[#213028] text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm font-serif"
-              >
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0">
+              <Field label="Event date for all files" hideLabel className="w-full sm:w-48">
+                <DateInput value={batchDate} onChange={(e: ChangeEvent<HTMLInputElement>) => setBatchDate(e.target.value)} />
+              </Field>
+              <Button onClick={() => handleBatchUpdateDate(batchDate)} disabled={!batchDate} className="font-serif font-bold shadow-sm">
                 {isMultiFile && groupsWithoutDate.length > 0 ? "Apply to Files Without Date" : "Apply to All Records"}
-              </button>
+              </Button>
             </div>
           </div>
 
           {fileGroups.length >= COLLAPSE_GROUPS_FROM && (
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setCollapsedGroups(new Set())}
-                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setCollapsedGroups(new Set())}>
                 Expand All
-              </button>
-              <button
-                type="button"
-                onClick={() => setCollapsedGroups(new Set(fileGroups.map(g => g.id)))}
-                className="px-3 py-1.5 border border-natural-border rounded-lg text-xs font-semibold text-natural-forest hover:bg-natural-cream"
-              >
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setCollapsedGroups(new Set(fileGroups.map(g => g.id)))}>
                 Collapse All
-              </button>
+              </Button>
             </div>
           )}
 
           {fileGroups.length > 0
             ? fileGroups.map(renderFileGroup)
-            : renderRecordsTable(parsedRecords.map((rec, index) => ({ rec, index })))}
+            : renderRecordsTable(parsedRecords.map((rec, index) => ({ rec, index })), "Extracted attendance records")}
+
+          {/* US-66: sticky action bar: the batch summary next to Confirm stays visible while scrolling the preview */}
+          <section
+            aria-label="Import summary"
+            className="sticky bottom-0 z-[var(--z-nav)] flex flex-col gap-3 rounded-card border border-natural-border bg-surface p-4 shadow-md sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p className="min-w-0 text-body font-semibold text-natural-forest" data-testid="batch-summary">
+              {batchSummary}
+            </p>
+            <div className="flex flex-wrap gap-3 sm:shrink-0">
+              <Button variant="secondary" onClick={handleDiscard}>
+                Discard
+              </Button>
+              <Button
+                onClick={handleImportApproved}
+                disabled={!canEdit || hasMissingDates || hasMissingActivity || importing || parsedRecords.length === 0}
+                loading={importing}
+                icon={<CheckCircle className="h-4 w-4" />}
+                title={
+                  hasMissingDates
+                    ? "Select an event date in Batch Edit Event Date first."
+                    : hasMissingActivity
+                    ? "Select an activity for every file marked Activity Not Detected first"
+                    : undefined
+                }
+                className="font-serif font-bold"
+              >
+                Confirm & Import Caserits
+              </Button>
+            </div>
+          </section>
         </div>
       )}
+
+      {/* US-66: replaces window.confirm; Cancel (initial focus) keeps the batch as it is */}
+      <ConfirmDialog
+        open={confirmDiscard}
+        onCancel={() => setConfirmDiscard(false)}
+        onConfirm={discardPreview}
+        title="Discard this preview?"
+        objectName={`${pluralize(fileCount, "file")} · ${pluralize(newColleagueCount + existingColleagueCount, "colleague")}`}
+        consequences={`${pluralize(parsedRecords.length, "attendance record")} will not be imported.`}
+        confirmLabel="Discard"
+      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-react";
+import { ACTIVITY_THEME } from "../../activityTheme";
 import type { ActivityType } from "../../types";
 import { cx, type NativeAttributes } from "./styles";
 
@@ -73,15 +74,18 @@ export interface ActivityBadgeProps extends NativeAttributes {
   size?: BadgeSize;
 }
 
-/** The activity's name in its color. No icon yet (US-58 brings the activity icons). */
+/** The activity's name in its color plus its US-58 icon (ACTIVITY_THEME). Dot and icon are
+ *  decorative (aria-hidden): the name identifies the activity. */
 export function ActivityBadge({ activity, size = "sm", className, ...rest }: ActivityBadgeProps) {
   const classes = ACTIVITY_CLASSES[activity];
+  const Icon = ACTIVITY_THEME[activity].icon;
   return (
     <span
       {...rest}
       className={cx("inline-flex items-center gap-1.5 rounded-chip border bg-surface font-semibold whitespace-nowrap", classes.badge, SIZES[size], className)}
     >
       <span className={cx("size-2 shrink-0 rounded-chip", classes.dot)} aria-hidden="true" />
+      <Icon className={cx("shrink-0", size === "md" ? "size-4" : "size-3")} aria-hidden="true" />
       {activity}
     </span>
   );

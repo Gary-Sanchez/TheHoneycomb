@@ -8,6 +8,14 @@ import Badge, { ActivityBadge, StatusBadge } from "./Badge";
 
 afterEach(cleanup);
 
+// Lucide's class for each ACTIVITY_THEME icon (src/activityTheme.ts)
+const ACTIVITY_ICON_CLASS = {
+  Speakeasy: "lucide-messages-square",
+  "Reading Club": "lucide-book-open",
+  "Music Room": "lucide-music",
+  "Writing Hood": "lucide-pen-line",
+} as const;
+
 // Text/background token pairs checked ≥ 4.5:1 by src/designTokens.test.ts (TEXT_PAIRS).
 const verifiedPairs = readFileSync(join(__dirname, "..", "..", "designTokens.test.ts"), "utf8");
 const isVerified = (fg: string, bg: string) => verifiedPairs.includes(`["${fg}", "${bg}"]`);
@@ -56,7 +64,10 @@ describe("US-56: badges", () => {
     expect(badge.className).toContain(`border-activity-${slug}`);
     expect(badge.className).toContain("bg-surface");
     expect(badge.querySelector(`.bg-activity-${slug}`)?.getAttribute("aria-hidden")).toBe("true");
-    expect(badge.querySelector("svg")).toBeNull();
+    // US-66: the activity's US-58 icon goes with its color, decorative
+    const icon = badge.querySelector("svg");
+    expect(icon?.getAttribute("aria-hidden")).toBe("true");
+    expect(icon?.getAttribute("class")).toContain(ACTIVITY_ICON_CLASS[activity]);
     expect(isVerified(`activity-${slug}-text`, "surface")).toBe(true);
   });
 });

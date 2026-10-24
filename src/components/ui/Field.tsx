@@ -27,10 +27,13 @@ export interface FieldProps {
   required?: boolean;
   /** Control id (generated with useId when omitted). Set it here, not on the control. */
   id?: string;
+  /** US-66: keeps the label for assistive tech only (sr-only, still a real <label for>), e.g. inside
+   *  a table row whose column header already says what the control is. */
+  hideLabel?: boolean;
   className?: string;
 }
 
-export default function Field({ label, children, help, error, required = false, id, className }: FieldProps) {
+export default function Field({ label, children, help, error, required = false, id, hideLabel = false, className }: FieldProps) {
   const generated = useId();
   const controlId = id ?? generated;
   const helpId = help ? `${controlId}-help` : undefined;
@@ -38,8 +41,10 @@ export default function Field({ label, children, help, error, required = false, 
   const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
-    <div className={cx("flex flex-col gap-1.5", className)}>
-      <label htmlFor={controlId} className="text-body font-medium text-forest">
+    // relative with hideLabel: the absolutely positioned sr-only label stays inside the field (and
+    // inside a scrolling table), so it can't widen the page at 375 px
+    <div className={cx("flex flex-col gap-1.5", hideLabel && "relative", className)}>
+      <label htmlFor={controlId} className={hideLabel ? "sr-only" : "text-body font-medium text-forest"}>
         {label}
         {required && <span className="text-danger" aria-hidden="true"> *</span>}
       </label>
