@@ -91,6 +91,19 @@ describe("US-56: Field", () => {
     expect(screen.getByRole("textbox", { name: "C" }).className).toContain("border-input-border");
   });
 
+  it("US-66: hideLabel keeps a real <label for> that names the control, visually hidden (sr-only)", () => {
+    render(
+      <Field label="Event date for Elena Rostova" hideLabel>
+        <DateInput />
+      </Field>
+    );
+    const input = screen.getByLabelText("Event date for Elena Rostova") as HTMLInputElement;
+    const label = screen.getByText("Event date for Elena Rostova") as HTMLLabelElement;
+    expect(label.tagName).toBe("LABEL");
+    expect(label.className).toBe("sr-only");
+    expect(label.control).toBe(input);
+  });
+
   it("a Field id overrides the generated one; standalone controls keep their own aria-*", () => {
     render(
       <>

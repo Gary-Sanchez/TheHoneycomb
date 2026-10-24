@@ -15,6 +15,10 @@ export const batchTooLargeMessage = (bytes?: number) =>
     MAX_CSV_BATCH_BYTES / MB
   } MB for all files together, so the whole batch was rejected. Split it into smaller batches and try again.`;
 
+// US-66: the limits as shown in the upload zone before choosing files (built from the constants)
+export const uploadLimitsSummary = () =>
+  `Limits: up to ${MAX_CSV_BATCH_FILES} .csv files per batch · ${MAX_FILE_BYTES / MB} MB per file · ${MAX_CSV_BATCH_BYTES / MB} MB per batch.`;
+
 // The first limit a selection breaks, as a message for the user, or null when it fits
 export function checkCsvBatch(files: { size: number }[]): string | null {
   if (files.length > MAX_CSV_BATCH_FILES) return tooManyFilesMessage(files.length);
