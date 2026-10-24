@@ -206,3 +206,65 @@ found 0 vulnerabilities
 Verificado después del cambio: `npm ls vite` (una sola versión, 6.4.4), `npm run lint`,
 `npm test`, `npm run build`, `npm run dev` con HMR, `npm run test:e2e` (incluye las capturas
 visuales) y `npm run electron:build` + arranque del ejecutable empaquetado.
+
+## 7. Regresión de 2026-10-23 (US-70): `zod`, `multer`, `body-parser`, `electron`, `undici`, `fast-uri`
+
+Relevado el 2026-10-23 sobre `main` @ `29431d6` (Node 26.8.1 / npm 11.19.0): `npm audit` volvió a
+reportar **6 vulnerabilidades (5 altas, 1 moderada)**. Ninguna la introdujo un cambio del repo. El
+job `audit` falló en el PR #72 (US-60), que no toca dependencias. El advisory de `zod` tiene fecha
+de publicación 2026-10-01, pero `main` todavía pasaba el audit el 2026-10-23 a las 15:39 UTC: lo
+más probable es que la base de npm lo haya incorporado tarde. Los demás se publicaron el
+2026-10-23.
+
+| Paquete | Llega por | Advisory | Severidad | Problema |
+|---|---|---|---|---|
+| `zod` | directa (`dependencies`) | [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) | alta | Puede agotar la memoria al validar colecciones grandes con restricciones |
+| `multer` | directa (`dependencies`) | [GHSA-q7qp-rjg7-q26m](https://github.com/advisories/GHSA-q7qp-rjg7-q26m) | alta | DoS por un `fileFilter` asíncrono pendiente tras cortar el request |
+| `body-parser` | `express` 4 | [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828) | alta | DoS por bytes sobrantes tras un body comprimido |
+| `electron` | directa (`devDependencies`) | [GHSA-jr5w-w6x2-84p9](https://github.com/advisories/GHSA-jr5w-w6x2-84p9) | alta | Mitigación de los certificados intermedios de eMudhra comprometidos |
+| `undici` | `@electron/get`, `jsdom`, `node-gyp` | [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c), [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685), [GHSA-f72v-6w45-q472](https://github.com/advisories/GHSA-f72v-6w45-q472) | alta | DoS por content-encodings excesivos, memoria sin límite en el parser de EventSource y bypass de SRI |
+| `fast-uri` | `electron-builder` → `ajv` | [GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg), [GHSA-xhq7-xmqj-769h](https://github.com/advisories/GHSA-xhq7-xmqj-769h), [GHSA-wjr9-j795-jxcr](https://github.com/advisories/GHSA-wjr9-j795-jxcr), [GHSA-333x-w4r6-6crp](https://github.com/advisories/GHSA-333x-w4r6-6crp) | moderada | Spoofing de esquema y confusión de host al normalizar URIs |
+
+### 7.1 Corrección
+
+`npm audit fix` (sin `--force`) actualiza el lockfile dentro de los rangos ya declarados, sin
+cambiar de versión mayor:
+
+| Paquete | Antes | Después |
+|---|---|---|
+| `zod` | 4.6.5 | 4.6.7 |
+| `multer` | 2.4.0 | 2.5.0 |
+| `body-parser` (vía `express` 4.22.3) | 1.20.8 | 1.20.9 |
+| `electron` | 44.5.1 | 44.9.3 |
+| `undici` (`@electron/get`) | 7.30.0 | 7.30.1 |
+| `undici` (`jsdom`) | 8.11.2 | 8.12.3 |
+| `undici` (`node-gyp`) | 6.29.0 | 6.29.1 |
+| `fast-uri` (`ajv`) | 3.1.8 | 3.1.9 |
+
+Igual que en §6.1, los rangos de las dependencias directas en `package.json` suben a la versión
+instalada, para que un `npm install` sin lockfile no pueda resolver una versión vulnerable:
+`zod` `^4.6.5` → **`^4.6.7`**, `multer` `^2.2.0` → **`^2.5.0`** y `electron` `^44.5.1` →
+**`^44.9.3`**. `express` queda en `^4.21.2`: `body-parser` es transitiva y la versión corregida
+entra por el lockfile.
+
+- `zod`, `multer`, `express` y `vite` siguen **solo** en `dependencies` (ver §2). Electron sigue
+  en 44 y electron-builder en 26.
+- Los `overrides` de §5.2 y el origen de `xlsx` (§3) no cambian.
+- Sin install scripts nuevos (`npm install-scripts ls` → nada pendiente). `electron` 44 no tiene
+  install script: baja su binario la primera vez que se lo ejecuta (`node_modules/electron/index.js`).
+
+### 7.2 Estado final
+
+```
+$ npm ci && npm audit
+found 0 vulnerabilities
+```
+
+Verificado después del cambio: `npm ls` (versiones de la tabla de §7.1), `npm run lint`, `npm test`,
+`npm run build`, `npm run dev` con HMR, la API contra `main` (mismas respuestas en los 400 de
+validación de `zod` y en las subidas con `multer`: `.csv` suelto, lote, lote de 51 archivos,
+`.txt` en lote y sin sesión → 401), `npm run test:e2e` y `npm run electron:build` + arranque del
+ejecutable empaquetado (`app.asar` con `zod` 4.6.7 / `multer` 2.5.0 / `body-parser` 1.20.9),
+check-in, cierre y reapertura con el registro conservado. `e2e/shutdown.spec.ts` sigue fallando de
+forma intermitente por el tope de 1500 ms en el cierre de Electron, con la misma frecuencia que en
+`main` (44.5.1); no lo introduce esta actualización.
